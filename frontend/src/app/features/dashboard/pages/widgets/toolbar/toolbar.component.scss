@@ -1,0 +1,66 @@
+/* web/src/app/widgets/toolbar/toolbar.component.scss */
+
+/* Importer les variables du thème */
+@use '../../../../../shared/styles/css-variables.scss' as *;
+
+:host {
+  display: block;
+  width: 100%;
+}
+
+header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  padding: 0 16px;
+  //background-color: var(--brand-background-sidebar, #3C2964);
+  color: var(--brand-text-primary, white);
+  border-bottom: 1px solid var(--brand-border-color, rgba(255, 255, 255, 0.1));
+  box-sizing: border-box;
+}
+
+.brand-text {
+  font-size: 18px;
+  font-weight: 500;
+  margin-left: 8px;
+  color: var(--brand-text-primary, white);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.icon-color {
+  color: var(--brand-text-primary, white);
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+
+  &:hover {
+    background-color: var(--brand-background-hover, rgba(255, 255, 255, 0.1));
+  }
+}
+
+.user-icon {
+  font-size: 24px;
+}
+
+.username {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+button[nz-button] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

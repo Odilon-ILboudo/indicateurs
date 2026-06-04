@@ -1,0 +1,417 @@
+.indicator-detail {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+  
+  /* Fil d'Ariane */
+  nz-breadcrumb {
+    margin-bottom: 24px;
+  }
+  
+  /* État de chargement */
+  .loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px;
+    
+    nz-spin {
+      margin-bottom: 16px;
+    }
+    
+    p {
+      color: #666;
+      margin: 0;
+    }
+  }
+  
+  /* En-tête */
+  .header {
+    margin: 24px 0 32px;
+    
+    .title-section {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 16px;
+      
+      mat-icon {
+        font-size: 40px;
+        width: 40px;
+        height: 40px;
+      }
+      
+      h1 {
+        margin: 0;
+        font-size: 28px;
+        font-weight: 600;
+        color: #1a1a1a;
+      }
+    }
+    
+    .description-section {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      color: #666;
+      font-size: 16px;
+      line-height: 1.5;
+      
+      p {
+        margin: 0;
+        flex: 1;
+      }
+      
+      .guide-button {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 30px;
+        padding: 8px 20px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        
+        &:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        &.active {
+          background: linear-gradient(135deg, #52c41a 0%, #1890ff 100%);
+        }
+        
+        mat-icon {
+          font-size: 18px;
+          width: 18px;
+          height: 18px;
+        }
+        
+        span {
+          font-size: 14px;
+        }
+      }
+    }
+    
+    .context-selector {
+      display: flex;
+      gap: 24px;
+      margin-top: 24px;
+      padding: 16px;
+      background-color: #f5f5f5;
+      border-radius: 8px;
+      
+      .selector-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        
+        label {
+          font-size: 12px;
+          font-weight: 500;
+          color: #666;
+          text-transform: uppercase;
+        }
+        
+        nz-select {
+          width: 200px;
+        }
+      }
+    }
+  }
+  
+  /* Bannière contexte teacher (lecture seule) */
+  .context-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    background: #f0f5ff;
+    border: 1px solid #d6e4ff;
+    border-radius: 10px;
+    padding: 10px 18px;
+    margin-bottom: 24px;
+
+    .ctx-chips {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .ctx-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: white;
+      border: 1px solid #d6e4ff;
+      border-radius: 20px;
+      padding: 3px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #1d39c4;
+
+      mat-icon {
+        font-size: 14px;
+        width: 14px;
+        height: 14px;
+        line-height: 1;
+        color: #597ef7;
+      }
+
+      &.scope {
+        background: #e6f4ff;
+        border-color: #91caff;
+        color: #0958d9;
+      }
+    }
+
+    .ctx-sep {
+      font-size: 16px;
+      color: #adc6ff;
+      width: 16px;
+      height: 16px;
+    }
+
+    .ctx-back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: #8c8c8c;
+      text-decoration: none;
+      white-space: nowrap;
+
+      mat-icon { font-size: 14px; width: 14px; height: 14px; }
+
+      &:hover { color: #1890ff; }
+    }
+  }
+
+  /* Visualisations */
+  .visualizations {
+    margin: 32px 0;
+    
+    .viz-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
+      
+      h3 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 500;
+      }
+      
+      .viz-options {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        
+        .viz-option {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: #f5f5f5;
+          padding: 6px 12px;
+          border-radius: 25px;
+          transition: all 0.2s ease;
+          
+          &:hover {
+            background: #e8e8e8;
+          }
+          
+          .goto-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+            
+            mat-icon {
+              font-size: 16px;
+              width: 16px;
+              height: 16px;
+              color: #1890ff;
+            }
+            
+            &:hover {
+              background: rgba(24, 144, 255, 0.1);
+              transform: translateX(2px);
+            }
+          }
+        }
+      }
+    }
+    
+    .viz-container {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    
+    .viz-card {
+      mat-card-header {
+        margin-bottom: 16px;
+        
+        mat-icon {
+          margin-right: 8px;
+          vertical-align: middle;
+        }
+        
+        mat-card-title {
+          display: flex;
+          align-items: center;
+          font-size: 18px;
+        }
+      }
+    }
+    
+    .default-viz {
+      .value-display {
+        text-align: center;
+        padding: 32px;
+        
+        .big-value {
+          font-size: 72px;
+          font-weight: 700;
+          color: #1890ff;
+        }
+        
+        .unit {
+          font-size: 20px;
+          color: #666;
+          margin-left: 8px;
+        }
+      }
+      
+      .trend-info {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 16px;
+        
+        mat-icon {
+          font-size: 20px;
+          
+          &.trend-up {
+            color: #52c41a;
+          }
+          
+          &.trend-down {
+            color: #f5222d;
+          }
+        }
+        
+        span {
+          font-size: 14px;
+          color: #666;
+        }
+      }
+    }
+    
+    .chart-viz {
+      .chart {
+        height: 400px;
+        width: 100%;
+      }
+    }
+    
+    .gauge-viz {
+      .gauge {
+        height: 300px;
+        width: 100%;
+      }
+    }
+  }
+  
+  /* Mode d'emploi */
+  .guide-section {
+    margin-top: 32px;
+    
+    mat-card-header {
+      margin-bottom: 16px;
+      
+      mat-icon {
+        margin-right: 8px;
+      }
+    }
+    
+    .guide-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      
+      @media (max-width: 768px) {
+        grid-template-columns: 1fr;
+        gap: 24px;
+      }
+      
+      .guide-col {
+        h4 {
+          margin: 0 0 12px 0;
+          font-size: 16px;
+          font-weight: 500;
+        }
+        
+        p {
+          margin: 8px 0;
+          line-height: 1.5;
+        }
+        
+        code {
+          background-color: #f5f5f5;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-family: monospace;
+        }
+        
+        ul {
+          margin: 8px 0 0 20px;
+          padding: 0;
+          
+          li {
+            margin: 4px 0;
+            line-height: 1.5;
+          }
+        }
+      }
+    }
+  }
+  
+  /* État vide */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    
+    mat-icon {
+      font-size: 64px;
+      width: 64px;
+      height: 64px;
+      color: #999;
+      margin-bottom: 16px;
+    }
+    
+    h3 {
+      margin: 0 0 8px 0;
+      font-size: 20px;
+    }
+    
+    p {
+      margin: 0 0 24px 0;
+      color: #666;
+    }
+  }
+}

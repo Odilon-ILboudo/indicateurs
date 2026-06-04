@@ -1,0 +1,75 @@
+<mat-card
+  class="indicator-card"
+  [class.clickable]="clickable"
+  [class.loading]="isLoading"
+  [class.has-tabs]="currentViews.length > 1"
+  [style.border-left]="'4px solid ' + getThresholdColor()"
+  [routerLink]="clickable ? ['/dashboard/indicator', indicator.id] : null"
+  [matTooltip]="clickable ? 'Cliquez pour plus de détails' : ''"
+  matTooltipPosition="above">
+
+  <!-- Sélecteur de vues (teacher, 2+ vues) -->
+  <div class="view-tabs" *ngIf="currentViews.length > 1">
+    <button
+      *ngFor="let v of currentViews; let i = index"
+      class="view-tab"
+      [class.active]="i === activeViewIndex"
+      [class.chart-tab]="isChartView(i)"
+      [matTooltip]="isChartView(i) ? 'Cliquez sur la carte pour visualiser ce graphique' : ''"
+      matTooltipPosition="above"
+      (click)="onTabClick($event, i)">
+      <mat-icon *ngIf="isChartView(i)" class="chart-tab-icon">show_chart</mat-icon>
+      {{ v.label || ('Vue ' + (i + 1)) }}
+    </button>
+  </div>
+
+  <mat-card-content>
+    <!-- État de chargement -->
+    <div class="loading-overlay" *ngIf="isLoading">
+      <mat-icon>sync</mat-icon>
+    </div>
+
+    <!-- Contenu normal -->
+    <ng-container *ngIf="!isLoading">
+      <div class="card-header">
+        <div class="value-section">
+          <span class="value">{{ getFormattedValue() }}</span>
+          <span class="unit" *ngIf="indicator.visualization.unit">
+            {{ indicator.visualization.unit }}
+          </span>
+          <div class="trend-badge" *ngIf="value?.trend" [class]="'trend-' + value?.trend">
+            <mat-icon class="trend-icon">{{ getTrendIcon(value?.trend || 'stable') }}</mat-icon>
+            <span class="trend-text">
+              {{ value?.trend === 'up' ? '+' : value?.trend === 'down' ? '-' : '' }}
+            </span>
+          </div>
+        </div>
+        <div class="icon-section">
+          <div class="icon-bg" [style.backgroundColor]="indicator.visualization.color || '#7f8c8d'">
+            <mat-icon>
+              {{ indicator.visualization.icon || 'analytics' }}
+            </mat-icon>
+          </div>
+        </div>
+      </div>
+      
+      <div class="card-footer">
+        <div class="title-section">
+          <span class="title">{{ indicator.name }}</span>
+          <span class="category-badge" [class]="indicator.category">
+            {{ getCategoryLabel(indicator.category) }}
+          </span>
+        </div>
+        <mat-icon class="arrow-icon">arrow_forward</mat-icon>
+      </div>
+      
+      <!-- Métadonnées supplémentaires -->
+      <div class="card-metadata" *ngIf="value?.metadata?.lastUpdate">
+        <span class="update-time">
+          <mat-icon>update</mat-icon>
+          {{ value?.metadata?.lastUpdate | date:'dd/MM/yyyy' }}
+        </span>
+      </div>
+    </ng-container>
+  </mat-card-content>
+</mat-card>

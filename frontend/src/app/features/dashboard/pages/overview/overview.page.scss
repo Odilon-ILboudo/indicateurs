@@ -1,0 +1,188 @@
+/* web/src/app/pages/dashboard/overview/overview.page.scss */
+
+/* Importer les variables du thème */
+@use '../../../../shared/styles/css-variables.scss' as *;
+
+:host {
+  display: block;
+  width: 100%;
+}
+
+p {
+  color: var(--brand-text-secondary, #666);
+}
+
+mat-card {
+  margin-bottom: 1rem;
+  background-color: var(--brand-background-components, #fafafa);
+  color: var(--brand-text-primary, #1a1a1a);
+}
+
+// Container principal
+.overview-container {
+  padding: 16px;
+}
+
+// En-tête
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+  
+  h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 500;
+    color: var(--brand-text-primary, #1a1a1a);
+  }
+  
+  .header-actions {
+    button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background-color: var(brand-color-primary);
+      color: var(--brand-color-primary-contrast, white);
+      border: none;
+      
+      &:hover {
+        background-color: var(--brand-color-primary-shade, #14197e);
+      }
+    }
+  }
+}
+
+// Sélecteur d'indicateurs
+.indicator-selector-container {
+  margin-bottom: 24px;
+  padding: 16px;
+  background-color: var(--brand-background-secondary, #f5f5f5);
+  border-radius: 12px;
+  border: 1px solid var(--brand-border-color, rgba(0, 0, 0, 0.12));
+}
+
+// Chargement
+.loading-container {
+  padding: 48px;
+  text-align: center;
+}
+
+// Sections d'indicateurs
+.indicators-section {
+  padding: 24px 0;
+}
+
+.section-header {
+  margin-bottom: 24px;
+  
+  h3 {
+    margin: 0 0 8px 0;
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--brand-text-primary, #1a1a1a);
+  }
+  
+  p {
+    margin: 0 0 16px 0;
+    color: var(--brand-text-secondary, #666);
+  }
+  
+  .filters {
+    display: flex;
+    gap: 16px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+}
+
+// État vide
+.empty-state {
+  text-align: center;
+  padding: 48px;
+  color: var(--brand-text-secondary, #666);
+  background-color: var(--brand-background-secondary, #f5f5f5);
+  border-radius: 12px;
+  margin-top: 24px;
+  
+  mat-icon {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+    margin-bottom: 16px;
+    color: var(--brand-text-secondary, #999);
+  }
+  
+  p {
+    margin: 0;
+    font-size: 14px;
+  }
+}
+
+// Onglets Material personnalisés
+::ng-deep .mat-mdc-tab-group {
+  .mat-mdc-tab-header {
+    border-bottom: 1px solid var(--brand-border-color, rgba(0, 0, 0, 0.12));
+  }
+  
+  .mat-mdc-tab {
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--brand-text-primary, #1a1a1a);
+  }
+  
+  .mat-mdc-tab.mdc-tab--active {
+    color: var(--brand-color-primary, #1890ff);
+  }
+  
+  .mat-mdc-tab-body-content {
+    overflow: visible;
+  }
+}
+
+// Grille responsive
+nz-row {
+  margin: 0 -8px;
+}
+
+nz-col {
+  padding: 8px;
+}
+
+// Media queries
+@media (max-width: 720px) {
+  .overview-container {
+    padding: 12px;
+  }
+  
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    
+    h2 {
+      font-size: 20px;
+    }
+  }
+  
+  .section-header {
+    .filters {
+      width: 100%;
+      
+      nz-select {
+        width: 100% !important;
+      }
+    }
+  }
+  
+  .empty-state {
+    padding: 32px;
+    
+    mat-icon {
+      font-size: 36px;
+      width: 36px;
+      height: 36px;
+    }
+  }
+}

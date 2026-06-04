@@ -1,0 +1,193 @@
+/* web/src/app/pages/dashboard/dashboard.page.scss */
+
+/* ============================================
+   IMPORTS DES THÈMES
+   ============================================ */
+
+/* Importer les variables CSS du thème */
+@use '../../shared/styles/css-variables.scss' as *;
+
+/* Importer les overrides Material et ng-zorro */
+@use '../../shared/styles/theme-overrides.scss' as *;
+
+/* Librairies tierces */
+@import 'ng-zorro-antd/ng-zorro-antd.min.css';
+@import '@angular/material/prebuilt-themes/indigo-pink.css';
+
+
+:host {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ============================================
+   MAT-DRAWER-CONTAINER - prend toute la hauteur
+   ============================================ */
+
+mat-drawer-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* ============================================
+   STYLE DU DRAWER CONTENT (zone de contenu principal)
+   ============================================ */
+
+mat-drawer-content {
+  background-color: var(--brand-background-primary, #f4f2ed);
+  color: var(--brand-text-primary, #1a1a1a);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* La toolbar prend toute la largeur et est collée en haut */
+app-toolbar {
+  display: block;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+/* Conteneur du contenu avec padding */
+.content-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 2rem;
+}
+
+/* ============================================
+   STYLE DU BREADCRUMB (fil d'Ariane)
+   ============================================ */
+
+:host::ng-deep {
+  .ant-breadcrumb {
+    color: var(--brand-text-secondary, #666);
+  }
+  
+  .ant-breadcrumb-link {
+    display: inline-flex;
+    align-items: center;
+    color: var(--brand-text-secondary, #666);
+    
+    mat-icon {
+      margin: 0 8px;
+      color: var(--brand-text-secondary, #666);
+    }
+    
+    a {
+      color: var(--brand-color-primary, #1890ff);
+      text-decoration: none;
+      
+      &:hover {
+        color: var(--brand-color-primary-shade, #14197e);
+        text-decoration: underline;
+      }
+    }
+  }
+
+  .ant-breadcrumb-separator {
+    color: var(--brand-text-secondary, #666);
+    margin: 0 4px;
+  }
+
+  nz-breadcrumb {
+    font-size: 1.5em;
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+
+    button {
+      padding-left: 0;
+      mat-icon {
+        margin: 0;
+      }
+    }
+  }
+
+  nz-breadcrumb-item {
+    display: inline-flex;
+    align-items: center;
+    
+    &:last-child .ant-breadcrumb-link {
+      color: var(--brand-text-primary, #1a1a1a);
+      font-weight: 500;
+    }
+  }
+
+  .mat-drawer-backdrop.mat-drawer-shown {
+    background-color: rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* ============================================
+   STYLE DE LA SIDEBAR
+   ============================================ */
+
+mat-drawer {
+  width: 220px;
+  background-color: var(--brand-background-sidebar, #3C2964);
+  border-right: 1px solid var(--brand-border-color, rgba(255, 255, 255, 0.1));
+  height: 100%;
+}
+
+/* ============================================
+   STYLE DU ROUTER OUTLET
+   ============================================ */
+
+.router-outlet {
+  width: 100%;
+}
+
+/* ============================================
+   STYLE DU TOAST PERSISTANT
+   ============================================ */
+
+.persistent-toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--brand-color-primary, #1890ff);
+  color: var(--brand-color-primary-contrast, white);
+  padding: 12px 24px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-size: 14px;
+  
+  .toast-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  button {
+    color: var(--brand-color-primary-contrast, white);
+    
+    &:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+  }
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 720px) {
+  .content-wrapper {
+    padding: 0 1rem;
+  }
+  
+  .persistent-toast {
+    left: 16px;
+    right: 16px;
+    transform: none;
+    font-size: 12px;
+    padding: 10px 16px;
+  }
+}

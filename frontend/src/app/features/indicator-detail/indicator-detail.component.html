@@ -1,0 +1,137 @@
+<div class="indicator-detail">
+
+  <!-- Fil d'Ariane -->
+  <nz-breadcrumb>
+    <nz-breadcrumb-item><a routerLink="/dashboard/overview">Tableau de bord</a></nz-breadcrumb-item>
+    <nz-breadcrumb-item>{{ indicator?.name || 'Chargement...' }}</nz-breadcrumb-item>
+  </nz-breadcrumb>
+
+  <!-- Chargement -->
+  <div class="loading-container" *ngIf="isLoading">
+    <nz-spin nzSimple></nz-spin>
+    <p>Chargement...</p>
+  </div>
+
+  <ng-container *ngIf="!isLoading && indicator">
+
+    <!-- En-tête -->
+    <div class="header">
+      <div class="title-section">
+        <mat-icon [style.color]="indicator.visualization?.color || '#7f8c8d'">
+          {{ indicator.visualization?.icon || 'analytics' }}
+        </mat-icon>
+        <h1>{{ indicator.name }}</h1>
+        <nz-tag [nzColor]="isTeacher ? 'blue' : 'green'">
+          {{ getContextLabel(activeContextType) }}
+        </nz-tag>
+      </div>
+      <p class="description">{{ indicator.description }}</p>
+    </div>
+
+    <!-- Bannière contexte teacher (lecture seule) -->
+    <div class="context-banner" *ngIf="isTeacher && hasTeacherContext">
+      <div class="ctx-chips">
+        <span class="ctx-chip" *ngIf="teacherCourseName">
+          <mat-icon>school</mat-icon>{{ teacherCourseName }}
+        </span>
+        <mat-icon class="ctx-sep">chevron_right</mat-icon>
+        <span class="ctx-chip" *ngIf="teacherActivityName">
+          <mat-icon>assignment</mat-icon>{{ teacherActivityName }}
+        </span>
+        <mat-icon class="ctx-sep">chevron_right</mat-icon>
+        <span class="ctx-chip scope">
+          <mat-icon>layers</mat-icon>{{ teacherScopeName }}
+        </span>
+      </div>
+      <a routerLink="/dashboard/overview" class="ctx-back-link">
+        <mat-icon>arrow_back</mat-icon> Modifier le filtre
+      </a>
+    </div>
+
+    <!-- Teacher sans contexte sélectionné -->
+    <nz-empty
+      *ngIf="isTeacher && !hasTeacherContext"
+      nzNotFoundContent="Aucun cours ou activité sélectionné. Retournez au tableau de bord pour choisir un contexte."
+      style="margin: 40px 0">
+      <ng-template #nzNotFoundFooter>
+        <a routerLink="/dashboard/overview">
+          <mat-icon>arrow_back</mat-icon> Retour au tableau de bord
+        </a>
+      </ng-template>
+    </nz-empty>
+
+    <!-- contextConfig absent pour ce rôle -->
+    <nz-empty
+      *ngIf="activeContextConfig === undefined && (!isTeacher || hasTeacherContext)"
+      nzNotFoundContent="Aucune vue configurée pour ce contexte."
+      style="margin: 40px 0">
+    </nz-empty>
+
+    <!-- Onglets des vues -->
+    <nz-tabs *ngIf="activeContextConfig && activeContextConfig.views.length > 0 && (!isTeacher || hasTeacherContext)">
+      <nz-tab
+        *ngFor="let view of activeContextConfig.views"
+        [nzTitle]="view.label">
+
+        <!-- Chargement de la vue -->
+        <div class="view-loading" *ngIf="viewLoading[view.id]">
+          <nz-spin nzSimple></nz-spin>
+        </div>
+
+        <ng-container *ngIf="!viewLoading[view.id]">
+
+          <!-- Vue CARD : valeur scalaire -->
+          <div class="view-card" *ngIf="view.visualization.type === 'card' && viewResults[view.id]">
+            <div class="scalar-value"
+              [style.color]="getThresholdColor(view, viewResults[view.id].value)">
+              {{ viewResults[view.id].value | number:'1.0-2' }}
+              <span class="unit">{{ view.visualization.unit || '' }}</span>
+            </div>
+            <div class="thresholds" *ngIf="view.visualization.thresholds">
+              <span class="t-good">≤ {{ view.visualization.thresholds.good }} : Bon</span>
+              <span class="t-warning">≤ {{ view.visualization.thresholds.warning }} : Moyen</span>
+              <span class="t-danger">> {{ view.visualization.thresholds.warning }} : Difficile</span>
+            </div>
+          </div>
+
+          <!-- Vue GAUGE -->
+          <div class="view-chart" *ngIf="view.visualization.type === 'gauge' && chartOptions[view.id]">
+            <div echarts [options]="chartOptions[view.id]" style="height:300px"></div>
+          </div>
+
+          <!-- Vue LINE-CHART -->
+          <div class="view-chart" *ngIf="view.visualization.type === 'line-chart' && chartOptions[view.id]">
+            <div echarts [options]="chartOptions[view.id]" style="height:300px"></div>
+          </div>
+
+          <!-- Vue BAR-CHART (par champ : ressource, exercice…) -->
+          <div class="view-chart" *ngIf="view.visualization.type === 'bar-chart' && chartOptions[view.id]">
+            <div echarts [options]="chartOptions[view.id]" style="height:400px"></div>
+          </div>
+
+          <!-- Vue HISTOGRAM (distribution) -->
+          <div class="view-chart" *ngIf="view.visualization.type === 'histogram' && chartOptions[view.id]">
+            <div echarts [options]="chartOptions[view.id]" style="height:300px"></div>
+          </div>
+
+          <!-- Aucune donnée disponible -->
+          <nz-empty
+            *ngIf="!viewLoading[view.id] && !viewResults[view.id]"
+            nzNotFoundContent="Aucune donnée disponible pour cette vue.">
+          </nz-empty>
+
+        </ng-container>
+
+      </nz-tab>
+    </nz-tabs>
+
+  </ng-container>
+
+  <!-- Indicateur non trouvé -->
+  <div class="empty-state" *ngIf="!isLoading && !indicator">
+    <mat-icon>error_outline</mat-icon>
+    <h3>Indicateur non trouvé</h3>
+    <button mat-raised-button routerLink="/dashboard/overview">Retour au tableau de bord</button>
+  </div>
+
+</div>

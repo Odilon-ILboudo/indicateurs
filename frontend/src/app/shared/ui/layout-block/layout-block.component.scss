@@ -1,0 +1,58 @@
+// frontend/src/app/shared/ui/layout-block/layout-block.component.scss
+.layout-block {
+  width: 100%;
+  min-height: 200px;
+}
+
+.layout-header {
+  margin-bottom: 24px;
+}
+
+.layout-header h2 {
+  margin: 0 0 8px 0;
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--brand-text-primary, #1a1a1a);
+}
+
+.layout-header p {
+  margin: 0;
+  color: var(--brand-text-secondary, #666);
+}
+
+.layout-loading {
+  padding: 48px;
+  text-align: center;
+}
+
+.layout-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.error-icon {
+  font-size: 64px;
+  width: 64px;
+  height: 64px;
+  color: #f5222d;
+  margin-bottom: 16px;
+}
+
+.layout-error h3 {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.layout-error p {
+  margin: 0;
+  color: #666;
+}
+
+.layout-content {
+  width: 100%;
+}

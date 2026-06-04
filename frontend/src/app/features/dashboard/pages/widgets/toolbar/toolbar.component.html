@@ -1,0 +1,56 @@
+<!-- web/src/app/widgets/toolbar/toolbar.component.html -->
+<header>
+  <button
+    id="tuto-toolbar-menu-button"
+    nz-button
+    nzType="text"
+    (click)="toggleDrawer()"
+  >
+    <mat-icon class="icon-color">menu</mat-icon>
+  </button>
+
+  <span class="brand-text">PLaTon - Indicateurs</span>
+  <div class="spacer"></div>
+
+  <!-- Sélecteur de thème -->
+  <button
+    id="tuto-toolbar-theme-button"
+    nz-button
+    nzType="text"
+    nzSize="small"
+    [matMenuTriggerFor]="themeMenu"
+  >
+    <mat-icon class="icon-color">{{ themeIcon }}</mat-icon>
+  </button>
+
+  <!-- Avatar utilisateur -->
+  <div class="user-info" [matMenuTriggerFor]="avatarMenu">
+    <mat-icon class="user-icon icon-color">account_circle</mat-icon>
+    <span class="username">{{ user?.firstName }} {{ user?.lastName }}</span>
+  </div>
+</header>
+
+<!-- Menu des thèmes -->
+<mat-menu #themeMenu="matMenu" id="tuto-theme-menu">
+  <button mat-menu-item (click)="setLightTheme()">
+    <mat-icon>light_mode</mat-icon>
+    <span>Thème clair</span>
+  </button>
+  <button mat-menu-item (click)="setDarkTheme()">
+    <mat-icon>dark_mode</mat-icon>
+    <span>Thème sombre</span>
+  </button>
+</mat-menu>
+
+<!-- Menu utilisateur -->
+<mat-menu #avatarMenu="matMenu" id="tuto-avatar-menu">
+  <button mat-menu-item disabled>
+    <mat-icon>account_circle</mat-icon>
+    <span>{{ user?.firstName }} {{ user?.lastName }}</span>
+  </button>
+  <mat-divider></mat-divider>
+  <button mat-menu-item (click)="logout()">
+    <mat-icon>logout</mat-icon>
+    <span>Déconnexion</span>
+  </button>
+</mat-menu>

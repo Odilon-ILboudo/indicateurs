@@ -1,0 +1,49 @@
+<!-- web/src/app/pages/dashboard/overview/overview.page.html -->
+<div class="overview-container">
+  <!-- En-tête -->
+  <div class="page-header">
+    <h2>Tableau de bord</h2>
+    <p>Visualisez vos indicateurs.</p>
+  </div>
+
+  <!-- Sélecteur de contexte enseignant -->
+  <app-teacher-context-selector
+    *ngIf="roleService.isTeacher()"
+    (contextChange)="onTeacherContextChange($event)">
+  </app-teacher-context-selector>
+
+  <!-- Chargement -->
+  <div *ngIf="loading" class="loading-container">
+    <nz-skeleton [nzActive]="true" [nzParagraph]="{ rows: 4 }"></nz-skeleton>
+  </div>
+
+  <!-- Dashboard -->
+  <div *ngIf="!loading">
+    <div class="indicators-section">
+      <div class="section-header">
+        <h3>Vos indicateurs</h3>
+        <p *ngIf="!roleService.isTeacher()">Suivi de votre progression personnelle.</p>
+        <p *ngIf="roleService.isTeacher()">
+          {{ context.scope === 'course' ? 'Vue cours entier' : 'Vue groupe de TP' }}
+          <ng-container *ngIf="context.activityId"> · Activité sélectionnée</ng-container>
+        </p>
+      </div>
+
+      <div nz-row [nzGutter]="[16, 16]">
+        <div nz-col nzXs="24" nzSm="12" nzMd="8" nzLg="8" nzXl="6"
+             *ngFor="let indicatorId of activeIndicatorIds">
+          <ui-indicator-card
+            *ngIf="getIndicatorById(indicatorId) as indicator"
+            [indicator]="indicator"
+            [context]="context">
+          </ui-indicator-card>
+        </div>
+      </div>
+
+      <div *ngIf="activeIndicatorIds.length === 0" class="empty-state">
+        <mat-icon>info</mat-icon>
+        <p>Aucun indicateur actif. Rendez-vous dans l'onglet "Indicateurs" pour en ajouter.</p>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,25 @@
+<!-- frontend/src/app/shared/ui/layout-block/layout-block.component.html -->
+<div class="layout-block">
+  <!-- En-tête optionnel -->
+  <div *ngIf="title" class="layout-header">
+    <h2>{{ title }}</h2>
+    <p *ngIf="description">{{ description }}</p>
+  </div>
+
+  <!-- État de chargement -->
+  <div *ngIf="state === 'LOADING'" class="layout-loading">
+    <nz-skeleton [nzActive]="true" [nzParagraph]="{ rows: 4 }"></nz-skeleton>
+  </div>
+
+  <!-- État d'erreur -->
+  <div *ngIf="isError" class="layout-error">
+    <mat-icon class="error-icon">{{ getErrorIcon() }}</mat-icon>
+    <h3>{{ getErrorTitle() }}</h3>
+    <p>{{ errorMessage || 'Une erreur est survenue. Veuillez réessayer plus tard.' }}</p>
+  </div>
+
+  <!-- Contenu principal -->
+  <div *ngIf="state === 'READY'" class="layout-content">
+    <ng-content></ng-content>
+  </div>
+</div>

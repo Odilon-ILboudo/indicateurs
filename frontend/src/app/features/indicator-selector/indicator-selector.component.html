@@ -1,0 +1,95 @@
+<div class="indicator-selector">
+  <div class="filters">
+    <nz-select 
+      nzPlaceHolder="Filtrer par étendue" 
+      [(ngModel)]="filters.scope"
+      (ngModelChange)="applyFilters()"
+      style="width: 200px">
+      <nz-option nzValue="all" nzLabel="Toutes les étendues" />
+      <nz-option nzValue="global" nzLabel="Global" />
+      <nz-option nzValue="course" nzLabel="Cours" />
+      <nz-option nzValue="activity" nzLabel="Activité" />
+      <nz-option nzValue="learner" nzLabel="Apprenant" />
+      <nz-option nzValue="circle" nzLabel="Groupe" />
+    </nz-select>
+    
+    <nz-select 
+      nzPlaceHolder="Trier par" 
+      [(ngModel)]="filters.sortBy"
+      (ngModelChange)="applyFilters()"
+      style="width: 200px">
+      <nz-option nzValue="name" nzLabel="Nom" />
+      <nz-option nzValue="popular" nzLabel="Plus utilisés" />
+      <nz-option nzValue="unpopular" nzLabel="Moins utilisés" />
+    </nz-select>
+  </div>
+  
+  <!-- État de chargement -->
+  <div *ngIf="isLoading" class="loading-state">
+    <nz-spin nzSimple></nz-spin>
+    <p>Chargement des indicateurs...</p>
+  </div>
+  
+  <!-- Tableau des indicateurs -->
+  <nz-table 
+    *ngIf="!isLoading && filteredIndicators.length > 0"
+    #indicatorTable 
+    [nzData]="filteredIndicators" 
+    [nzLoading]="false"
+    nzBordered>
+    <thead>
+      <tr>
+        <th>Nom</th>
+        <th nzWidth="100px">Étendue</th>
+        <th nzWidth="100px">Utilisations</th>
+        <th nzWidth="150px">Visualisations</th>
+        <th nzWidth="120px">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let indicator of indicatorTable.data">
+        <td>
+          <strong>{{ indicator.name }}</strong>
+          <br>
+          <small class="description">{{ indicator.description }}</small>
+        </td>
+        <td>
+          <nz-tag *ngFor="let ctx of getSupportedContexts(indicator)" style="margin-bottom:2px">
+            {{ getScopeLabel(ctx) }}
+          </nz-tag>
+          <span *ngIf="!getSupportedContexts(indicator).length" class="no-viz">-</span>
+        </td>
+        <td>{{ indicator.usageCount || 0 }}</td>
+        <td>
+          <mat-icon
+            *ngFor="let viz of getVizTypes(indicator)"
+            [matTooltip]="getVizLabel(viz)"
+            class="viz-icon">
+            {{ getVizIcon(viz) }}
+          </mat-icon>
+          <span *ngIf="!getVizTypes(indicator).length" class="no-viz">Aucune</span>
+        </td>
+        <td class="actions">
+          <button
+            mat-icon-button
+            (click)="viewIndicator(indicator)"
+            matTooltip="Voir les détails"
+            style="border:none;box-shadow:none;background:transparent">
+            <mat-icon>visibility</mat-icon>
+          </button>
+          <nz-switch 
+            [ngModel]="isActive(indicator.id)"
+            (ngModelChange)="toggleIndicator(indicator.id, $event)"
+            [nzCheckedChildren]="'✓'"
+            [nzUnCheckedChildren]="'✗'">
+          </nz-switch>
+        </td>
+      </tr>
+    </tbody>
+  </nz-table>
+  
+  <div class="empty-state" *ngIf="!isLoading && filteredIndicators.length === 0 && allIndicators.length === 0">
+    <mat-icon>info</mat-icon>
+    <p>Aucun indicateur disponible</p>
+  </div>
+</div>

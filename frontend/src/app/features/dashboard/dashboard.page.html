@@ -1,0 +1,29 @@
+<!-- web/src/app/pages/dashboard/dashboard.page.html -->
+<mat-drawer-container>
+  <mat-drawer mode="side" [(opened)]="drawerOpened" #drawer>
+    <app-sidebar />
+  </mat-drawer>
+  
+  <mat-drawer-content>
+    <!-- La toolbar est en premier, sans padding -->
+    <app-toolbar (drawerToggle)="drawerOpened = !drawerOpened" />
+    
+    <!-- Le contenu avec padding -->
+    <div class="content-wrapper">
+      <div class="router-outlet">
+        <router-outlet />
+      </div>
+    </div>
+  </mat-drawer-content>
+</mat-drawer-container>
+
+<!-- Toast persistant -->
+<div class="persistent-toast" *ngIf="!settings.dismissedToast">
+  <div class="toast-content">
+    <mat-icon>info</mat-icon>
+    <span>Personnalisez votre dashboard avec les indicateurs disponibles.</span>
+  </div>
+  <button mat-icon-button (click)="dismissToast()">
+    <mat-icon>close</mat-icon>
+  </button>
+</div>

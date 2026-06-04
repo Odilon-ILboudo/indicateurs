@@ -1,0 +1,32 @@
+<!-- web/src/app/pages/dashboard/indicators/indicators.page.html -->
+<div class="indicators-container">
+  <div class="page-header">
+    <h2>Indicateurs</h2>
+    <p>Gérez vos indicateurs de performance</p>
+  </div>
+  
+  <!-- Chargement -->
+  <div *ngIf="loading" class="loading-container">
+    <nz-skeleton [nzActive]="true" [nzParagraph]="{ rows: 4 }"></nz-skeleton>
+  </div>
+  
+  <!-- Interface selon le rôle -->
+  <div *ngIf="!loading">
+    <!-- Onglets pour admin -->
+    <nz-tabs *ngIf="roleService.canCreateIndicators()" [(nzSelectedIndex)]="activeTab">
+      <nz-tab nzTitle="Liste des indicateurs">
+        <div class="indicator-selector-wrapper">
+          <ui-indicator-selector (indicatorsChanged)="onIndicatorsChanged()"></ui-indicator-selector>
+        </div>
+      </nz-tab>
+      <nz-tab nzTitle="Administration">
+        <ui-admin-indicator-manager></ui-admin-indicator-manager>
+      </nz-tab>
+    </nz-tabs>
+    
+    <!-- Pour teacher et student, seulement la sélection -->
+    <div *ngIf="!roleService.isAdmin()" class="indicator-selector-wrapper">
+      <ui-indicator-selector (indicatorsChanged)="onIndicatorsChanged()"></ui-indicator-selector>
+    </div>
+  </div>
+</div>
