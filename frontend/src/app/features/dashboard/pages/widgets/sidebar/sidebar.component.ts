@@ -75,8 +75,9 @@ export class SidebarComponent implements OnInit {
     this.topLinks.push(
       { url: 'overview', icon: 'dashboard', title: 'Tableau de bord' },
       { url: 'indicators', icon: 'analytics', title: 'Indicateurs' },
+      { url: 'courses', icon: 'local_library', title: 'Cours' },
+      { url: 'resources', icon: 'work', title: 'Espace de travail' },
     );
-
   }
 
   protected toggleLink(link: NavLink): void {

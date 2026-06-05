@@ -22,7 +22,7 @@ import { ToolbarComponent } from './pages/widgets/toolbar/toolbar.component';
   ],
 })
 export class DashboardPage {
-  protected drawerOpened = false;
+  protected drawerOpened = true;
   protected settings: UserDashboardSettings = { dismissedToast: false, activeIndicators: [], favoriteIndicators: [], layout: { columns: 3 } };
   
   private settingsService = inject(DashboardSettingsService);

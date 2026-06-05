@@ -8,6 +8,8 @@ import { AggregationModule } from './modules/features/aggregation/aggregation.mo
 import { UsersModule } from './modules/features/users/users.module';
 import { UserPreferencesModule } from './modules/features/user-preferences/user-preferences.module';
 import { GroupsModule } from './modules/features/groups/groups.module';
+import { CoursesModule } from './modules/features/courses/courses.module';
+import { ResourcesModule } from './modules/features/resources/resources.module';
 
 
 @Module({
@@ -20,6 +22,8 @@ import { GroupsModule } from './modules/features/groups/groups.module';
     AggregationModule,
     UsersModule,
     GroupsModule,
+    CoursesModule,
+    ResourcesModule,
   ],
 })
 export class AppModule {}

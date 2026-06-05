@@ -1,0 +1,65 @@
+:host {
+  display: block;
+}
+
+i[nzType='branches'] {
+  display: inline-block;
+  margin-right: 8px;
+}
+
+nz-select {
+  min-width: 100px;
+  margin-right: 8px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.btn-group {
+  display: inline-flex;
+
+  [nz-button],
+  a[nz-button] {
+    border-radius: 0;
+    margin-left: -1px;
+
+    &:first-child {
+      border-radius: 4px 0 0 4px;
+      margin-left: 0;
+    }
+
+    &:last-child {
+      border-radius: 0 4px 4px 0;
+    }
+
+    &:only-child {
+      border-radius: 4px;
+    }
+  }
+}
+
+.spacer {
+  flex: 1;
+}
+
+section {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  justify-content: flex-start;
+  height: 100%;
+  margin: 0 auto;
+}
+
+form {
+  width: 100%;
+}
+
+mat-form-field {
+  display: block;
+  width: 100%;
+  margin: 12px 0;
+}

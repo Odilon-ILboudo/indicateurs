@@ -1,0 +1,50 @@
+mat-toolbar {
+  background-color: transparent !important;
+  app-toolbar {
+    display: block;
+    width: 100%;
+  }
+}
+
+.persistent-toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--brand-color-primary, #1890ff);
+  color: var(--brand-color-primary-contrast, white);
+  padding: 12px 24px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-size: 14px;
+
+  .toast-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  button {
+    color: var(--brand-color-primary-contrast, white);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+
+    &:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+    }
+  }
+
+  @media (max-width: 768px) {
+    left: 16px;
+    right: 16px;
+    transform: none;
+    font-size: 12px;
+    padding: 10px 16px;
+  }
+}

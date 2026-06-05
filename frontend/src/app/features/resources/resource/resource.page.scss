@@ -1,0 +1,59 @@
+nz-page-header {
+  padding-left: 0;
+  padding: 0;
+}
+
+p {
+  margin: 1rem 0;
+}
+
+nz-button-group {
+  margin: 0 8px 0 0;
+}
+
+nz-select {
+  width: 164px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.container-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0;
+}
+
+.resource-delete-message {
+  display: flex;
+  flex-direction: column;
+  width: 320px;
+  p {
+    margin: 0;
+    width: 100%;
+  }
+  button {
+    padding: 0;
+  }
+}
+
+.move-to-owner-circle-message {
+  display: flex;
+  flex-direction: column;
+  width: 350px;
+  p {
+    margin: 0;
+    width: 100%;
+  }
+  button {
+    padding: 0;
+  }
+}
+
+@media (min-width: 768px) {
+  p {
+    width: 70%;
+  }
+}

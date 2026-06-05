@@ -1,0 +1,34 @@
+<header>
+  <nz-select [(ngModel)]="version" (ngModelChange)="onChangeVersion($event)" [nzCustomTemplate]="versionTpt">
+    <ng-template #versionTpt>
+      <i nz-icon nzType="branches" nzTheme="outline"></i>
+      {{ version }}
+    </ng-template>
+    <nz-option nzLabel="latest" nzValue="latest" />
+    <nz-option *ngFor="let item of versions.all" [nzLabel]="item.tag" [nzValue]="item.tag" />
+  </nz-select>
+  <div class="btn-group">
+    <a *ngIf="canPreview" nz-button nzType="primary" nz-tooltip="Prévisualiser" (click)="preview.emit()">
+      <i nz-icon nzType="play-circle" nzTheme="outline"></i>
+    </a>
+    <button nz-button target="_blank" nz-tooltip="Éditer en ligne" (click)="edit.emit()">
+      <i nz-icon nzType="edit" nzTheme="outline"></i>
+    </button>
+    <button nz-button nz-tooltip="Actualiser" (click)="refresh.emit(version)">
+      <i nz-icon nzType="reload" nzTheme="outline"></i>
+    </button>
+    <button *ngIf="version === 'latest'" nz-button nz-tooltip="Importer" (click)="upload.next()">
+      <i nz-icon nzType="import" nzTheme="outline"></i>
+    </button>
+    <button nz-button nz-tooltip="Télécharger" (click)="download.emit()">
+      <i nz-icon nzType="download" nzTheme="outline"></i>
+    </button>
+    <button *ngIf="canCreateVersion" nz-button nz-tooltip="Nouvelle version" (click)="versioning.open()">
+      <i nz-icon nzType="tag" nzTheme="outline"></i>
+    </button>
+  </div>
+  <div class="spacer"></div>
+</header>
+
+<resource-version *ngIf="versionInfo" [version]="versionInfo" />
+<resource-versioning #versioning [resource]="resource" (versionCreated)="refresh.next('latest')" />

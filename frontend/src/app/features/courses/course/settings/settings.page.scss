@@ -1,0 +1,99 @@
+:host {
+  display: block;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+}
+
+nz-form-item {
+  margin-bottom: 12px;
+}
+
+nz-select,
+mat-form-field {
+  display: block;
+  width: 100%;
+}
+
+nz-spin,
+button {
+  align-self: flex-start;
+}
+
+nz-spin {
+  margin: 2rem 1rem;
+}
+
+mat-card {
+  margin: 1rem 0;
+}
+
+mat-card-header {
+  margin-bottom: 1rem;
+}
+
+.danger-zone {
+  border: 1px solid var(--brand-text-error);
+}
+
+.demo-title {
+  padding-bottom: 1rem;
+}
+
+.demo-content {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.demo-left {
+  flex: 1;
+  min-width: 300px;
+}
+
+.demo-right {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.demo-url-field {
+  width: 100%;
+}
+
+.demo-delete-btn {
+  margin-top: 0.5rem;
+}
+
+.demo-qr-mobile {
+  display: none;
+  justify-content: center;
+  margin: 1rem 0;
+}
+
+@media (max-width: 768px) {
+  .demo-content {
+    flex-direction: column;
+  }
+
+  .demo-left {
+    min-width: unset;
+  }
+
+  .demo-right {
+    display: none;
+  }
+
+  .demo-qr-mobile {
+    display: flex;
+  }
+}
+
+@media (min-width: 769px) {
+  .demo-qr-mobile {
+    display: none;
+  }
+}

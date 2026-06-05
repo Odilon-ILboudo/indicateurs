@@ -1,0 +1,50 @@
+<section>
+  <button *ngIf="canEdit" (click)="addModal.open()" nz-button nzType="primary" nz-tooltip="Ajouter">
+    <span nz-icon nzType="plus" nzTheme="outline"></span><span>Ajouter un membre</span>
+  </button>
+  <mat-card *ngIf="context.course">
+    <course-member-search-bar
+      #searchbar
+      autoSelect
+      [ngModel]="members"
+      placeholder="Pour filtrer, essayez de taper un nom, un email..."
+      (ngModelChange)="onUpdateMembers($event)"
+      [filters]="filters"
+      [courseId]="context.course!.id"
+    />
+    <mat-card-content>
+      <course-member-table
+        [total]="searchbar.total"
+        [(filters)]="filters"
+        [loading]="searchbar.searching"
+        [members]="members"
+        [nonDeletables]="nonDeletables"
+        [editable]="canEdit"
+        (deleted)="remove($event)"
+        (changeRole)="updateRole($any($event))"
+      />
+    </mat-card-content>
+  </mat-card>
+</section>
+<user-search-modal
+  #addModal
+  multi
+  okTitle="Ajouter"
+  [title]="searchModalTitle"
+  [excludes]="excludes"
+  [filters]="{ roles: roles }"
+  [allowGroup]="allowGroup"
+  (closed)="addMembers($event)"
+>
+  <p>
+    Sélectionnez les
+    <nz-select [(ngModel)]="role" nzAllowClear nzPlaceHolder="Rôle" nzShowSearch>
+      <nz-option
+        *ngFor="let role of roles"
+        [nzLabel]="(role | displayCourseMemberRole) + 's'"
+        [nzValue]="role"
+      ></nz-option>
+    </nz-select>
+    que vous souhaitez ajouter
+  </p>
+</user-search-modal>

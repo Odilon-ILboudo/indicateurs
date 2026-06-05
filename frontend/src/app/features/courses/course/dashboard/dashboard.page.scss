@@ -1,0 +1,39 @@
+:host {
+  display: block;
+}
+
+nz-empty {
+  margin: 2rem 0;
+}
+
+mat-card {
+  margin-bottom: 1rem;
+}
+
+header {
+  display: flex;
+
+  flex-wrap: wrap;
+  gap: 1rem;
+  flex-direction: row;
+  align-items: center;
+}
+
+ui-search-bar {
+  flex-basis: 1;
+  flex-grow: 999;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.container-progression {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.add-activity {
+  margin-right: 1rem;
+}

@@ -126,7 +126,7 @@ const CTX_ICONS: Record<string, string> = {
             <span class="info-label">Contextes</span>
             <div class="info-value tags-row">
               <nz-tag *ngFor="let ctx of contexts" nzColor="blue">{{ ctxLabel(ctx) }}</nz-tag>
-              <span *ngIf="!contexts.length" class="empty-val">—</span>
+              <span *ngIf="!contexts.length" class="empty-val">-</span>
             </div>
           </div>
 
