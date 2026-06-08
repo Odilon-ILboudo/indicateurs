@@ -38,16 +38,22 @@ export class OverviewPage implements OnInit, OnDestroy {
   protected readonly roleService = inject(RoleService);
 
   protected indicators: IndicatorDefinition[] = [];
+  private allIndicators: IndicatorDefinition[] = [];
   protected activeIndicatorIds: string[] = [];
   protected loading = true;
 
-  protected context: DashboardContext = {
-    scope: 'learner',
-    scopeId: environment.defaultUserId,
-    userId: environment.defaultUserId,
-    academicYear: '2024-2025',
-    semester: 'S1',
-  };
+  protected context: DashboardContext = this.buildDefaultContext();
+
+  private buildDefaultContext(): DashboardContext {
+    const scope = this.roleService.isTeacher() ? 'teacher' : this.roleService.isAdmin() ? 'admin' : 'learner';
+    return {
+      scope,
+      scopeId: environment.defaultUserId,
+      userId: environment.defaultUserId,
+      academicYear: '2024-2025',
+      semester: 'S1',
+    };
+  }
 
   async ngOnInit(): Promise<void> {
     // Restaurer le contexte teacher si une sélection précédente existe
@@ -65,6 +71,8 @@ export class OverviewPage implements OnInit, OnDestroy {
 
   protected onTeacherContextChange(ctx: DashboardContext): void {
     this.context = ctx;
+    this.indicators = this.allIndicators.filter(ind =>
+      ind.contextType === this.context.scope && this.roleService.canSeeIndicatorContext(ind.contextType));
     this.changeDetectorRef.markForCheck();
   }
 
@@ -81,7 +89,9 @@ export class OverviewPage implements OnInit, OnDestroy {
     this.loading = true;
     this.subscriptions.push(
       this.indicatorService.loadIndicators().subscribe(indicators => {
-        this.indicators = indicators;
+        this.allIndicators = indicators;
+        this.indicators = indicators.filter(ind =>
+          ind.contextType === this.context.scope && this.roleService.canSeeIndicatorContext(ind.contextType));
         this.loading = false;
         this.changeDetectorRef.markForCheck();
       })

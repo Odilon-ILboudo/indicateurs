@@ -18,56 +18,12 @@ export class ActivityIndicatorController {
    * Récupère la valeur de l'indicateur pour un utilisateur sur une activité
    * GET /indicators/activity-attempts/value?userId=xxx&activityId=xxx
    */
-  /*@Get('value')
-  async getIndicatorValue(
-    @Query('userId') userId: string,
-    @Query('activityId') activityId: string,
-  ) {
-
-    this.logger.log(` ========== GET VALUE ==========`);
-    this.logger.log(` userId reçu: ${userId}`);
-    this.logger.log(` activityId reçu: ${activityId}`);
-    
-    if (!userId || !activityId) {
-      return {
-        success: false,
-        message: 'Les paramètres userId et activityId sont requis',
-      };
-    }
-
-    //  Récupération par name (pas d'ID en dur)
-    const indicator = await this.indicatorsService.findByName(this.INDICATOR_NAME);
-    
-    if (!indicator) {
-      return {
-        success: false,
-        message: 'Indicateur non trouvé',
-      };
-    }
-
-    const result = await this.activityIndicatorService.getIndicatorWithDetails(
-      userId,
-      activityId,
-      indicator.id,
-    );
-
-    return {
-      success: true,
-      data: result,
-    };
-  }*/
-
-
   @Get('value')
   async getIndicatorValue(
     @Query('userId') userId: string,
     @Query('activityId') activityId: string,
-    @Query('indicatorId') indicatorId: string,  // ← AJOUTER ce paramètre
+    @Query('indicatorId') indicatorId: string, 
   ) {
-    this.logger.log(` ========== GET VALUE ==========`);
-    this.logger.log(` userId reçu: ${userId}`);
-    this.logger.log(` activityId reçu: ${activityId}`);
-    this.logger.log(` indicatorId reçu: ${indicatorId}`);
     
     if (!userId || !activityId || !indicatorId) {
       return {

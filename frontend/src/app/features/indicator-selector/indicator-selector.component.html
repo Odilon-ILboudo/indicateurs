@@ -1,7 +1,7 @@
 <div class="indicator-selector">
   <div class="filters">
-    <nz-select 
-      nzPlaceHolder="Filtrer par étendue" 
+    <nz-select
+      nzPlaceHolder="Filtrer par étendue"
       [(ngModel)]="filters.scope"
       (ngModelChange)="applyFilters()"
       style="width: 200px">
@@ -10,11 +10,11 @@
       <nz-option nzValue="course" nzLabel="Cours" />
       <nz-option nzValue="activity" nzLabel="Activité" />
       <nz-option nzValue="learner" nzLabel="Apprenant" />
-      <nz-option nzValue="circle" nzLabel="Groupe" />
+      <nz-option nzValue="group" nzLabel="Groupe" />
     </nz-select>
-    
-    <nz-select 
-      nzPlaceHolder="Trier par" 
+
+    <nz-select
+      nzPlaceHolder="Trier par"
       [(ngModel)]="filters.sortBy"
       (ngModelChange)="applyFilters()"
       style="width: 200px">
@@ -22,19 +22,29 @@
       <nz-option nzValue="popular" nzLabel="Plus utilisés" />
       <nz-option nzValue="unpopular" nzLabel="Moins utilisés" />
     </nz-select>
+
+    <nz-select
+      nzPlaceHolder="Familles / indicateurs uniques"
+      [(ngModel)]="filters.grouping"
+      (ngModelChange)="applyFilters()"
+      style="width: 240px">
+      <nz-option nzValue="all" nzLabel="Familles + indicateurs uniques" />
+      <nz-option nzValue="families" nzLabel="Familles uniquement" />
+      <nz-option nzValue="standalone" nzLabel="Indicateurs uniques" />
+    </nz-select>
   </div>
-  
+
   <!-- État de chargement -->
   <div *ngIf="isLoading" class="loading-state">
     <nz-spin nzSimple></nz-spin>
     <p>Chargement des indicateurs...</p>
   </div>
-  
+
   <!-- Tableau des indicateurs -->
-  <nz-table 
-    *ngIf="!isLoading && filteredIndicators.length > 0"
-    #indicatorTable 
-    [nzData]="filteredIndicators" 
+  <nz-table
+    *ngIf="!isLoading && displayRows.length > 0"
+    #indicatorTable
+    [nzData]="displayRows"
     [nzLoading]="false"
     nzBordered>
     <thead>
@@ -47,48 +57,84 @@
       </tr>
     </thead>
     <tbody>
-      <tr *ngFor="let indicator of indicatorTable.data">
-        <td>
-          <strong>{{ indicator.name }}</strong>
-          <br>
-          <small class="description">{{ indicator.description }}</small>
-        </td>
-        <td>
-          <nz-tag *ngFor="let ctx of getSupportedContexts(indicator)" style="margin-bottom:2px">
-            {{ getScopeLabel(ctx) }}
-          </nz-tag>
-          <span *ngIf="!getSupportedContexts(indicator).length" class="no-viz">-</span>
-        </td>
-        <td>{{ indicator.usageCount || 0 }}</td>
-        <td>
-          <mat-icon
-            *ngFor="let viz of getVizTypes(indicator)"
-            [matTooltip]="getVizLabel(viz)"
-            class="viz-icon">
-            {{ getVizIcon(viz) }}
-          </mat-icon>
-          <span *ngIf="!getVizTypes(indicator).length" class="no-viz">Aucune</span>
-        </td>
-        <td class="actions">
-          <button
-            mat-icon-button
-            (click)="viewIndicator(indicator)"
-            matTooltip="Voir les détails"
-            style="border:none;box-shadow:none;background:transparent">
-            <mat-icon>visibility</mat-icon>
-          </button>
-          <nz-switch 
-            [ngModel]="isActive(indicator.id)"
-            (ngModelChange)="toggleIndicator(indicator.id, $event)"
-            [nzCheckedChildren]="'✓'"
-            [nzUnCheckedChildren]="'✗'">
-          </nz-switch>
-        </td>
-      </tr>
+      <ng-container *ngFor="let row of indicatorTable.data" [ngSwitch]="row.kind">
+
+        <!-- Ligne d'en-tête de famille, repliable -->
+        <tr *ngSwitchCase="'family'" class="family-row" (click)="toggleFamily(row.familyName)">
+          <td colspan="5">
+            <mat-icon class="family-chevron">{{ row.expanded ? 'expand_more' : 'chevron_right' }}</mat-icon>
+            <mat-icon class="family-icon">folder_special</mat-icon>
+            <strong>{{ row.familyName }}</strong>
+            <nz-tag nzColor="purple">{{ row.members.length }} indicateur{{ row.members.length > 1 ? 's' : '' }}</nz-tag>
+          </td>
+        </tr>
+
+        <!-- Indicateur autonome ou membre d'une famille dépliée : même rendu qu'un indicateur unique -->
+        <ng-container *ngSwitchCase="'standalone'" [ngTemplateOutlet]="indicatorRow" [ngTemplateOutletContext]="{ $implicit: row.indicator }" />
+        <ng-container *ngSwitchCase="'member'" [ngTemplateOutlet]="indicatorRow" [ngTemplateOutletContext]="{ $implicit: row.indicator }" />
+
+      </ng-container>
     </tbody>
   </nz-table>
-  
-  <div class="empty-state" *ngIf="!isLoading && filteredIndicators.length === 0 && allIndicators.length === 0">
+
+  <ng-template #indicatorRow let-indicator>
+    <tr>
+      <td>
+        <strong>{{ indicator.name }}</strong>
+        <br>
+        <small class="description">{{ indicator.description }}</small>
+      </td>
+      <td>
+        <nz-tag *ngFor="let ctx of getSupportedContexts(indicator)" style="margin-bottom:2px">
+          {{ getScopeLabel(ctx) }}
+        </nz-tag>
+        <span *ngIf="!getSupportedContexts(indicator).length" class="no-viz">-</span>
+      </td>
+      <td>{{ indicator.usageCount || 0 }}</td>
+      <td>
+        <ng-container *ngIf="indicator.visualizations?.length; else noViz">
+          <ng-container *ngIf="indicator.visualizations!.length > 1; else singleViz">
+            <mat-icon
+              *ngFor="let viz of indicator.visualizations"
+              [class.viz-icon-disabled]="!isVizEnabled(indicator.id, viz.id)"
+              [matTooltip]="(viz.label || getVizLabel(viz.type)) + (isVizEnabled(indicator.id, viz.id) ? ' — visible (cliquer pour masquer)' : ' — masquée (cliquer pour afficher)')"
+              class="viz-icon viz-icon-toggle"
+              (click)="toggleViz(indicator, viz, $event)">
+              {{ getVizIcon(viz.type) }}
+            </mat-icon>
+          </ng-container>
+          <ng-template #singleViz>
+            <mat-icon
+              *ngFor="let viz of indicator.visualizations"
+              [matTooltip]="viz.label || getVizLabel(viz.type)"
+              class="viz-icon">
+              {{ getVizIcon(viz.type) }}
+            </mat-icon>
+          </ng-template>
+        </ng-container>
+        <ng-template #noViz>
+          <span class="no-viz">Aucune</span>
+        </ng-template>
+      </td>
+      <td class="actions">
+        <button
+          mat-icon-button
+          (click)="viewIndicator(indicator)"
+          matTooltip="Voir les détails"
+          style="border:none;box-shadow:none;background:transparent">
+          <mat-icon>visibility</mat-icon>
+        </button>
+        <nz-switch
+          [ngModel]="isActive(indicator.id)"
+          (ngModelChange)="toggleIndicator(indicator.id, $event)"
+          [nzCheckedChildren]="'✓'"
+          [nzUnCheckedChildren]="'✗'">
+        </nz-switch>
+      </td>
+    </tr>
+  </ng-template>
+
+  <div class="empty-state" *ngIf="!isLoading && displayRows.length === 0 && allIndicators.length === 0">
     <mat-icon>info</mat-icon>
     <p>Aucun indicateur disponible</p>
   </div>

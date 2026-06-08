@@ -17,6 +17,13 @@ h4 {
   font-weight: 600;
 }
 
+h4.section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--brand-background-sidebar, #3C2964);
+  margin-bottom: 16px;
+}
+
 .no-margin-left {
   margin-left: 0;
 }

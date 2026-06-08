@@ -1,34 +1,28 @@
-export type IndicatorScope = 'global' | 'course' | 'activity' | 'learner' | 'teacher' | 'group';
-export type IndicatorCategory = 'performance' | 'progress';
+export type IndicatorScope = 'learner' | 'teacher' | 'admin' | 'course' | 'activity' | 'group';
 
 export type ViewVisualizationType = 'card' | 'gauge' | 'line-chart' | 'bar-chart' | 'histogram';
 
-export interface ViewVisualization {
+export interface IndicatorFormula {
+  version: '1.0';
+  pipeline: {
+    id: string;
+    type: string;
+    label?: string;
+    params: Record<string, any>;
+  }[];
+}
+
+/** Une visualisation au sein d'un indicateur. */
+export interface IndicatorVisualization {
+  id: string;
+  label: string;
   type: ViewVisualizationType;
   icon?: string;
   color?: string;
   unit?: string;
   thresholds?: { good: number; warning: number; danger: number };
-}
-
-export interface ViewConfig {
-  id: string;
-  label: string;
-  formula: {
-    version: '1.0';
-    pipeline: {
-      id: string;
-      type: string;
-      label?: string;
-      params: Record<string, any>;
-    }[];
-  };
-  visualization: ViewVisualization;
-}
-
-export interface ContextConfig {
-  contextType: IndicatorScope;
-  views: ViewConfig[];
+  /** Formule propre à cette vue. Si absente, utilise indicator.formula. */
+  formula?: IndicatorFormula | null;
 }
 
 export interface ViewResult {
@@ -37,62 +31,20 @@ export interface ViewResult {
   metadata: Record<string, any>;
 }
 
-
 export interface IndicatorDefinition {
-  id: string;  // ← AJOUTER cette propriété (UUID)
+  id: string;
   name: string;
   description: string;
-  scope?: IndicatorScope;  // optionnel
-  category?: IndicatorCategory;
-  supportedContexts?: IndicatorScope[];  // ← AJOUTER
-  formula?: {
-    version: '1.0';
-    dataSource: 'platon.sessions' | 'platon.activities';
-    pipeline: {
-      id: string;
-      type: string;
-      label?: string;
-      params: Record<string, any>;
-    }[];
-  } | null;
+  contextType: IndicatorScope;
+  /** Regroupement nominal de plusieurs indicateurs créés ensemble (ex: "Tentatives avant réussite"). */
+  familyName?: string | null;
+  formula?: IndicatorFormula | null;
   requiredEvents: string[];
-  dataSource?: string;
-  calculationRule?: string;
-  usageExample?: string;
-  visualization: {
-    defaultType: 'card' | 'chart' | 'gauge' | 'table';
-    icon?: string;
-    color?: string;
-    unit?: string;
-    thresholds?: {
-      good: number;
-      warning: number;
-      danger: number;
-    };
-    availableVisualizations?: ('card' | 'chart' | 'gauge' | 'table')[];
-  };
-  templateConfig?: {  // ← AJOUTER pour admin
-    thresholds?: {
-      good?: { label: string; defaultValue: number; min: number; max: number };
-      warning?: { label: string; defaultValue: number; min: number; max: number };
-      danger?: { label: string; defaultValue: number; min: number; max: number };
-    };
-    display?: {
-      unit?: { label: string; defaultValue: string; options?: string[] };
-      icon?: { label: string; defaultValue: string; options?: string[] };
-      color?: { label: string; defaultValue: string; options?: string[] };
-    };
-    description?: {
-      dataSource?: { label: string; defaultValue: string };
-      calculationRule?: { label: string; defaultValue: string };
-      usageExample?: { label: string; defaultValue: string };
-    };
-  };
+  /** Tableau de visualisations (min. 1). La première est la vue "carte" par défaut. */
+  visualizations: IndicatorVisualization[];
   usageCount?: number;
   isActive: boolean;
-  metadata: Record<string, any>;
-  // Nouveau modèle multi-contexte/multi-vue
-  contextConfigs?: ContextConfig[];
+  metadata?: Record<string, any>;
 }
 
 export interface IndicatorValue {
@@ -110,7 +62,7 @@ export interface DashboardContext {
   scope: IndicatorScope;
   scopeId: string;
   userId: string;
-  activityId?: string; // Pour les contextes course/group : activité sélectionnée par l'enseignant
+  activityId?: string;
   groupId?: string;
   academicYear?: string;
   semester?: string;
@@ -127,11 +79,22 @@ export interface TeacherCourse {
   groups: { id: string; name: string }[];
 }
 
+export interface IndicatorSnapshot {
+  id: string;
+  indicatorId: string;
+  contextType: string;
+  contextId: string;
+  activityId: string;
+  title: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface UserDashboardSettings {
-  dismissedToast: boolean; // Toast persistant supprimé
-  activeIndicators: string[]; // IDs des indicateurs actifs
+  dismissedToast: boolean;
+  activeIndicators: string[];
   favoriteIndicators: string[];
   layout: {
-    columns: number; // Nombre de colonnes pour la grille d'indicateurs
+    columns: number;
   };
 }

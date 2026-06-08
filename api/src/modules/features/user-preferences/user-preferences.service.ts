@@ -27,13 +27,24 @@ export class UserPreferencesService {
       relations: ['indicator'],
     });
 
+    const vizPreferences: Record<string, string> = {};
+    const vizVisibility: Record<string, string[]> = {};
+    for (const p of preferences) {
+      if (p.activeVizId) vizPreferences[p.indicatorId] = p.activeVizId;
+      if (p.enabledVizIds) vizVisibility[p.indicatorId] = p.enabledVizIds;
+    }
+
     return {
       activeIndicators: preferences.filter(p => p.isVisible).map(p => p.indicatorId),
+      vizPreferences,
+      vizVisibility,
       preferences: preferences.map(p => ({
         indicatorId: p.indicatorId,
         indicatorName: p.indicator?.name,
         isVisible: p.isVisible,
         displayPreferences: p.displayPreferences,
+        activeVizId: p.activeVizId ?? null,
+        enabledVizIds: p.enabledVizIds ?? null,
         usageCount: p.indicator?.usageCount || 0,
       })),
     };
@@ -49,7 +60,7 @@ export class UserPreferencesService {
   async createPreference(
     userId: string,
     indicatorId: string,
-    data: { isVisible?: boolean; displayPreferences?: { icon?: string; color?: string }; userRole?: string },
+    data: { isVisible?: boolean; displayPreferences?: { icon?: string; color?: string }; userRole?: string; activeVizId?: string; enabledVizIds?: string[] | null },
   ) {
     const indicator = await this.indicatorRepository.findOne({
       where: { id: indicatorId, isActive: true },
@@ -64,19 +75,20 @@ export class UserPreferencesService {
       indicatorId,
       isVisible: data.isVisible ?? true,
       displayPreferences: data.displayPreferences,
+      activeVizId: data.activeVizId ?? null,
+      enabledVizIds: data.enabledVizIds ?? null,
     });
 
     const savedPreference = await this.preferenceRepository.save(preference);
     await this.incrementUsageCount(indicatorId);
-    const isTeacherOrAdmin = data.userRole === 'teacher' || data.userRole === 'admin';
-    if (!isTeacherOrAdmin) await this.calculateAndStoreValue(userId, indicator);
+    await this.calculateAndStoreValue(userId, indicator);
     return savedPreference;
   }
 
   async updatePreference(
     userId: string,
     indicatorId: string,
-    data: { isVisible?: boolean; displayPreferences?: { icon?: string; color?: string }; userRole?: string },
+    data: { isVisible?: boolean; displayPreferences?: { icon?: string; color?: string }; userRole?: string; activeVizId?: string; enabledVizIds?: string[] | null },
   ) {
     let preference = await this.preferenceRepository.findOne({
       where: { userId, indicatorId },
@@ -100,18 +112,21 @@ export class UserPreferencesService {
     if (data.displayPreferences) {
       preference.displayPreferences = data.displayPreferences;
     }
+    if (data.activeVizId !== undefined) {
+      preference.activeVizId = data.activeVizId;
+    }
+    if (data.enabledVizIds !== undefined) {
+      preference.enabledVizIds = data.enabledVizIds;
+    }
 
     const savedPreference = await this.preferenceRepository.save(preference);
 
     if (!wasVisible && willBeVisible) {
       await this.incrementUsageCount(indicatorId);
-      const isTeacherOrAdmin = data.userRole === 'teacher' || data.userRole === 'admin';
-      if (!isTeacherOrAdmin) {
-        const indicator = await this.indicatorRepository.findOne({
-          where: { id: indicatorId, isActive: true },
-        });
-        if (indicator) await this.calculateAndStoreValue(userId, indicator);
-      }
+      const indicator = await this.indicatorRepository.findOne({
+        where: { id: indicatorId, isActive: true },
+      });
+      if (indicator) await this.calculateAndStoreValue(userId, indicator);
     } else if (wasVisible && !willBeVisible) {
       await this.decrementUsageCount(indicatorId);
     }
@@ -136,25 +151,12 @@ export class UserPreferencesService {
     }
   }
 
-  // Pré-calcule la valeur learner d'un indicateur et la persiste.
-  // Skip si l'indicateur n'a pas de contextConfig 'learner' (ex. indicateur course/group uniquement).
+  // Pré-calcule la valeur d'un indicateur scopé à un seul utilisateur (learner/teacher/admin) et la persiste.
+  // Skip pour les indicateurs course/group/activity : leur valeur se calcule à la demande via computeView.
   private async calculateAndStoreValue(userId: string, indicator: IndicatorDefinition): Promise<void> {
-    const explicitConfigs: any[] = indicator.contextConfigs as any[];
-    const hasExplicitConfigs = Array.isArray(explicitConfigs) && explicitConfigs.length > 0;
+    if (!['learner', 'teacher', 'admin'].includes(indicator.contextType)) return;
 
-    // Si contextConfigs est défini mais sans vue learner → indicateur teacher/course, rien à pré-calculer
-    if (hasExplicitConfigs && !explicitConfigs.some(c => c.contextType === 'learner')) return;
-
-    const configs: any[] = hasExplicitConfigs
-      ? explicitConfigs
-      : indicator.formula
-        ? [{ contextType: 'learner', views: [{ formula: indicator.formula }] }]
-        : [];
-
-    const firstView = configs.find(c => c.contextType === 'learner')?.views?.[0];
-    const formulaToUse = (firstView?.formula?.pipeline?.length)
-      ? firstView.formula
-      : indicator.formula;
+    const formulaToUse = indicator.formula;
 
     if (!formulaToUse?.pipeline?.length) return;
 
@@ -172,7 +174,7 @@ export class UserPreferencesService {
     await this.indicatorValueRepository.upsert(
       {
         indicatorId: indicator.id,
-        contextType: 'learner',
+        contextType: indicator.contextType,
         contextId: userId,
         value,
         metadata: { lastUpdate: new Date(), history: [] } as any,

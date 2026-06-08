@@ -18,12 +18,25 @@
     width: 18px;
     height: 18px;
     margin: 0 4px;
-    cursor: pointer;
     color: var(--brand-text-secondary, #666);
-    transition: color 0.2s ease;
-    
+    transition: color 0.2s ease, opacity 0.2s ease;
+  }
+
+  .viz-icon-toggle {
+    cursor: pointer;
+
     &:hover {
       color: var(--brand-primary, #1890ff);
+    }
+
+    &.viz-icon-disabled {
+      color: #d9d9d9;
+      opacity: 0.5;
+
+      &:hover {
+        color: #ff4d4f;
+        opacity: 0.8;
+      }
     }
   }
   
@@ -47,6 +60,32 @@
   .no-viz {
     font-size: 12px;
     color: var(--brand-text-secondary, #999);
+  }
+
+  .family-row {
+    cursor: pointer;
+    background: #f9f0ff;
+
+    &:hover {
+      background: #efdbff;
+    }
+
+    td {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .family-chevron {
+      color: #722ed1;
+    }
+
+    .family-icon {
+      color: #722ed1;
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
   }
   
   .actions {

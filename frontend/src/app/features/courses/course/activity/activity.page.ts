@@ -15,8 +15,10 @@ import { NzDatePickerModule } from 'ng-zorro-antd/date-picker'
 import { NzSelectModule, NzSelectOptionInterface } from 'ng-zorro-antd/select'
 import { NzSliderModule } from 'ng-zorro-antd/slider'
 import { NzInputNumberModule } from 'ng-zorro-antd/input-number'
+import { NzEmptyModule } from 'ng-zorro-antd/empty'
+import { NzSpinModule } from 'ng-zorro-antd/spin'
 
-import { DurationPipe, UiLayoutBlockComponent, UiStatisticCardComponent } from '@platon/shared/ui'
+import { DurationPipe, UiLayoutBlockComponent } from '@platon/shared/ui'
 import { CourseActivityCardComponent } from '@platon/feature/course/browser'
 import {
   KCileComponent,
@@ -29,6 +31,11 @@ import {
 import { UserActivityResultsDistribution } from '@platon/feature/result/common'
 import { PeerTreeComponent } from '@platon/feature/peer/browser'
 
+import { IndicatorService } from '../../../../core/services/indicator.service'
+import { RoleService } from '../../../../core/services/role.service'
+import { DashboardContext, IndicatorDefinition } from '../../../../core/models/indicator.model'
+import { IndicatorCardComponent } from '../../../../shared/ui/indicator-card/indicator-card.component'
+import { GroupSnapshotsPanelComponent } from './group-snapshots-panel.component'
 import { ActivityPresenter } from './activity.presenter'
 
 @Component({
@@ -54,6 +61,8 @@ import { ActivityPresenter } from './activity.presenter'
     NzSelectModule,
     NzSliderModule,
     NzInputNumberModule,
+    NzEmptyModule,
+    NzSpinModule,
 
     DurationPipe,
 
@@ -65,7 +74,8 @@ import { ActivityPresenter } from './activity.presenter'
     ResultBoxPlotComponent,
     PeerTreeComponent,
 
-    UiStatisticCardComponent,
+    IndicatorCardComponent,
+    GroupSnapshotsPanelComponent,
     UiLayoutBlockComponent,
   ],
 })
@@ -74,11 +84,21 @@ export class CourseActivityPage implements OnInit, OnDestroy {
   private readonly presenter = inject(ActivityPresenter)
   private readonly changeDetectorRef = inject(ChangeDetectorRef)
   private readonly resultService = inject(ResultService)
+  private readonly indicatorService = inject(IndicatorService)
+  private readonly roleService = inject(RoleService)
   private readonly subscriptions: Subscription[] = []
   private readonly today = new Date()
 
   protected userDistribution: UserActivityResultsDistribution[] = []
   protected context = this.presenter.defaultContext()
+
+  // Indicateurs par contexte
+  protected activityIndicators: IndicatorDefinition[] = []
+  protected groupIndicators: IndicatorDefinition[] = []
+  protected indicatorsLoading = true
+  protected activityContext: DashboardContext | null = null
+  protected indicatorQueryParams: Record<string, string> = {}
+
   protected KCileInsightsOption: { selectedBucket: number; possibleBucket: NzSelectOptionInterface[] } = {
     selectedBucket: 10,
     possibleBucket: [
@@ -96,15 +116,39 @@ export class CourseActivityPage implements OnInit, OnDestroy {
   protected columnOrder?: string[]
 
   ngOnInit(): void {
+    this.loadActivityIndicators()
+
     this.subscriptions.push(
       this.presenter.contextChange.subscribe((context) => {
         this.context = context
         this.columnOrder = this.context.results?.exercises.map((e) => e.title)
-        // Mark immediately so the template re-renders with the new state
         this.changeDetectorRef.markForCheck()
 
         if (context.activity) {
-          // Dates from JSON are ISO strings — convert them to Date objects
+          const activityId = context.activity.id
+          const courseId = context.course?.id ?? ''
+          const activityName = context.activity.title ?? ''
+          const courseName = context.course?.name ?? ''
+
+          // Contexte pour les indicator cards
+          this.activityContext = {
+            scope: 'activity',
+            scopeId: activityId,
+            userId: '',
+          }
+
+          // Query params pour la navigation vers le détail
+          this.indicatorQueryParams = {
+            from: 'activity',
+            activityId,
+            courseId,
+            activityName,
+            courseName,
+          }
+
+          this.changeDetectorRef.markForCheck()
+
+          // Dates from JSON are ISO strings - convert them to Date objects
           const toDate = (v: unknown): Date => v instanceof Date ? v : v ? new Date(v as string) : this.today
           this.onDateChange([
             toDate(context.activity.createdAt),
@@ -117,6 +161,23 @@ export class CourseActivityPage implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.subscriptions.forEach((s) => s.unsubscribe())
+  }
+
+  private loadActivityIndicators(): void {
+    this.indicatorsLoading = true
+    this.indicatorService.loadIndicators().subscribe({
+      next: (indicators) => {
+        const visible = indicators.filter(ind => this.roleService.canSeeIndicatorContext(ind.contextType))
+        this.activityIndicators = visible.filter(ind => ind.contextType === 'activity')
+        this.groupIndicators = visible.filter(ind => ind.contextType === 'group')
+        this.indicatorsLoading = false
+        this.changeDetectorRef.markForCheck()
+      },
+      error: () => {
+        this.indicatorsLoading = false
+        this.changeDetectorRef.markForCheck()
+      },
+    })
   }
 
   protected async onDateChange(dates: Date[]): Promise<void> {

@@ -25,9 +25,17 @@ export class UserIndicatorPreference {
 
   @Column({ type: 'jsonb', nullable: true })
   displayPreferences: {
-    icon?: string;    // Icône différente
-    color?: string;   // Couleur différente
+    icon?: string;
+    color?: string;
   };
+
+  /** Visualisation active choisie par l'utilisateur pour cet indicateur. */
+  @Column({ name: 'active_viz_id', type: 'varchar', length: 255, nullable: true })
+  activeVizId: string | null;
+
+  /** Visualisations que l'utilisateur souhaite voir pour cet indicateur. `null` = toutes (valeur par défaut). */
+  @Column({ name: 'enabled_viz_ids', type: 'jsonb', nullable: true })
+  enabledVizIds: string[] | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

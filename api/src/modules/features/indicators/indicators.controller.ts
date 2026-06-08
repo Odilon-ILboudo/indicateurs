@@ -44,15 +44,24 @@ export class IndicatorsController {
     return this.indicatorsService.getCourseActivities(courseId);
   }
 
+  /** Retourne les étudiants d'un cours (pour le sélecteur de test de formule). */
+  @Get('course/:courseId/students')
+  async getCourseStudents(@Param('courseId') courseId: string) {
+    return this.indicatorsService.getCourseStudents(courseId);
+  }
+
   /**
-   * Retourne les contextConfigs effectifs d'un indicateur (avec rétro-compatibilité).
-   * Utilisé par le frontend pour savoir quelles vues afficher.
+   * Retourne la configuration de l'indicateur (contextType + visualizations + formula).
    * GET /api/indicators/:id/context-configs
    */
   @Get(':id/context-configs')
   async getContextConfigs(@Param('id') id: string) {
     const indicator = await this.indicatorsService.findById(id);
-    return this.indicatorsService.getEffectiveContextConfigs(indicator);
+    return {
+      contextType: indicator.contextType,
+      visualizations: indicator.visualizations,
+      formula: indicator.formula,
+    };
   }
 
   @Get(':id')
@@ -111,19 +120,21 @@ export class IndicatorsController {
   }
 
   /**
-   * Calcule une vue spécifique d'un indicateur pour un contexte et un viewId donnés.
+   * Calcule la formule d'un indicateur pour un contexte donné et persiste le résultat.
    * POST /api/indicators/:id/compute-view
-   * Body: { contextType, contextId, viewId }
+   * Body: { contextType, contextId, activityId? }
    */
   @Post(':id/compute-view')
   async computeView(
     @Param('id') id: string,
-    @Body() body: { contextType: string; contextId: string; viewId: string; activityId?: string },
+    @Body() body: { contextType: string; contextId: string; activityId?: string; vizId?: string },
   ) {
-    if (!body.contextType || !body.contextId || !body.viewId) {
-      throw new BadRequestException('contextType, contextId et viewId sont requis');
+    if (!body.contextType || !body.contextId) {
+      throw new BadRequestException('contextType et contextId sont requis');
     }
-    return this.indicatorsService.computeView(id, body.contextType, body.contextId, body.viewId, body.activityId);
+    return this.indicatorsService.computeView(
+      id, body.contextType, body.contextId, body.activityId, body.vizId,
+    );
   }
 
   /**
@@ -184,6 +195,51 @@ export class IndicatorsController {
   @Delete(':id')
   async deleteIndicator(@Param('id') id: string) {
     await this.indicatorsService.delete(id);
+    return { success: true };
+  }
+
+  // ── Snapshots (comparaison groupes côte à côte) ──────────────────────────
+
+  /** Liste les snapshots d'un indicateur pour une activité donnée. */
+  @Get(':id/snapshots')
+  async getSnapshots(
+    @Param('id') id: string,
+    @Query('activityId') activityId: string,
+  ) {
+    if (!activityId) throw new BadRequestException('activityId est requis');
+    return this.indicatorsService.getSnapshots(id, activityId);
+  }
+
+  /** Crée un snapshot (groupe + activité). Retourne 409 si déjà existant. */
+  @Post(':id/snapshots')
+  async createSnapshot(
+    @Param('id') id: string,
+    @Body() body: { contextType: string; contextId: string; activityId: string; title: string },
+  ) {
+    if (!body.contextId || !body.activityId || !body.title) {
+      throw new BadRequestException('contextId, activityId et title sont requis');
+    }
+    return this.indicatorsService.createSnapshot(id, { ...body, contextType: body.contextType ?? 'group' });
+  }
+
+  /** Met à jour le titre d'un snapshot. */
+  @Patch(':id/snapshots/:snapshotId')
+  async updateSnapshotTitle(
+    @Param('id') id: string,
+    @Param('snapshotId') snapshotId: string,
+    @Body() body: { title: string },
+  ) {
+    if (!body.title?.trim()) throw new BadRequestException('title est requis');
+    return this.indicatorsService.updateSnapshotTitle(id, snapshotId, body.title.trim());
+  }
+
+  /** Supprime un snapshot. */
+  @Delete(':id/snapshots/:snapshotId')
+  async deleteSnapshot(
+    @Param('id') id: string,
+    @Param('snapshotId') snapshotId: string,
+  ) {
+    await this.indicatorsService.deleteSnapshot(id, snapshotId);
     return { success: true };
   }
 }

@@ -1,34 +1,26 @@
 // src/indicators/entities/indicator-definition.entity.ts
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
-export type ContextType = 'global' | 'course' | 'activity' | 'learner' | 'teacher' | 'group';
+export type ContextType = 'learner' | 'teacher' | 'admin' | 'course' | 'activity' | 'group';
 
-export interface ViewVisualization {
-  type: 'card' | 'gauge' | 'line-chart' | 'bar-chart' | 'histogram';
+export type VizType = 'card' | 'gauge' | 'line-chart' | 'bar-chart' | 'histogram';
+
+export interface FormulaDefinition {
+  version: '1.0';
+  pipeline: { id: string; type: string; label?: string; params: Record<string, any> }[];
+}
+
+/** Une visualisation au sein d'un indicateur (1 indicateur peut en avoir plusieurs). */
+export interface IndicatorVisualization {
+  id: string;
+  label: string;
+  type: VizType;
   icon?: string;
   color?: string;
   unit?: string;
   thresholds?: { good: number; warning: number; danger: number };
-}
-
-export interface ViewConfig {
-  id: string;
-  label: string;
-  formula: {
-    version: '1.0';
-    pipeline: {
-      id: string;
-      type: string;
-      label?: string;
-      params: Record<string, any>;
-    }[];
-  };
-  visualization: ViewVisualization;
-}
-
-export interface ContextConfig {
-  contextType: ContextType;
-  views: ViewConfig[];
+  /** Formule propre à cette vue. Si absente, utilise indicator.formula. */
+  formula?: FormulaDefinition | null;
 }
 
 @Entity('indicator_definitions')
@@ -43,25 +35,20 @@ export class IndicatorDefinition {
   @Column({ nullable: true, type: 'text' })
   description: string;
 
-  @Column({ type: 'jsonb', default: [] })
-  supportedContexts: ContextType[];
+  /** Contexte unique pour cet indicateur (Option B : 1 indicateur = 1 contexte). */
+  @Column({ type: 'varchar', nullable: true })
+  contextType: ContextType;
+
+  /** Regroupement nominal de plusieurs indicateurs créés ensemble (ex: "Tentatives avant réussite"). */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  familyName: string | null;
 
   @Column({ type: 'jsonb' })
   requiredEvents: string[];
 
-  // Visualisation par défaut (peut être surchargée par l'utilisateur)
+  /** Tableau de visualisations (min. 1). Chacune peut avoir sa propre formule. */
   @Column({ type: 'jsonb', nullable: true })
-  visualization: {
-    defaultType: 'card' | 'chart' | 'gauge' | 'table';
-    icon?: string;
-    color?: string;
-    unit?: string;
-    thresholds?: {
-      good: number;
-      warning: number;
-      danger: number;
-    };
-  };
+  visualizations: IndicatorVisualization[];
 
   @Column({ default: true })
   isActive: boolean;
@@ -69,81 +56,9 @@ export class IndicatorDefinition {
   @Column({ default: 0 })
   usageCount: number;
 
-  // Formule DSL legacy (rétro-compatibilité - utiliser contextConfigs à la place)
+  /** Formule partagée utilisée par les visualisations sans formule propre. */
   @Column({ type: 'jsonb', nullable: true })
-  formula: {
-    version: '1.0';
-    dataSource?: 'platon.sessions' | 'platon.activities';
-    pipeline: {
-      id: string;
-      type: string;
-      label?: string;
-      params: Record<string, any>;
-    }[];
-  } | null;
-
-  // Nouveau modèle multi-contexte/multi-vue - remplace formula + visualization
-  @Column({ type: 'jsonb', nullable: true })
-  contextConfigs: ContextConfig[] | null;
-
-  // Configuration du template (paramètres modifiables par l'utilisateur)
-  @Column({ type: 'jsonb', nullable: true })
-  templateConfig: {
-    // Seuils paramétrables
-    thresholds: {
-      good: {
-        label: string;
-        defaultValue: number;
-        min: number;
-        max: number;
-      };
-      warning: {
-        label: string;
-        defaultValue: number;
-        min: number;
-        max: number;
-      };
-      danger: {
-        label: string;
-        defaultValue: number;
-        min: number;
-        max: number;
-      };
-    };
-    // Affichage paramétrable
-    display: {
-      unit: {
-        label: string;
-        defaultValue: string;
-        options?: string[];
-      };
-      icon: {
-        label: string;
-        defaultValue: string;
-        options?: string[];
-      };
-      color: {
-        label: string;
-        defaultValue: string;
-        options?: string[];
-      };
-    };
-    // Descriptions paramétrables
-    description: {
-      dataSource: {
-        label: string;
-        defaultValue: string;
-      };
-      calculationRule: {
-        label: string;
-        defaultValue: string;
-      };
-      usageExample: {
-        label: string;
-        defaultValue: string;
-      };
-    };
-  };
+  formula: FormulaDefinition | null;
 
   @CreateDateColumn()
   createdAt: Date;

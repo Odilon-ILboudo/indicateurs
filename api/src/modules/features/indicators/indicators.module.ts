@@ -10,12 +10,13 @@ import { IndicatorDefinition } from './entities/indicator-definition.entity';
 import { IndicatorValue } from './entities/indicator-value.entity';
 import { IndicatorFormulaVersion } from './entities/indicator-formula-version.entity';
 import { IndicatorExecutionLog } from './entities/indicator-execution-log.entity';
+import { IndicatorSnapshot } from './entities/indicator-snapshot.entity';
 import { UserIndicatorPreference } from '../user-preferences/entities/user-indicator-preference.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature(
-      [IndicatorDefinition, IndicatorValue, IndicatorFormulaVersion, IndicatorExecutionLog, UserIndicatorPreference],
+      [IndicatorDefinition, IndicatorValue, IndicatorFormulaVersion, IndicatorExecutionLog, IndicatorSnapshot, UserIndicatorPreference],
       'indicators',
     ),
     EventEmitterModule.forRoot(),

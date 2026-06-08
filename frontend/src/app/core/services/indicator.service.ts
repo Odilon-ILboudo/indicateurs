@@ -2,7 +2,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, BehaviorSubject, map, of, tap } from 'rxjs';
-import { ContextConfig, CourseActivity, IndicatorDefinition, IndicatorValue, TeacherCourse, ViewResult } from '../models/indicator.model';
+import { CourseActivity, IndicatorDefinition, IndicatorSnapshot, IndicatorValue, TeacherCourse, ViewResult } from '../models/indicator.model';
 import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
@@ -13,6 +13,12 @@ export class IndicatorService {
 
   private indicatorsCache$ = new BehaviorSubject<IndicatorDefinition[] | null>(null);
   private indicatorsLoaded = false;
+
+  /** Cache in-memory des préférences viz : indicatorId → vizId (chargé depuis la BDD au démarrage). */
+  private readonly vizPreferencesCache = new Map<string, string>();
+
+  /** Cache in-memory des visualisations activées par l'utilisateur : indicatorId → vizIds[] (absent = toutes activées). */
+  private readonly vizVisibilityCache = new Map<string, string[]>();
 
   // ── Lecture ──────────────────────────────────────────────────────────────
 
@@ -28,13 +34,12 @@ export class IndicatorService {
     );
   }
 
-  /** Charge TOUS les indicateurs (actifs + inactifs) pour l'interface admin. */
   loadAllForAdmin(): Observable<IndicatorDefinition[]> {
     return this.http.get<IndicatorDefinition[]>(`${this.apiUrl}/all`);
   }
 
-  getIndicatorValue(indicatorId: string, contextId: string): Observable<IndicatorValue> {
-    const url = `${this.apiUrl}/${indicatorId}/values?contextType=learner&contextId=${contextId}`;
+  getIndicatorValue(indicatorId: string, contextType: string, contextId: string): Observable<IndicatorValue> {
+    const url = `${this.apiUrl}/${indicatorId}/values?contextType=${contextType}&contextId=${contextId}`;
     return this.http.get<{ values: IndicatorValue[] }>(url).pipe(
       map(response => response.values[0] || { value: 0, timestamp: new Date() }),
     );
@@ -47,15 +52,27 @@ export class IndicatorService {
     );
   }
 
-  getUserPreferences(userId: string): Observable<{ activeIndicators: string[] }> {
-    return this.http.get<{ activeIndicators: string[] }>(
+  getUserPreferences(userId: string): Observable<{ activeIndicators: string[]; vizPreferences: Record<string, string>; vizVisibility: Record<string, string[]> }> {
+    return this.http.get<{ activeIndicators: string[]; vizPreferences: Record<string, string>; vizVisibility: Record<string, string[]> }>(
       `${this.preferencesUrl}?userId=${encodeURIComponent(userId)}`,
+    ).pipe(
+      tap(prefs => {
+        if (prefs.vizPreferences) {
+          for (const [indicatorId, vizId] of Object.entries(prefs.vizPreferences)) {
+            this.vizPreferencesCache.set(indicatorId, vizId);
+          }
+        }
+        if (prefs.vizVisibility) {
+          for (const [indicatorId, vizIds] of Object.entries(prefs.vizVisibility)) {
+            this.vizVisibilityCache.set(indicatorId, vizIds);
+          }
+        }
+      }),
     );
   }
 
   // ── Écriture ─────────────────────────────────────────────────────────────
 
-  /** Crée un nouvel indicateur depuis le builder admin (remplace le seed script). */
   createIndicator(data: Partial<IndicatorDefinition> & { formula?: any }): Observable<IndicatorDefinition> {
     this.invalidateCache();
     return this.http.post<IndicatorDefinition>(this.apiUrl, data);
@@ -89,19 +106,22 @@ export class IndicatorService {
     );
   }
 
-  /** Prévisualise une formule DSL sur des données réelles sans persister. */
-  previewFormula(formula: any, context: { userId: string; activityId: string }): Observable<{ value: number }> {
-    return this.http.post<{ value: number }>(`${this.apiUrl}/preview`, { formula, context });
-  }
-
-  /** Recalcule toutes les valeurs d'un indicateur DSL pour tous les utilisateurs actifs. */
   recalculateIndicator(indicatorId: string): Observable<{ processed: number; updated: number; failed: number }> {
     return this.http.post<{ processed: number; updated: number; failed: number }>(
       `${this.apiUrl}/${indicatorId}/recalculate`, {},
     );
   }
 
-  // ── Versioning des formules (tâche 4) ─────────────────────────────────────
+  // ── DSL preview ──────────────────────────────────────────────────────────
+
+  previewFormulaRaw(
+    formula: any,
+    context: { userId?: string; groupId?: string; activityId?: string },
+  ): Observable<{ result: any }> {
+    return this.http.post<{ result: any }>(`${this.apiUrl}/preview`, { formula, context });
+  }
+
+  // ── Versioning ────────────────────────────────────────────────────────────
 
   getFormulaHistory(indicatorId: string): Observable<any[]> {
     return this.http.get<any[]>(`${this.apiUrl}/${indicatorId}/formula-history`);
@@ -113,44 +133,39 @@ export class IndicatorService {
     );
   }
 
-  // ── Logs d'exécution (tâche 5) ────────────────────────────────────────────
+  // ── Logs ──────────────────────────────────────────────────────────────────
 
   getExecutionLogs(indicatorId: string, limit = 50): Observable<any[]> {
     return this.http.get<any[]>(`${this.apiUrl}/${indicatorId}/logs?limit=${limit}`);
   }
 
-  /** Retourne les tables PLaTon disponibles et leurs colonnes (pour le builder). */
   getPlatonSchema(): Observable<{ name: string; columns: { name: string; type: string }[] }[]> {
     return this.http.get<{ name: string; columns: { name: string; type: string }[] }[]>(
       `${this.apiUrl}/schema`,
     );
   }
 
-  // ── Multi-contexte / Multi-vue ────────────────────────────────────────────
-
-  /** Retourne les contextConfigs effectifs d'un indicateur (avec rétro-compatibilité legacy). */
-  getContextConfigs(indicatorId: string): Observable<ContextConfig[]> {
-    return this.http.get<ContextConfig[]>(`${this.apiUrl}/${indicatorId}/context-configs`);
-  }
+  // ── Calcul de vue ─────────────────────────────────────────────────────────
 
   /**
-   * Calcule une vue spécifique pour un contexte donné et persiste le résultat.
-   * - learner : contextId = userId
-   * - group   : contextId = groupId (CourseGroups.id)
-   * - course  : contextId = courseId
+   * Calcule la formule d'un indicateur pour un contexte donné et persiste le résultat.
+   * - learner  : contextId = userId
+   * - group    : contextId = groupId, activityId requis
+   * - course   : contextId = courseId, activityId requis
+   * - activity : contextId = activityId
    */
   computeView(
     indicatorId: string,
     contextType: string,
     contextId: string,
-    viewId: string,
     activityId?: string,
+    vizId?: string,
   ): Observable<ViewResult> {
     return this.http.post<ViewResult>(`${this.apiUrl}/${indicatorId}/compute-view`, {
       contextType,
       contextId,
-      viewId,
       ...(activityId ? { activityId } : {}),
+      ...(vizId    ? { vizId }    : {}),
     });
   }
 
@@ -162,22 +177,84 @@ export class IndicatorService {
     return this.http.get<CourseActivity[]>(`${this.apiUrl}/course/${courseId}/activities`);
   }
 
-  /** Pré-calcule toutes les vues de tous les indicateurs actifs pour un contexte donné. Fire-and-forget. */
+  getCourseStudents(courseId: string): Observable<{ id: string; name: string }[]> {
+    return this.http.get<{ id: string; email: string; first_name: string; last_name: string }[]>(
+      `${this.apiUrl}/course/${courseId}/students`,
+    ).pipe(
+      map(students => students.map(s => ({ id: s.id, name: `${s.first_name} ${s.last_name}`.trim() || s.email }))),
+    );
+  }
+
   precomputeContext(contextType: string, contextId: string, activityId: string): Observable<{ computed: number }> {
     return this.http.post<{ computed: number }>(`${this.apiUrl}/precompute-context`, {
       contextType, contextId, activityId,
     });
   }
 
-  /**
-   * Prévisualise le résultat brut d'un pipeline DSL sans persister.
-   * Retourne le résultat tel quel (number | object | array).
-   */
-  previewFormulaRaw(
-    formula: any,
-    context: { userId?: string; groupId?: string; activityId?: string },
-  ): Observable<{ result: any }> {
-    return this.http.post<{ result: any }>(`${this.apiUrl}/preview`, { formula, context });
+  // ── Snapshots ─────────────────────────────────────────────────────────────
+
+  getSnapshots(indicatorId: string, activityId: string): Observable<IndicatorSnapshot[]> {
+    return this.http.get<IndicatorSnapshot[]>(
+      `${this.apiUrl}/${indicatorId}/snapshots?activityId=${encodeURIComponent(activityId)}`,
+    );
+  }
+
+  createSnapshot(
+    indicatorId: string,
+    body: { contextType: string; contextId: string; activityId: string; title: string },
+  ): Observable<IndicatorSnapshot> {
+    return this.http.post<IndicatorSnapshot>(`${this.apiUrl}/${indicatorId}/snapshots`, body);
+  }
+
+  updateSnapshotTitle(indicatorId: string, snapshotId: string, title: string): Observable<IndicatorSnapshot> {
+    return this.http.patch<IndicatorSnapshot>(
+      `${this.apiUrl}/${indicatorId}/snapshots/${snapshotId}`,
+      { title },
+    );
+  }
+
+  deleteSnapshot(indicatorId: string, snapshotId: string): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${indicatorId}/snapshots/${snapshotId}`);
+  }
+
+  // ── Préférences viz (persistées en BDD via user-preferences) ─────────────
+
+  /** Lit la visualisation active depuis le cache in-memory (chargé au démarrage via getUserPreferences). */
+  getVizPreference(indicatorId: string): string | null {
+    return this.vizPreferencesCache.get(indicatorId) ?? null;
+  }
+
+  /** Persiste la visualisation choisie en BDD et met à jour le cache local. */
+  setVizPreference(userId: string, indicatorId: string, vizId: string): void {
+    this.vizPreferencesCache.set(indicatorId, vizId);
+    this.http.patch(
+      `${this.preferencesUrl}/${encodeURIComponent(indicatorId)}?userId=${encodeURIComponent(userId)}`,
+      { activeVizId: vizId },
+    ).subscribe();
+  }
+
+  /** Visualisations que l'utilisateur a choisi d'afficher pour cet indicateur. `null` = toutes (réglage par défaut). */
+  getEnabledVizIds(indicatorId: string): string[] | null {
+    return this.vizVisibilityCache.get(indicatorId) ?? null;
+  }
+
+  /** Indique si une visualisation donnée doit être affichée à l'utilisateur (toutes le sont par défaut). */
+  isVizEnabled(indicatorId: string, vizId: string): boolean {
+    const enabled = this.vizVisibilityCache.get(indicatorId);
+    return !enabled || enabled.includes(vizId);
+  }
+
+  /** Persiste la liste des visualisations activées en BDD et met à jour le cache local. `null` réinitialise au défaut (toutes). */
+  setEnabledVizIds(userId: string, indicatorId: string, vizIds: string[] | null): void {
+    if (vizIds) {
+      this.vizVisibilityCache.set(indicatorId, vizIds);
+    } else {
+      this.vizVisibilityCache.delete(indicatorId);
+    }
+    this.http.patch(
+      `${this.preferencesUrl}/${encodeURIComponent(indicatorId)}?userId=${encodeURIComponent(userId)}`,
+      { enabledVizIds: vizIds },
+    ).subscribe();
   }
 
   private invalidateCache(): void {

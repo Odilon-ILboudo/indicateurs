@@ -1,4 +1,3 @@
-// frontend/src/app/shared/ui/indicator-card/indicator-card.component.ts
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, inject, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
@@ -6,7 +5,8 @@ import { MatCardModule } from '@angular/material/card';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterModule } from '@angular/router';
 import { IndicatorService } from '../../../core/services/indicator.service';
-import { DashboardContext, IndicatorDefinition, IndicatorValue } from '../../../core/models/indicator.model';
+import { DashboardContext, IndicatorDefinition, IndicatorValue, IndicatorVisualization, ViewVisualizationType } from '../../../core/models/indicator.model';
+import { environment } from '../../../../environments/environment';
 
 @Component({
   selector: 'ui-indicator-card',
@@ -22,64 +22,75 @@ export class IndicatorCardComponent implements OnInit, OnChanges {
   @Input() indicator!: IndicatorDefinition;
   @Input() context!: DashboardContext;
   @Input() clickable: boolean = true;
+  @Input() queryParams?: Record<string, string>;
+  /** Surcharge le titre affiché dans la card (ex : snapshot.title pour les groupes). */
+  @Input() displayTitle?: string;
 
   @Output() valueChange = new EventEmitter<IndicatorValue>();
 
   value: IndicatorValue | null = null;
   isLoading: boolean = true;
-  activeViewIndex = 0;
-
-  get currentViews() {
-    const scope = this.context?.scope;
-    if (scope !== 'course' && scope !== 'group') return [];
-    const configs = this.indicator?.contextConfigs ?? [];
-    return configs.find(c => c.contextType === scope)?.views ?? [];
-  }
-
-  isChartView(index: number): boolean {
-    const view = this.currentViews[index];
-    return !!view && view.visualization?.type !== 'card';
-  }
-
-  onTabClick(event: Event, index: number): void {
-    event.stopPropagation();
-    if (!this.isChartView(index)) {
-      this.selectView(index);
-    }
-  }
-
-  selectView(index: number): void {
-    if (index === this.activeViewIndex) return;
-    this.activeViewIndex = index;
-    this.loadValue();
-  }
+  activeVizId: string | null = null;
 
   ngOnInit(): void {
+    this.initActiveViz();
     this.loadValue();
   }
 
   ngOnChanges(): void {
-    // Réinitialiser la vue sélectionnée lors d'un changement de contexte
-    this.activeViewIndex = 0;
-    if (this.indicator && this.context) this.loadValue();
+    if (this.indicator && this.context) {
+      this.initActiveViz();
+      this.loadValue();
+    }
+  }
+
+  /** Visualisations que l'utilisateur a choisi de voir (toutes par défaut). */
+  get visibleVisualizations(): IndicatorVisualization[] {
+    const all = this.indicator?.visualizations ?? [];
+    const visible = all.filter(v => this.indicatorService.isVizEnabled(this.indicator.id, v.id));
+    return visible.length ? visible : all;
+  }
+
+  private initActiveViz(): void {
+    if (!this.visibleVisualizations.length) return;
+    const saved = this.indicatorService.getVizPreference(this.indicator.id);
+    const valid = this.visibleVisualizations.find(v => v.id === saved);
+    this.activeVizId = valid?.id ?? this.visibleVisualizations[0].id;
+  }
+
+  selectViz(viz: IndicatorVisualization, event: Event): void {
+    event.stopPropagation();
+    if (viz.id === this.activeVizId) return;
+    this.activeVizId = viz.id;
+    this.indicatorService.setVizPreference(environment.defaultUserId, this.indicator.id, viz.id);
+    this.loadValue();
+  }
+
+  get activeViz(): IndicatorVisualization | undefined {
+    return this.visibleVisualizations.find(v => v.id === this.activeVizId)
+      ?? this.visibleVisualizations[0];
+  }
+
+  get hasMultipleViz(): boolean {
+    return this.visibleVisualizations.length > 1;
   }
 
   private loadValue(): void {
     this.isLoading = true;
     const scope = this.context.scope;
 
-    if ((scope === 'course' || scope === 'group') && this.context.activityId) {
-      const configs = this.indicator.contextConfigs ?? [];
-      const ctxConfig = configs.find(c => c.contextType === scope);
-      const views = ctxConfig?.views ?? [];
-      const viewId = views[this.activeViewIndex]?.id ?? views[0]?.id;
-      if (!viewId) {
+    if (scope === 'course' || scope === 'group' || scope === 'activity') {
+      if ((scope === 'course' || scope === 'group') && !this.context.activityId) {
         this.isLoading = false;
         this.cdr.detectChanges();
         return;
       }
+
+      const activityId = scope === 'activity' ? undefined : this.context.activityId;
+      const vizId = this.activeViz?.id;
+
       this.indicatorService.computeView(
-        this.indicator.id, scope, this.context.scopeId, viewId, this.context.activityId,
+        this.indicator.id, scope, this.context.scopeId, activityId, vizId,
       ).subscribe({
         next: (result) => {
           this.value = { value: result.value, timestamp: new Date(), metadata: result.metadata };
@@ -87,8 +98,7 @@ export class IndicatorCardComponent implements OnInit, OnChanges {
           this.isLoading = false;
           this.cdr.detectChanges();
         },
-        error: (err) => {
-          console.error(`Failed to compute view for indicator ${this.indicator.id}:`, err);
+        error: () => {
           this.isLoading = false;
           this.cdr.detectChanges();
         },
@@ -96,9 +106,10 @@ export class IndicatorCardComponent implements OnInit, OnChanges {
       return;
     }
 
-    // Contexte learner : lecture de la valeur pré-calculée
+    // learner/teacher/admin : lecture de la valeur pré-calculée
     this.indicatorService.getIndicatorValue(
       this.indicator.id,
+      scope,
       this.context.scopeId,
     ).subscribe({
       next: (value) => {
@@ -107,26 +118,44 @@ export class IndicatorCardComponent implements OnInit, OnChanges {
         this.isLoading = false;
         this.cdr.detectChanges();
       },
-      error: (err) => {
-        console.error(`Failed to load indicator ${this.indicator.id}:`, err);
+      error: () => {
         this.isLoading = false;
         this.cdr.detectChanges();
       },
     });
   }
-  
+
   refresh(): void {
     this.loadValue();
   }
-  
-  getTrendColor(trend: string): string {
-    switch (trend) {
-      case 'up': return '#52c41a';
-      case 'down': return '#f5222d';
-      default: return '#faad14';
-    }
+
+  get viz() { return this.activeViz; }
+
+  getThresholdColor(): string {
+    if (!this.value) return '#d9d9d9';
+    const val = this.value.value;
+    const thresholds = this.activeViz?.thresholds;
+    if (!thresholds) return '#d9d9d9';
+    if (val <= thresholds.good)    return '#52c41a';
+    if (val <= thresholds.warning) return '#fa8c16';
+    return '#ff4d4f';
   }
-  
+
+  isChartVisualization(): boolean {
+    const t = this.activeViz?.type;
+    return t === 'bar-chart' || t === 'histogram' || t === 'line-chart' || t === 'gauge';
+  }
+
+  getFormattedValue(): string {
+    if (!this.value) return '—';
+    if (this.isChartVisualization()) return '···';
+    const val = this.value.value;
+    if (Math.abs(val) >= 1000) {
+      return (val / 1000).toFixed(1) + 'k';
+    }
+    return val.toFixed(1);
+  }
+
   getTrendIcon(trend: string): string {
     switch (trend) {
       case 'up': return 'trending_up';
@@ -134,39 +163,26 @@ export class IndicatorCardComponent implements OnInit, OnChanges {
       default: return 'trending_flat';
     }
   }
-  
-  getThresholdColor(): string {
-    if (!this.value) return '#d9d9d9';
-    const val = this.value.value;
-    // Vue active (teacher) → vue learner → legacy
-    const activeView = this.currentViews[this.activeViewIndex];
-    const thresholds = activeView?.visualization?.thresholds
-      ?? this.indicator.contextConfigs?.find(c => c.contextType === 'learner')?.views?.[0]?.visualization?.thresholds
-      ?? this.indicator?.visualization?.thresholds;
-    if (!thresholds) return '#d9d9d9';
-    if (val <= thresholds.good)    return '#52c41a';
-    if (val <= thresholds.warning) return '#fa8c16';
-    return '#ff4d4f';
-  }
 
-  getFormattedValue(): string {
-    if (!this.value) return '0';
-    const val = this.value.value;
-    if (Math.abs(val) >= 1000) {
-      return (val / 1000).toFixed(1) + 'k';
-    }
-    // Afficher avec une décimale pour 0 aussi
-    return val.toFixed(1);
-  }
-
-  getCategoryLabel(category?: string): string {
-    const labels: Record<string, string> = {
-      'performance': 'Performance',
-      'progress': 'Progression',
+  getVizTypeIcon(type: ViewVisualizationType): string {
+    const icons: Record<ViewVisualizationType, string> = {
+      card: 'credit_card',
+      gauge: 'speed',
+      'line-chart': 'show_chart',
+      'bar-chart': 'bar_chart',
+      histogram: 'equalizer',
     };
-    if (!category) {
-      return 'Inconnu';
-    }
-    return labels[category] || category;
+    return icons[type] ?? 'analytics';
+  }
+
+  getVizTypeLabel(type: ViewVisualizationType): string {
+    const labels: Record<ViewVisualizationType, string> = {
+      card: 'Carte',
+      gauge: 'Jauge',
+      'line-chart': 'Courbe',
+      'bar-chart': 'Barres',
+      histogram: 'Histogramme',
+    };
+    return labels[type] ?? type;
   }
 }

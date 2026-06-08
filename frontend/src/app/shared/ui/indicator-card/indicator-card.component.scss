@@ -6,11 +6,6 @@
   height: 140px;
   overflow: hidden;
 
-  &.has-tabs {
-    height: auto;
-    min-height: 140px;
-    overflow: visible;
-  }
   background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
   border: 1px solid rgba(0, 0, 0, 0.08);
   
@@ -168,29 +163,30 @@
     line-height: 1.4;
   }
   
-  .category-badge {
+  .viz-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
     font-size: 10px;
     font-weight: 500;
     padding: 2px 6px;
     border-radius: 4px;
+    background-color: rgba(24, 144, 255, 0.1);
+    color: #1890ff;
     width: fit-content;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    
-    &.performance {
-      background-color: rgba(114, 46, 209, 0.1);
-      color: #722ed1;
-    }
-    
-    &.progress {
-      background-color: rgba(82, 196, 26, 0.1);
-      color: #52c41a;
-    }
-    
-    &.social {
-      background-color: rgba(250, 173, 20, 0.1);
-      color: #faad14;
-    }
+  }
+
+  .viz-badge-icon {
+    font-size: 11px !important;
+    width: 11px !important;
+    height: 11px !important;
+  }
+
+  .chart-placeholder-icon {
+    font-size: 32px !important;
+    width: 32px !important;
+    height: 32px !important;
+    color: #bfbfbf;
   }
   
   .arrow-icon {
@@ -219,6 +215,57 @@
       height: 12px;
     }
   }
+
+  // Sélecteur de visualisation (chips en bas de la card)
+  .viz-selector {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+
+    .viz-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      border: 1px solid rgba(0, 0, 0, 0.12);
+      background: transparent;
+      cursor: pointer;
+      padding: 0;
+      transition: background 0.15s ease, border-color 0.15s ease;
+
+      mat-icon {
+        font-size: 16px;
+        width: 16px;
+        height: 16px;
+        color: #8c8c8c;
+      }
+
+      &:hover {
+        background: rgba(24, 144, 255, 0.08);
+        border-color: rgba(24, 144, 255, 0.3);
+
+        mat-icon { color: #1890ff; }
+      }
+
+      &.active {
+        background: rgba(24, 144, 255, 0.12);
+        border-color: #1890ff;
+
+        mat-icon { color: #1890ff; }
+      }
+    }
+  }
+
+  // La card s'étend quand des chips de viz sont présentes
+  &.has-multi-viz {
+    height: auto;
+    min-height: 140px;
+    overflow: visible;
+  }
 }
 
 // Animation de chargement
@@ -236,11 +283,6 @@
   .indicator-card {
     height: 130px;
 
-    &.has-tabs {
-      height: auto;
-      min-height: 130px;
-    }
-    
     .value {
       font-size: 28px;
     }
@@ -286,59 +328,3 @@
   }
 }
 
-.view-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 8px 12px 0;
-  flex-wrap: wrap;
-
-  .view-tab {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 11px;
-    font-weight: 500;
-    padding: 2px 10px;
-    border-radius: 12px;
-    border: 1px solid #d9d9d9;
-    background: transparent;
-    color: #595959;
-    cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
-
-    &:hover {
-      border-color: #1677ff;
-      color: #1677ff;
-    }
-
-    &.active {
-      background: #1677ff;
-      border-color: #1677ff;
-      color: #fff;
-    }
-
-    &.chart-tab {
-      cursor: default;
-      opacity: 0.55;
-      border-style: dashed;
-
-      &:hover {
-        border-color: #d9d9d9;
-        color: #595959;
-      }
-
-      &.active {
-        background: transparent;
-        border-color: #d9d9d9;
-        color: #595959;
-      }
-
-      .chart-tab-icon {
-        font-size: 12px;
-        width: 12px;
-        height: 12px;
-      }
-    }
-  }
-}

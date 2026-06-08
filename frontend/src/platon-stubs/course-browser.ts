@@ -989,7 +989,7 @@ export class CourseMemberTableComponent {
   }
 
   protected roleLabel(role?: string): string {
-    return role === 'teacher' ? 'Enseignant' : role === 'student' ? 'Étudiant' : role ?? '—'
+    return role === 'teacher' ? 'Enseignant' : role === 'student' ? 'Étudiant' : role ?? '-'
   }
 }
 

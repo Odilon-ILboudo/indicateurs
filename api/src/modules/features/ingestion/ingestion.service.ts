@@ -113,7 +113,7 @@ export class IngestionService implements OnModuleInit {
     const contextType = 'learner';
     const contextId = event.userId;
 
-    if (!indicator.supportedContexts.includes(contextType as any)) {
+    if (indicator.contextType !== contextType) {
       this.logger.debug(`Context ${contextType} not supported for indicator ${indicator.name}`);
       return;
     }

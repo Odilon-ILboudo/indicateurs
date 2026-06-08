@@ -17,7 +17,9 @@ import { NzEmptyModule } from 'ng-zorro-antd/empty';
 import { IndicatorService } from '../../core/services/indicator.service';
 import { DashboardSettingsService } from '../../core/services/dashboard-settings.service';
 import { RoleService } from '../../core/services/role.service';
-import { IndicatorDefinition, IndicatorScope } from '../../core/models/indicator.model';
+import { IndicatorDefinition, IndicatorScope, IndicatorVisualization } from '../../core/models/indicator.model';
+import { buildIndicatorDisplayRows, IndicatorDisplayRow } from '../../shared/utils/indicator-family-grouping';
+import { environment } from '../../../environments/environment';
 
 // ── Constantes DSL ────────────────────────────────────────────────────────────
 
@@ -107,6 +109,10 @@ const CTX_ICONS: Record<string, string> = {
         <span class="status-badge" [class.active]="ind.isActive">
           {{ ind.isActive ? '● Actif' : '● Inactif' }}
         </span>
+        <span class="family-badge" *ngIf="ind.familyName">
+          <mat-icon>folder_special</mat-icon>
+          Famille : {{ ind.familyName }}
+        </span>
         <p class="ind-description" *ngIf="ind.description; else noDesc">{{ ind.description }}</p>
         <ng-template #noDesc>
           <p class="ind-description empty">Aucune description renseignée</p>
@@ -161,120 +167,66 @@ const CTX_ICONS: Record<string, string> = {
         </div>
       </div>
 
-      <!-- ── Section 2 : Contextes & Vues (nouveau modèle) ── -->
-      <div class="section" *ngIf="relevantContextConfigs.length">
+      <!-- ── Section 2 : Visualisations ── -->
+      <div class="section" *ngIf="ind.visualizations?.length">
         <div class="section-title">
-          <mat-icon>layers</mat-icon>
-          Contextes &amp; Vues
-          <span class="section-count">{{ totalViews }} vue{{ totalViews !== 1 ? 's' : '' }} au total</span>
+          <mat-icon>bar_chart</mat-icon>
+          Visualisations
+          <span class="section-count">{{ ind.visualizations.length }} configurée{{ ind.visualizations.length > 1 ? 's' : '' }}</span>
         </div>
 
-        <div *ngFor="let ctx of relevantContextConfigs; let ci = index" class="ctx-block">
-
-          <!-- En-tête contexte -->
-          <div class="ctx-header">
-            <mat-icon class="ctx-icon">{{ ctxIcon(ctx.contextType) }}</mat-icon>
-            <span class="ctx-name">{{ ctxLabel(ctx.contextType) }}</span>
-            <span class="ctx-count-badge">
-              {{ ctx.views.length }} vue{{ ctx.views.length !== 1 ? 's' : '' }}
+        <div class="view-card" *ngFor="let viz of ind.visualizations">
+          <div class="view-header">
+            <mat-icon class="view-viz-icon" [style.color]="viz.color">{{ viz.icon || vizIcon(viz.type) }}</mat-icon>
+            <span class="view-label">{{ viz.label || vizLabel(viz.type) }}</span>
+            <span class="view-type-chip" [style.background]="viz.color || vizColor(viz.type)">
+              {{ vizLabel(viz.type) }}
             </span>
           </div>
 
-          <!-- Cartes de vues -->
-          <div *ngFor="let v of ctx.views; let vi = index" class="view-card">
-
-            <!-- En-tête vue -->
-            <div class="view-header">
-              <mat-icon class="view-viz-icon">{{ vizIcon(v.visualization.type) }}</mat-icon>
-              <span class="view-label">{{ v.label || 'Vue sans nom' }}</span>
-              <span class="view-type-chip" [style.background]="vizColor(v.visualization.type)">
-                {{ vizLabel(v.visualization.type) }}
-              </span>
-            </div>
-
-            <!-- Méta : unité + couleur -->
-            <div class="view-meta" *ngIf="v.visualization.unit || v.visualization.color">
-              <span class="meta-item" *ngIf="v.visualization.unit">
-                <span class="meta-k">Unité :</span> {{ v.visualization.unit }}
-              </span>
-              <span class="meta-item color-item" *ngIf="v.visualization.color">
-                <span class="meta-k">Couleur :</span>
-                <span class="color-dot" [style.background]="v.visualization.color"></span>
-              </span>
-            </div>
-
-            <!-- Seuils -->
-            <div class="thresholds-row" *ngIf="v.visualization.thresholds as t">
-              <span class="meta-k">Seuils :</span>
-              <span class="threshold good">
-                Bon ≤ {{ t.good }}{{ v.visualization.unit ?? '' }}
-              </span>
-              <span class="threshold warning">
-                Moyen ≤ {{ t.warning }}{{ v.visualization.unit ?? '' }}
-              </span>
-              <span class="threshold danger">
-                Critique &gt; {{ t.warning }}{{ v.visualization.unit ?? '' }}
-              </span>
-            </div>
-
-            <!-- Pipeline DSL -->
-            <div class="pipeline-row" *ngIf="v.formula?.pipeline?.length">
-              <span class="meta-k pipeline-label">Pipeline :</span>
-              <div class="pipeline-steps">
-                <ng-container *ngFor="let s of v.formula.pipeline; let last = last">
-                  <span class="step-chip"
-                    [style.background]="stepColor(s.type)"
-                    [title]="s.label || s.type">
-                    {{ stepLabel(s.type) }}
-                  </span>
-                  <span *ngIf="!last" class="step-arrow">→</span>
-                </ng-container>
-              </div>
-            </div>
-
-            <div class="view-no-formula" *ngIf="!v.formula?.pipeline?.length">
-              <mat-icon>warning_amber</mat-icon>
-              Aucune formule configurée pour cette vue
-            </div>
-
+          <div class="view-meta" *ngIf="viz.unit || viz.color">
+            <span class="meta-item" *ngIf="viz.unit">
+              <span class="meta-k">Unité :</span> {{ viz.unit }}
+            </span>
+            <span class="meta-item color-item" *ngIf="viz.color">
+              <span class="meta-k">Couleur :</span>
+              <span class="color-dot" [style.background]="viz.color"></span>
+            </span>
           </div>
 
-          <!-- Séparateur entre contextes -->
-          <nz-divider *ngIf="ci < relevantContextConfigs.length - 1" style="margin: 12px 0 16px"></nz-divider>
-
-        </div>
-      </div>
-
-      <!-- ── Section 2 fallback : visualisation legacy ── -->
-      <div class="section" *ngIf="!ind.contextConfigs?.length && ind.visualization">
-        <div class="section-title">
-          <mat-icon>bar_chart</mat-icon>
-          Visualisation (configuration héritée)
-        </div>
-
-        <div class="info-grid">
-          <div class="info-row" *ngIf="ind.visualization.defaultType">
-            <span class="info-label">Type</span>
-            <span class="info-value">{{ vizLabel(ind.visualization.defaultType) }}</span>
+          <div class="thresholds-row" *ngIf="viz.thresholds as t">
+            <span class="meta-k">Seuils :</span>
+            <span class="threshold good">Bon ≤ {{ t.good }}{{ viz.unit ?? '' }}</span>
+            <span class="threshold warning">Moyen ≤ {{ t.warning }}{{ viz.unit ?? '' }}</span>
+            <span class="threshold danger">Critique &gt; {{ t.warning }}{{ viz.unit ?? '' }}</span>
           </div>
-          <div class="info-row" *ngIf="ind.visualization.unit">
-            <span class="info-label">Unité</span>
-            <span class="info-value">{{ ind.visualization.unit }}</span>
-          </div>
-          <div class="info-row" *ngIf="ind.visualization.thresholds as t">
-            <span class="info-label">Seuils</span>
-            <div class="info-value tags-row">
-              <span class="threshold good">✓ Bon ≤ {{ t.good }}</span>
-              <span class="threshold warning">⚠ Moyen ≤ {{ t.warning }}</span>
-              <span class="threshold danger">✕ Critique &gt; {{ t.warning }}</span>
+
+          <div class="pipeline-row" *ngIf="vizPipeline(viz).length">
+            <span class="meta-k pipeline-label">
+              Pipeline{{ usesOwnFormula(viz) ? '' : ' (formule globale)' }} :
+            </span>
+            <div class="pipeline-steps">
+              <ng-container *ngFor="let s of vizPipeline(viz); let last = last">
+                <span class="step-chip"
+                  [style.background]="stepColor(s.type)"
+                  [title]="s.label || s.type">
+                  {{ stepLabel(s.type) }}
+                </span>
+                <span *ngIf="!last" class="step-arrow">→</span>
+              </ng-container>
             </div>
+          </div>
+
+          <div class="view-no-formula" *ngIf="!vizPipeline(viz).length">
+            <mat-icon>warning_amber</mat-icon>
+            Aucune formule configurée pour cette visualisation
           </div>
         </div>
       </div>
 
       <!-- ── Aucune configuration ── -->
       <nz-empty
-        *ngIf="!ind.contextConfigs?.length && !ind.visualization"
+        *ngIf="!ind.visualizations?.length"
         nzNotFoundContent="Aucune configuration de visualisation disponible."
         style="margin: 24px 0">
       </nz-empty>
@@ -307,6 +259,26 @@ const CTX_ICONS: Record<string, string> = {
     .status-badge.active {
       background: #f6ffed;
       color: #389e0d;
+    }
+    .family-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      margin-left: 8px;
+      background: #f9f0ff;
+      color: #722ed1;
+
+      mat-icon {
+        font-size: 14px;
+        width: 14px;
+        height: 14px;
+        line-height: 14px;
+      }
     }
     .ind-description {
       color: #595959;
@@ -557,33 +529,11 @@ const CTX_ICONS: Record<string, string> = {
 })
 export class IndicatorViewModalComponent {
   readonly modalData = inject(NZ_MODAL_DATA) as { indicator: IndicatorDefinition };
-  private readonly roleService = inject(RoleService);
 
   get ind(): IndicatorDefinition { return this.modalData.indicator; }
 
   get contexts(): string[] {
-    if (this.ind.supportedContexts?.length) return this.ind.supportedContexts as string[];
-    if (this.ind.scope) return [this.ind.scope];
-    return [];
-  }
-
-  get relevantContextConfigs() {
-    const all = this.ind.contextConfigs ?? [];
-    const allowed = this.allowedContextTypes();
-    return allowed === null ? all : all.filter(c => allowed.includes(c.contextType));
-  }
-
-  get totalViews(): number {
-    return this.relevantContextConfigs.reduce((sum, ctx) => sum + ctx.views.length, 0);
-  }
-
-  // null = pas de filtre (admin voit tout)
-  private allowedContextTypes(): string[] | null {
-    switch (this.roleService.getRole()) {
-      case 'teacher': return ['course', 'group'];
-      case 'admin':   return null;
-      default:        return ['learner'];
-    }
+    return this.ind.contextType ? [this.ind.contextType] : [];
   }
 
   ctxLabel(ctx: string): string  { return CTX_LABELS[ctx] ?? ctx; }
@@ -593,6 +543,16 @@ export class IndicatorViewModalComponent {
   vizColor(type: string): string { return VIZ_COLORS[type] ?? '#8c8c8c'; }
   stepLabel(type: string): string { return STEP_LABELS[type] ?? type; }
   stepColor(type: string): string { return STEP_COLORS[type] ?? '#8c8c8c'; }
+
+  /** Pipeline effectif d'une visualisation : sa formule propre, ou la formule globale en repli. */
+  vizPipeline(viz: IndicatorVisualization): { id: string; type: string; label?: string }[] {
+    return viz.formula?.pipeline?.length ? viz.formula.pipeline : (this.ind.formula?.pipeline ?? []);
+  }
+
+  /** True si la visualisation a sa propre formule (false = elle utilise la formule globale de l'indicateur). */
+  usesOwnFormula(viz: IndicatorVisualization): boolean {
+    return !!viz.formula?.pipeline?.length;
+  }
 }
 
 // ── Composant principal ───────────────────────────────────────────────────────
@@ -619,12 +579,14 @@ export class IndicatorSelectorComponent implements OnInit {
   @Output() indicatorsChanged = new EventEmitter<void>();
 
   allIndicators: IndicatorDefinition[] = [];
-  filteredIndicators: IndicatorDefinition[] = [];
+  displayRows: IndicatorDisplayRow[] = [];
+  expandedFamilies = new Set<string>();
   isLoading = true;
 
   filters = {
     scope: 'all' as 'all' | IndicatorScope,
-    sortBy: 'popular' as 'popular' | 'unpopular' | 'name'
+    sortBy: 'popular' as 'popular' | 'unpopular' | 'name',
+    grouping: 'all' as 'all' | 'families' | 'standalone',
   };
 
   ngOnInit(): void {
@@ -651,13 +613,17 @@ export class IndicatorSelectorComponent implements OnInit {
   }
 
   applyFilters(): void {
-    let filtered = [...this.allIndicators];
+    let filtered = [...this.allIndicators]
+      .filter(ind => this.roleService.canSeeIndicatorContext(ind.contextType));
 
     if (this.filters.scope !== 'all') {
-      filtered = filtered.filter(ind =>
-        this.getSupportedContexts(ind).includes(this.filters.scope as string) ||
-        ind.scope === this.filters.scope,
-      );
+      filtered = filtered.filter(ind => ind.contextType === this.filters.scope);
+    }
+
+    if (this.filters.grouping === 'families') {
+      filtered = filtered.filter(ind => !!ind.familyName);
+    } else if (this.filters.grouping === 'standalone') {
+      filtered = filtered.filter(ind => !ind.familyName);
     }
 
     if (this.filters.sortBy === 'popular') {
@@ -668,7 +634,17 @@ export class IndicatorSelectorComponent implements OnInit {
       filtered.sort((a, b) => a.name.localeCompare(b.name));
     }
 
-    this.filteredIndicators = filtered;
+    this.displayRows = buildIndicatorDisplayRows(filtered, this.expandedFamilies);
+  }
+
+  toggleFamily(familyName: string): void {
+    if (this.expandedFamilies.has(familyName)) {
+      this.expandedFamilies.delete(familyName);
+    } else {
+      this.expandedFamilies.add(familyName);
+    }
+    this.applyFilters();
+    this.cdr.detectChanges();
   }
 
   isActive(indicatorId: string): boolean {
@@ -707,45 +683,19 @@ export class IndicatorSelectorComponent implements OnInit {
   }
 
   getSupportedContexts(indicator: IndicatorDefinition): string[] {
-    if (indicator.supportedContexts?.length) return indicator.supportedContexts as string[];
-    if (indicator.scope) return [indicator.scope];
-    return [];
+    return indicator.contextType ? [indicator.contextType] : [];
   }
 
   getScopeLabel(scope?: string): string {
     const labels: Record<string, string> = {
-      global: 'Global',
-      course: 'Cours',
+      learner:  'Apprenant',
+      group:    'Groupe de TP',
       activity: 'Activité',
-      learner: 'Apprenant',
-      group: 'Groupe de TP',
-      teacher: 'Enseignant',
-      circle: 'Groupe',
+      course:   'Cours',
+      teacher:  'Enseignant',
+      admin:    'Admin',
     };
     return scope ? (labels[scope] || scope) : '-';
-  }
-
-  getVizTypes(indicator: IndicatorDefinition): string[] {
-    if (indicator.contextConfigs?.length) {
-      const allowed = this.allowedContextTypes();
-      const relevant = allowed === null
-        ? indicator.contextConfigs
-        : indicator.contextConfigs.filter(c => allowed.includes(c.contextType));
-      const types = new Set<string>();
-      relevant.forEach(ctx => ctx.views.forEach(v => types.add(v.visualization.type)));
-      return Array.from(types);
-    }
-    if (indicator.visualization?.defaultType) return [indicator.visualization.defaultType];
-    return [];
-  }
-
-  // null = pas de filtre (admin voit tout)
-  private allowedContextTypes(): string[] | null {
-    switch (this.roleService.getRole()) {
-      case 'teacher': return ['course', 'group'];
-      case 'admin':   return null;
-      default:        return ['learner'];
-    }
   }
 
   getVizLabel(viz: string): string {
@@ -754,5 +704,31 @@ export class IndicatorSelectorComponent implements OnInit {
 
   getVizIcon(viz: string): string {
     return VIZ_ICONS[viz] || 'widgets';
+  }
+
+  // ── Choix des visualisations à afficher (par utilisateur) ─────────────────
+
+  isVizEnabled(indicatorId: string, vizId: string): boolean {
+    return this.indicatorService.isVizEnabled(indicatorId, vizId);
+  }
+
+  /** Active/désactive une visualisation pour l'utilisateur. Empêche de tout désactiver. */
+  toggleViz(indicator: IndicatorDefinition, viz: { id: string }, event: Event): void {
+    event.stopPropagation();
+    const all = indicator.visualizations ?? [];
+    if (all.length <= 1) return;
+
+    const current = this.indicatorService.getEnabledVizIds(indicator.id) ?? all.map(v => v.id);
+    const isEnabled = current.includes(viz.id);
+
+    if (isEnabled && current.length === 1) {
+      this.messageService.info('Vous devez garder au moins une visualisation active.');
+      return;
+    }
+
+    const next = isEnabled ? current.filter(id => id !== viz.id) : [...current, viz.id];
+    const persisted = next.length === all.length ? null : next;
+    this.indicatorService.setEnabledVizIds(environment.defaultUserId, indicator.id, persisted);
+    this.cdr.detectChanges();
   }
 }

@@ -166,32 +166,38 @@ export class IndicatorConfigComponent implements OnInit {
     if (this.modalData?.indicator) {
       this.indicator = this.modalData.indicator;
       
+      const viz0 = this.indicator.visualizations?.[0];
       this.config.name = this.indicator.name;
       this.config.description = this.indicator.description || '';
-      this.config.icon = this.indicator.visualization?.icon || 'analytics';
-      this.config.color = this.indicator.visualization?.color || '#1890ff';
-      this.config.unit = this.indicator.visualization?.unit || '';
+      this.config.icon = viz0?.icon || 'analytics';
+      this.config.color = viz0?.color || '#1890ff';
+      this.config.unit = viz0?.unit || '';
       this.config.thresholds = {
-        good: this.indicator.visualization?.thresholds?.good || 80,
-        warning: this.indicator.visualization?.thresholds?.warning || 60,
-        danger: this.indicator.visualization?.thresholds?.danger || 40
+        good: viz0?.thresholds?.good || 80,
+        warning: viz0?.thresholds?.warning || 60,
+        danger: viz0?.thresholds?.danger || 40
       };
     }
   }
   
   save(): void {
-    // Mettre à jour uniquement l'affichage, PAS la formule
+    // Mettre à jour le nom/description + les propriétés d'affichage de la première viz
+    const viz0 = this.indicator.visualizations?.[0];
+    const updatedVizs = this.indicator.visualizations?.map((v, i) =>
+      i === 0 ? { ...v, icon: this.config.icon, color: this.config.color, unit: this.config.unit, thresholds: this.config.thresholds } : v
+    ) ?? [];
     const updates = {
       name: this.config.name,
       description: this.config.description,
-      visualization: {
-        defaultType: this.indicator.visualization?.defaultType || 'card',
+      visualizations: updatedVizs.length ? updatedVizs : [{
+        id: viz0?.id ?? crypto.randomUUID(),
+        label: viz0?.label ?? 'Vue',
+        type: viz0?.type ?? 'card',
         icon: this.config.icon,
         color: this.config.color,
         unit: this.config.unit,
         thresholds: this.config.thresholds,
-        availableVisualizations: this.indicator.visualization?.availableVisualizations || ['card', 'chart', 'gauge']
-      }
+      }],
     };
     
     this.indicatorService.updateIndicator(this.indicator.id, updates).subscribe({

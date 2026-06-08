@@ -23,7 +23,7 @@ export class UserPreferencesController {
   async createPreference(
     @Query('userId') userId: string,
     @Param('indicatorId') indicatorId: string,
-    @Body() body: { isVisible?: boolean; displayPreferences?: { icon?: string; color?: string }; userRole?: string },
+    @Body() body: { isVisible?: boolean; displayPreferences?: { icon?: string; color?: string }; userRole?: string; activeVizId?: string; enabledVizIds?: string[] | null },
   ) {
     return this.preferencesService.createPreference(userId, indicatorId, body);
   }
@@ -32,7 +32,7 @@ export class UserPreferencesController {
   async updatePreference(
     @Query('userId') userId: string,
     @Param('indicatorId') indicatorId: string,
-    @Body() body: { isVisible?: boolean; displayPreferences?: { icon?: string; color?: string }; userRole?: string },
+    @Body() body: { isVisible?: boolean; displayPreferences?: { icon?: string; color?: string }; userRole?: string; activeVizId?: string; enabledVizIds?: string[] | null },
   ) {
     return this.preferencesService.updatePreference(userId, indicatorId, body);
   }

@@ -35,7 +35,7 @@ export class ActivityIndicatorService {
       activityName: activity?.name,
       value,
       interpretation: this.getInterpretation(value),
-      thresholds: indicator?.visualization?.thresholds,
+      thresholds: indicator?.visualizations?.[0]?.thresholds,
     };
   }
 

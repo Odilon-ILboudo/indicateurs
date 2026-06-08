@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { NzTableModule } from 'ng-zorro-antd/table';
 import { NzButtonModule } from 'ng-zorro-antd/button';
-import { NzModalModule, NzModalService, NZ_MODAL_DATA } from 'ng-zorro-antd/modal';
+import { NzModalModule, NzModalService, NzModalRef, NZ_MODAL_DATA } from 'ng-zorro-antd/modal';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzSwitchModule } from 'ng-zorro-antd/switch';
 import { NzTagModule } from 'ng-zorro-antd/tag';
@@ -15,10 +15,14 @@ import { NzBadgeModule } from 'ng-zorro-antd/badge';
 import { NzDividerModule } from 'ng-zorro-antd/divider';
 import { NzEmptyModule } from 'ng-zorro-antd/empty';
 import { NzSpinModule } from 'ng-zorro-antd/spin';
+import { NzFormModule } from 'ng-zorro-antd/form';
+import { NzInputModule } from 'ng-zorro-antd/input';
+import { NzSelectModule } from 'ng-zorro-antd/select';
 import { IndicatorService } from '../../core/services/indicator.service';
-import { IndicatorDefinition } from '../../core/models/indicator.model';
+import { IndicatorDefinition, IndicatorScope } from '../../core/models/indicator.model';
 import { IndicatorConfigComponent } from './indicator-config.component';
-import { IndicatorBuilderComponent } from './indicator-builder.component';
+import { IndicatorBuilderComponent, CONTEXT_LABELS, IndicatorFamilyPreset } from './indicator-builder.component';
+import { buildIndicatorDisplayRows, IndicatorDisplayRow } from '../../shared/utils/indicator-family-grouping';
 
 // ── Modale : historique des versions de formule ───────────────────────────────
 
@@ -115,6 +119,104 @@ export class LogsModalComponent {
   get logs() { return this.modalData.logs; }
 }
 
+// ── Modale : démarrage du wizard "famille d'indicateurs" ──────────────────────
+
+export interface FamilyStartResult {
+  familyName: string;
+  description: string;
+  requiredEvents: string[];
+  contextTypes: IndicatorScope[];
+}
+
+@Component({
+  selector: 'ui-family-start-modal',
+  standalone: true,
+  imports: [CommonModule, FormsModule, NzFormModule, NzInputModule, NzSelectModule, NzButtonModule],
+  template: `
+    <div class="family-start">
+      <p style="color:#888;font-size:13px;margin-top:0">
+        Une famille regroupe plusieurs indicateurs créés ensemble — un par contexte sélectionné —
+        partageant le même nom de base, la même description et les mêmes événements déclencheurs.
+        Vous configurerez ensuite la visualisation et la formule de chacun, l'un après l'autre.
+      </p>
+
+      <nz-form-item>
+        <nz-form-label [nzRequired]="true">Nom de la famille</nz-form-label>
+        <nz-form-control>
+          <input nz-input [(ngModel)]="familyName" placeholder="ex: Tentatives avant première réussite" />
+        </nz-form-control>
+      </nz-form-item>
+
+      <nz-form-item>
+        <nz-form-label>Description</nz-form-label>
+        <nz-form-control>
+          <textarea nz-input [(ngModel)]="description" rows="3"
+            placeholder="Décrivez ce que mesure cette famille d'indicateurs…"></textarea>
+        </nz-form-control>
+      </nz-form-item>
+
+      <nz-form-item>
+        <nz-form-label [nzRequired]="true">Événements déclencheurs</nz-form-label>
+        <nz-form-control>
+          <nz-select [(ngModel)]="requiredEvents" nzMode="tags"
+            nzPlaceHolder="ex: exercise.answered" style="width:100%">
+            <nz-option nzValue="exercise.answered"  nzLabel="exercise.answered"></nz-option>
+            <nz-option nzValue="exercise.viewed"    nzLabel="exercise.viewed"></nz-option>
+            <nz-option nzValue="activity.completed" nzLabel="activity.completed"></nz-option>
+            <nz-option nzValue="activity.started"   nzLabel="activity.started"></nz-option>
+          </nz-select>
+        </nz-form-control>
+      </nz-form-item>
+
+      <nz-form-item>
+        <nz-form-label [nzRequired]="true">Contextes à couvrir</nz-form-label>
+        <nz-form-control>
+          <nz-select [(ngModel)]="contextTypes" nzMode="multiple"
+            nzPlaceHolder="Sélectionnez un ou plusieurs contextes" style="width:100%">
+            <nz-option *ngFor="let c of contextOptions" [nzValue]="c.value" [nzLabel]="c.label"></nz-option>
+          </nz-select>
+        </nz-form-control>
+      </nz-form-item>
+
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+        <button nz-button (click)="cancel()">Annuler</button>
+        <button nz-button nzType="primary" [disabled]="!canStart" (click)="start()">
+          Configurer les indicateurs
+        </button>
+      </div>
+    </div>
+  `,
+  styles: [`.family-start { display:flex; flex-direction:column; }`],
+})
+export class IndicatorFamilyStartModalComponent {
+  private readonly modalRef = inject(NzModalRef);
+
+  familyName = '';
+  description = '';
+  requiredEvents: string[] = [];
+  contextTypes: IndicatorScope[] = [];
+
+  readonly contextOptions: { value: IndicatorScope; label: string }[] =
+    (Object.keys(CONTEXT_LABELS) as IndicatorScope[]).map(value => ({ value, label: CONTEXT_LABELS[value] }));
+
+  get canStart(): boolean {
+    return !!this.familyName.trim() && this.requiredEvents.length > 0 && this.contextTypes.length > 0;
+  }
+
+  start(): void {
+    if (!this.canStart) return;
+    const result: FamilyStartResult = {
+      familyName: this.familyName.trim(),
+      description: this.description.trim(),
+      requiredEvents: this.requiredEvents,
+      contextTypes: this.contextTypes,
+    };
+    this.modalRef.close(result);
+  }
+
+  cancel(): void { this.modalRef.close(null); }
+}
+
 // ── Composant principal ───────────────────────────────────────────────────────
 
 @Component({
@@ -125,7 +227,7 @@ export class LogsModalComponent {
     NzTableModule, NzButtonModule, NzModalModule,
     NzSwitchModule, NzTagModule, NzTooltipModule,
     NzPopconfirmModule, NzBadgeModule, NzDividerModule,
-    NzEmptyModule, NzSpinModule,
+    NzEmptyModule, NzSpinModule, NzSelectModule,
   ],
   template: `
     <div class="admin-manager">
@@ -138,16 +240,27 @@ export class LogsModalComponent {
             Créez et configurez des indicateurs sans toucher au code source.
           </p>
         </div>
-        <button nz-button nzType="primary" (click)="openBuilder()">
-          <mat-icon style="font-size:18px;line-height:1.4">add</mat-icon>
-          Nouvel indicateur
-        </button>
+        <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
+          <nz-select [(ngModel)]="groupingFilter" (ngModelChange)="applyGroupingFilter()" style="width:240px">
+            <nz-option nzValue="all" nzLabel="Familles + indicateurs uniques"></nz-option>
+            <nz-option nzValue="families" nzLabel="Familles uniquement"></nz-option>
+            <nz-option nzValue="standalone" nzLabel="Indicateurs uniques"></nz-option>
+          </nz-select>
+          <button nz-button (click)="openFamilyWizard()">
+            <mat-icon style="font-size:18px;line-height:1.4">folder_special</mat-icon>
+            Créer une famille
+          </button>
+          <button nz-button nzType="primary" (click)="openBuilder()">
+            <mat-icon style="font-size:18px;line-height:1.4">add</mat-icon>
+            Nouvel indicateur
+          </button>
+        </div>
       </div>
 
       <nz-spin [nzSpinning]="loading">
         <nz-table
           #table
-          [nzData]="indicators"
+          [nzData]="displayRows"
           nzBordered
           [nzPageSize]="20"
           nzSize="small">
@@ -155,7 +268,7 @@ export class LogsModalComponent {
           <thead>
             <tr>
               <th>Nom</th>
-              <th>Contextes</th>
+              <th>Contexte</th>
               <th>Événements</th>
               <th style="width:80px;text-align:center">Statut</th>
               <th style="width:200px;text-align:center">Actions</th>
@@ -163,106 +276,129 @@ export class LogsModalComponent {
           </thead>
 
           <tbody>
-            <tr *ngFor="let ind of table.data">
-              <!-- Nom + description -->
-              <td>
-                <div style="font-weight:500">{{ ind.name }}</div>
-                <div style="font-size:11px;color:#999;margin-top:2px">
-                  {{ ind.description | slice:0:80 }}{{ (ind.description?.length ?? 0) > 80 ? '…' : '' }}
-                </div>
-              </td>
+            <ng-container *ngFor="let row of table.data" [ngSwitch]="row.kind">
 
-              <!-- Contextes -->
-              <td>
-                <nz-tag *ngFor="let ctx of ind.supportedContexts" nzColor="blue">{{ ctx }}</nz-tag>
-                <span *ngIf="!ind.supportedContexts?.length" style="color:#bbb">-</span>
-              </td>
+              <!-- Ligne d'en-tête de famille, repliable -->
+              <tr *ngSwitchCase="'family'" class="family-row" (click)="toggleFamily(row.familyName)">
+                <td colspan="5">
+                  <mat-icon style="vertical-align:text-bottom;color:#722ed1">{{ row.expanded ? 'expand_more' : 'chevron_right' }}</mat-icon>
+                  <mat-icon style="font-size:16px;vertical-align:text-bottom;color:#722ed1">folder_special</mat-icon>
+                  <strong>{{ row.familyName }}</strong>
+                  <nz-tag nzColor="purple">{{ row.members.length }} indicateur{{ row.members.length > 1 ? 's' : '' }}</nz-tag>
+                </td>
+              </tr>
 
-              <!-- Événements -->
-              <td>
-                <nz-tag *ngFor="let ev of ind.requiredEvents" nzColor="purple">{{ ev }}</nz-tag>
-                <span *ngIf="!ind.requiredEvents?.length" style="color:#bbb">-</span>
-              </td>
+              <!-- Indicateur autonome ou membre d'une famille dépliée : même rendu et fonctionnalités qu'un indicateur unique -->
+              <ng-container *ngSwitchCase="'standalone'" [ngTemplateOutlet]="indicatorRow" [ngTemplateOutletContext]="{ $implicit: row.indicator }" />
+              <ng-container *ngSwitchCase="'member'" [ngTemplateOutlet]="indicatorRow" [ngTemplateOutletContext]="{ $implicit: row.indicator }" />
 
-
-              <!-- Switch actif/inactif -->
-              <td style="text-align:center">
-                <nz-switch
-                  [(ngModel)]="ind.isActive"
-                  (ngModelChange)="toggleActive(ind)"
-                  [nzCheckedChildren]="'ON'"
-                  [nzUnCheckedChildren]="'OFF'">
-                </nz-switch>
-              </td>
-
-              <!-- Actions -->
-              <td>
-                <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">
-
-                  <button nz-button nzType="default" nzSize="small"
-                    nz-tooltip="Modifier la formule et la définition"
-                    (click)="openBuilder(ind)">
-                    <mat-icon style="font-size:16px;line-height:1.3">edit</mat-icon>
-                  </button>
-
-                  <!--
-                  <button nz-button nzType="default" nzSize="small"
-                    nz-tooltip="Paramètres d'affichage"
-                    (click)="openConfig(ind)">
-                    <mat-icon style="font-size:16px;line-height:1.3">settings</mat-icon>
-                  </button>
-                  -->
-
-                  <!-- Historique des versions (seulement si DSL) -->
-                  <button *ngIf="hasFormula(ind)"
-                    nz-button nzType="default" nzSize="small"
-                    nz-tooltip="Historique des versions de formule"
-                    [nzLoading]="historyLoading.has(ind.id)"
-                    (click)="openHistory(ind)">
-                    <mat-icon *ngIf="!historyLoading.has(ind.id)" style="font-size:16px;line-height:1.3">history</mat-icon>
-                  </button>
-
-                  <!-- Logs d'exécution (seulement si DSL) -->
-                  <button *ngIf="hasFormula(ind)"
-                    nz-button nzType="default" nzSize="small"
-                    nz-tooltip="Logs d'exécution"
-                    [nzLoading]="logsLoading.has(ind.id)"
-                    (click)="openLogs(ind)">
-                    <mat-icon *ngIf="!logsLoading.has(ind.id)" style="font-size:16px;line-height:1.3">receipt_long</mat-icon>
-                  </button>
-
-                  <!-- Recalcul (seulement si DSL) -->
-                  <button *ngIf="hasFormula(ind)"
-                    nz-button nzType="default" nzSize="small"
-                    nz-tooltip="Recalculer pour tous les utilisateurs"
-                    [nzLoading]="recalculating.has(ind.id)"
-                    nz-popconfirm
-                    nzPopconfirmTitle="Recalculer les valeurs pour tous les utilisateurs actifs ?"
-                    nzPopconfirmPlacement="left"
-                    (nzOnConfirm)="recalculate(ind)">
-                    <mat-icon *ngIf="!recalculating.has(ind.id)" style="font-size:16px;line-height:1.3">replay</mat-icon>
-                  </button>
-
-                  <button nz-button nzType="text" nzDanger nzSize="small"
-                    nz-tooltip="Supprimer définitivement"
-                    nz-popconfirm
-                    nzPopconfirmTitle="Supprimer cet indicateur ?"
-                    nzPopconfirmPlacement="left"
-                    (nzOnConfirm)="deleteIndicator(ind)">
-                    <mat-icon style="font-size:16px;line-height:1.3">delete</mat-icon>
-                  </button>
-
-                </div>
-              </td>
-            </tr>
+            </ng-container>
           </tbody>
 
         </nz-table>
 
-        <nz-empty *ngIf="!loading && indicators.length === 0"
+        <nz-empty *ngIf="!loading && displayRows.length === 0"
           nzNotFoundContent="Aucun indicateur - créez-en un avec le bouton ci-dessus.">
         </nz-empty>
       </nz-spin>
+
+      <ng-template #indicatorRow let-ind>
+        <tr>
+          <!-- Nom + description -->
+          <td>
+            <div style="font-weight:500">{{ ind.name }}</div>
+            <div style="font-size:11px;color:#999;margin-top:2px">
+              {{ ind.description | slice:0:80 }}{{ (ind.description?.length ?? 0) > 80 ? '…' : '' }}
+            </div>
+          </td>
+
+          <!-- Contexte -->
+          <td>
+            <nz-tag *ngIf="ind.contextType" nzColor="blue">{{ ind.contextType }}</nz-tag>
+            <span *ngIf="!ind.contextType" style="color:#bbb">-</span>
+            <span *ngIf="ind.visualizations?.length" style="font-size:11px;color:#999;margin-left:6px">
+              {{ ind.visualizations.length }} vue{{ ind.visualizations.length > 1 ? 's' : '' }}
+            </span>
+          </td>
+
+          <!-- Événements -->
+          <td>
+            <nz-tag *ngFor="let ev of ind.requiredEvents" nzColor="purple">{{ ev }}</nz-tag>
+            <span *ngIf="!ind.requiredEvents?.length" style="color:#bbb">-</span>
+          </td>
+
+          <!-- Switch actif/inactif -->
+          <td style="text-align:center">
+            <nz-switch
+              [(ngModel)]="ind.isActive"
+              (ngModelChange)="toggleActive(ind)"
+              [nzCheckedChildren]="'ON'"
+              [nzUnCheckedChildren]="'OFF'">
+            </nz-switch>
+          </td>
+
+          <!-- Actions -->
+          <td>
+            <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">
+
+              <button nz-button nzType="default" nzSize="small"
+                nz-tooltip="Modifier la formule et la définition"
+                (click)="openBuilder(ind)">
+                <mat-icon style="font-size:16px;line-height:1.3">edit</mat-icon>
+              </button>
+
+              <!--
+              <button nz-button nzType="default" nzSize="small"
+                nz-tooltip="Paramètres d'affichage"
+                (click)="openConfig(ind)">
+                <mat-icon style="font-size:16px;line-height:1.3">settings</mat-icon>
+              </button>
+              -->
+
+              <!-- Historique des versions (seulement si DSL) -->
+              <button *ngIf="hasFormula(ind)"
+                nz-button nzType="default" nzSize="small"
+                nz-tooltip="Historique des versions de formule"
+                [nzLoading]="historyLoading.has(ind.id)"
+                (click)="openHistory(ind)">
+                <mat-icon *ngIf="!historyLoading.has(ind.id)" style="font-size:16px;line-height:1.3">history</mat-icon>
+              </button>
+
+              <!-- Logs d'exécution (seulement si DSL) -->
+              <button *ngIf="hasFormula(ind)"
+                nz-button nzType="default" nzSize="small"
+                nz-tooltip="Logs d'exécution"
+                [nzLoading]="logsLoading.has(ind.id)"
+                (click)="openLogs(ind)">
+                <mat-icon *ngIf="!logsLoading.has(ind.id)" style="font-size:16px;line-height:1.3">receipt_long</mat-icon>
+              </button>
+
+              <!-- Recalcul (seulement si DSL) -->
+              <button *ngIf="hasFormula(ind)"
+                nz-button nzType="default" nzSize="small"
+                nz-tooltip="Recalculer pour tous les utilisateurs"
+                [nzLoading]="recalculating.has(ind.id)"
+                nz-popconfirm
+                nzPopconfirmTitle="Recalculer les valeurs pour tous les utilisateurs actifs ?"
+                nzPopconfirmPlacement="left"
+                (nzOnConfirm)="recalculate(ind)">
+                <mat-icon *ngIf="!recalculating.has(ind.id)" style="font-size:16px;line-height:1.3">replay</mat-icon>
+              </button>
+
+              <button nz-button nzType="text" nzDanger nzSize="small"
+                nz-tooltip="Supprimer définitivement"
+                nz-popconfirm
+                nzPopconfirmTitle="Supprimer cet indicateur ?"
+                nzPopconfirmPlacement="left"
+                (nzOnConfirm)="deleteIndicator(ind)">
+                <mat-icon style="font-size:16px;line-height:1.3">delete</mat-icon>
+              </button>
+
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+
 
     </div>
   `,
@@ -273,6 +409,9 @@ export class LogsModalComponent {
       margin-bottom: 20px; gap: 16px; flex-wrap: wrap;
     }
     .header button mat-icon { vertical-align: middle; }
+    .family-row { cursor: pointer; background: #f9f0ff; }
+    .family-row:hover { background: #efdbff; }
+    .family-row td { display: flex; align-items: center; gap: 6px; }
   `],
 })
 export class AdminIndicatorManagerComponent implements OnInit {
@@ -281,6 +420,9 @@ export class AdminIndicatorManagerComponent implements OnInit {
   private readonly messageSvc   = inject(NzMessageService);
 
   indicators: IndicatorDefinition[] = [];
+  displayRows: IndicatorDisplayRow[] = [];
+  expandedFamilies = new Set<string>();
+  groupingFilter: 'all' | 'families' | 'standalone' = 'all';
   loading = false;
   recalculating = new Set<string>();
   historyLoading = new Set<string>();
@@ -293,9 +435,29 @@ export class AdminIndicatorManagerComponent implements OnInit {
   private load(): void {
     this.loading = true;
     this.indicatorSvc.loadAllForAdmin().subscribe({
-      next: list => { this.indicators = list; this.loading = false; },
+      next: list => { this.indicators = list; this.applyGroupingFilter(); this.loading = false; },
       error: ()  => { this.loading = false; },
     });
+  }
+
+  /** Reconstruit `displayRows` (familles repliables + indicateurs uniques) selon le filtre courant. */
+  applyGroupingFilter(): void {
+    let filtered = this.indicators;
+    if (this.groupingFilter === 'families') {
+      filtered = filtered.filter(ind => !!ind.familyName);
+    } else if (this.groupingFilter === 'standalone') {
+      filtered = filtered.filter(ind => !ind.familyName);
+    }
+    this.displayRows = buildIndicatorDisplayRows(filtered, this.expandedFamilies);
+  }
+
+  toggleFamily(familyName: string): void {
+    if (this.expandedFamilies.has(familyName)) {
+      this.expandedFamilies.delete(familyName);
+    } else {
+      this.expandedFamilies.add(familyName);
+    }
+    this.applyGroupingFilter();
   }
 
   hasFormula(ind: IndicatorDefinition): boolean {
@@ -315,6 +477,48 @@ export class AdminIndicatorManagerComponent implements OnInit {
       nzBodyStyle: { 'max-height': '80vh', 'overflow-y': 'auto' },
     });
     ref.afterClose.subscribe(saved => { if (saved) this.load(); });
+  }
+
+  /** Ouvre la modale de démarrage d'une famille, puis enchaîne le builder pour chaque contexte sélectionné. */
+  openFamilyWizard(): void {
+    const startRef = this.modalSvc.create({
+      nzTitle: 'Créer une famille d\'indicateurs',
+      nzContent: IndicatorFamilyStartModalComponent,
+      nzFooter: null,
+      nzWidth: 520,
+    });
+    startRef.afterClose.subscribe((result: FamilyStartResult | null) => {
+      if (!result || !result.contextTypes.length) return;
+      const [first, ...queue] = result.contextTypes;
+      this.openFamilyMember(result, first, queue);
+    });
+  }
+
+  /** Ouvre le builder pré-rempli pour un membre de la famille, puis enchaîne sur le suivant à la fermeture. */
+  private openFamilyMember(start: FamilyStartResult, contextType: IndicatorScope, queue: IndicatorScope[]): void {
+    const preset: IndicatorFamilyPreset = {
+      familyName: start.familyName,
+      description: start.description,
+      requiredEvents: start.requiredEvents,
+      contextType,
+      name: `${start.familyName} — ${CONTEXT_LABELS[contextType]}`,
+    };
+    const ref = this.modalSvc.create({
+      nzTitle: preset.name,
+      nzContent: IndicatorBuilderComponent,
+      nzData: { familyPreset: preset, familyQueue: queue },
+      nzFooter: null,
+      nzWidth: '90vw',
+      nzCentered: true,
+      nzBodyStyle: { 'max-height': '80vh', 'overflow-y': 'auto' },
+    });
+    ref.afterClose.subscribe(saved => {
+      this.load();
+      if (saved && queue.length) {
+        const [next, ...rest] = queue;
+        this.openFamilyMember(start, next, rest);
+      }
+    });
   }
 
   openConfig(indicator: IndicatorDefinition): void {

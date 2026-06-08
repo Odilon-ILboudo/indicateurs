@@ -96,7 +96,7 @@ export class TagService {
   }
 }
 
-// withAuthGuard: no real auth needed — returns route as-is
+// withAuthGuard: no real auth needed - returns route as-is
 export function withAuthGuard(route: Record<string, unknown>, _roles?: string[]): Record<string, unknown> {
   return route
 }

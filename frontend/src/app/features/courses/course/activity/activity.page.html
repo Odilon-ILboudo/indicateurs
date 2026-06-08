@@ -17,68 +17,53 @@
 
     <nz-row [nzGutter]="[24, 24]" nzAlign="top">
       <nz-col nzXs="24" nzSm="24" nzMd="16" nzLg="16" nzXl="16">
-        <h4>Vue d'ensemble</h4>
-        <p>Ces données sont calculées uniquement sur les sessions des participants qui ont ouvert l'activité.</p>
-        <nz-row [nzGutter]="[24, 24]" nzAlign="top">
-          <nz-col nzXs="24" nzSm="24" nzMd="8" nzLg="8" nzXl="8">
-            <ui-statistic-card
-              matIcon="star"
-              ribbonColor="#7f8c8d"
-              description="Note moyenne"
-              [value]="context.results.averageScore"
-              valueSuffix=" / 100"
-              tooltip="Moyenne de la note des sessions complétées."
-              shouldBePositive
-            />
-          </nz-col>
-          <nz-col nzXs="24" nzSm="24" nzMd="8" nzLg="8" nzXl="8">
-            <ui-statistic-card
-              matIcon="access_time"
-              ribbonColor="#f39c12"
-              description="Tentatives moyennes"
-              tooltip="Nombre moyen de tentatives par session."
-              [value]="context.results.averageDuration | duration"
-            />
-          </nz-col>
-          <nz-col nzXs="24" nzSm="24" nzMd="8" nzLg="8" nzXl="8">
-            <ui-statistic-card
-              matIcon="check_circle"
-              ribbonColor="#8e44ad"
-              valueSuffix="%"
-              description="Taux de réussite"
-              tooltip="Pourcentage des sessions complétées avec une note de 100."
-              [value]="context.results.successRate"
-              shouldBePositive
-            />
-          </nz-col>
-          <nz-col nzXs="24" nzSm="24" nzMd="12" nzLg="12" nzXl="12">
-            <ui-statistic-card
-              matIcon="done"
-              ribbonColor="#f1c40f"
-              valueSuffix="%"
-              description="Taux de réponses"
-              tooltip="Pourcentage des sessions avec au moins un exercice répondu."
-              [value]="context.results.answerRate"
-              shouldBePositive
-            />
-          </nz-col>
-          <nz-col nzXs="24" nzSm="24" nzMd="12" nzLg="12" nzXl="12">
-            <ui-statistic-card
-              matIcon="clear"
-              ribbonColor="#16a085"
-              valueSuffix="%"
-              description="Taux d'abandon"
-              tooltip="Pourcentage des sessions avec au moins un exercice non répondu."
-              [value]="context.results.dropoutRate"
-              shouldBeZero
-            />
-          </nz-col>
-        </nz-row>
 
-        <ng-container *ngIf="context.results">
+        <!-- Indicateurs dynamiques (contextType = 'activity') -->
+        <h4 class="section-title">Indicateurs globaux</h4>
+        <ng-container *ngIf="indicatorsLoading">
+          <nz-spin nzSimple></nz-spin>
+        </ng-container>
+
+        <ng-container *ngIf="!indicatorsLoading">
+          <ng-container *ngIf="activityIndicators.length > 0 && activityContext; else noIndicators">
+            <nz-row [nzGutter]="[16, 16]">
+              <nz-col
+                *ngFor="let ind of activityIndicators"
+                nzXs="24" nzSm="12" nzMd="12" nzLg="8" nzXl="8">
+                <ui-indicator-card
+                  [indicator]="ind"
+                  [context]="activityContext"
+                  [clickable]="true"
+                  [queryParams]="indicatorQueryParams"
+                />
+              </nz-col>
+            </nz-row>
+          </ng-container>
+          <ng-template #noIndicators>
+            <nz-empty
+              nzNotFoundContent="Aucun indicateur de contexte 'activité' n'a été ajouté."
+              style="margin: 16px 0 24px">
+            </nz-empty>
+          </ng-template>
+        </ng-container>
+
+        <!-- Section "Par groupe" - snapshots comparatifs -->
+        <ng-container *ngIf="!indicatorsLoading && groupIndicators.length > 0 && context.activity">
+          <nz-divider></nz-divider>
+          <app-group-snapshots-panel
+            [groupIndicators]="groupIndicators"
+            [activityId]="context.activity.id"
+            [courseId]="context.course?.id ?? ''"
+            [activityName]="context.activity.title ?? ''"
+            [courseName]="context.course?.name ?? ''"
+          />
+        </ng-container>
+
+        <!---<ng-container *ngIf="context.results">
           <div class="spacer"></div>
           <section>
             <h4>Résultats par exercices</h4>
+            <p>Ces données sont calculées sur les sessions des participants qui ont ouvert l'activité.</p>
             <result-by-exercises [results]="context.results.exercises" />
           </section>
           <section>
@@ -131,7 +116,7 @@
 
         <ng-container *ngIf="context.activity.isPeerComparison">
           <peer-tree [activityId]="context.activity.id"></peer-tree>
-        </ng-container>
+        </ng-container>-->
       </nz-col>
 
       <nz-col nzXs="24" nzSm="24" nzMd="8" nzLg="8" nzXl="8">
@@ -142,7 +127,7 @@
       </nz-col>
     </nz-row>
 
-    <section>
+    <!---<section>
       <mat-card>
         <mat-card-header>
           <h4>Boîte à moustaches</h4>
@@ -156,6 +141,6 @@
     <section>
       <h4>Résultats par apprenants</h4>
       <result-by-members [results]="context.results.users" [columnOrder]="columnOrder" />
-    </section>
+    </section>-->
   </ng-container>
 </ui-layout-block>

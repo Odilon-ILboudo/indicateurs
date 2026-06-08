@@ -24,7 +24,7 @@ export class ResourcesService {
   ) {}
 
   async searchResources(filters: ResourceFilters) {
-    // views=true: recently viewed — return recent resources ordered by updated_at
+    // views=true: recently viewed - return recent resources ordered by updated_at
     const conditions: string[] = [];
     const params: unknown[] = [];
     let idx = 1;

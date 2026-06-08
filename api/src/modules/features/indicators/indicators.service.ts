@@ -1,11 +1,12 @@
 // src/modules/features/indicators/indicators.service.ts
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { IndicatorDefinition } from './entities/indicator-definition.entity';
 import { IndicatorValue } from './entities/indicator-value.entity';
 import { IndicatorFormulaVersion } from './entities/indicator-formula-version.entity';
 import { IndicatorExecutionLog } from './entities/indicator-execution-log.entity';
+import { IndicatorSnapshot } from './entities/indicator-snapshot.entity';
 import { UserIndicatorPreference } from '../user-preferences/entities/user-indicator-preference.entity';
 import { FormulaInterpreterService } from './interpreter/formula-interpreter.service';
 import { PlatonService } from '../../core/platon/platon.service';
@@ -25,6 +26,8 @@ export class IndicatorsService {
     private executionLogModel: Repository<IndicatorExecutionLog>,
     @InjectRepository(UserIndicatorPreference, 'indicators')
     private preferenceModel: Repository<UserIndicatorPreference>,
+    @InjectRepository(IndicatorSnapshot, 'indicators')
+    private snapshotModel: Repository<IndicatorSnapshot>,
     private readonly formulaInterpreter: FormulaInterpreterService,
     private readonly platonService: PlatonService,
   ) {}
@@ -67,7 +70,7 @@ export class IndicatorsService {
         id: indicator.id,
         name: indicator.name,
         description: indicator.description,
-        visualization: indicator.visualization,
+        visualizations: indicator.visualizations,
       },
       values: values.map(v => ({
         value: v.value,
@@ -103,7 +106,7 @@ export class IndicatorsService {
         results[name] = {
           value: values[0]?.value || 0,
           metadata: values[0]?.metadata,
-          visualization: indicator.visualization,
+          visualizations: indicator.visualizations,
         };
       }
     }
@@ -115,17 +118,15 @@ export class IndicatorsService {
     const indicator = this.indicatorModel.create({
       name: definition.name,
       description: definition.description,
-      supportedContexts: definition.supportedContexts || [],
+      contextType: definition.contextType ?? null,
+      familyName: definition.familyName ?? null,
       requiredEvents: definition.requiredEvents || [],
-      visualization: definition.visualization,
+      visualizations: definition.visualizations ?? [],
       formula: definition.formula ?? null,
-      contextConfigs: definition.contextConfigs ?? null,
       isActive: definition.isActive ?? true,
-      templateConfig: definition.templateConfig,
     });
     const saved = await this.indicatorModel.save(indicator);
 
-    // Snapshot de la version initiale
     if (saved.formula?.pipeline?.length) {
       await this.saveFormulaVersion(saved.id, saved.formula, definition.createdBy);
     }
@@ -136,7 +137,6 @@ export class IndicatorsService {
   async update(id: string, data: Partial<IndicatorDefinition> & { updatedBy?: string }): Promise<IndicatorDefinition> {
     const indicator = await this.findById(id);
 
-    // Si la formule change, sauvegarder une nouvelle version avant d'appliquer
     const newFormula = (data as any).formula;
     if (newFormula?.pipeline?.length) {
       const formulaChanged = JSON.stringify(indicator.formula) !== JSON.stringify(newFormula);
@@ -167,12 +167,7 @@ export class IndicatorsService {
   async recalculate(id: string): Promise<{ processed: number; updated: number; failed: number }> {
     const indicator = await this.findById(id);
 
-    // Résoudre la formule à utiliser (vue learner en priorité, sinon formule principale)
-    const configs = this.getEffectiveContextConfigs(indicator);
-    const firstView = configs.find((c: any) => c.contextType === 'learner')?.views?.[0];
-    const formulaToUse = (firstView?.formula?.pipeline?.length) ? firstView.formula : indicator.formula;
-
-    if (!formulaToUse?.pipeline?.length) {
+    if (!indicator.formula?.pipeline?.length) {
       throw new BadRequestException(`L'indicateur "${indicator.name}" n'a pas de formule DSL`);
     }
 
@@ -194,7 +189,7 @@ export class IndicatorsService {
               )[0]?.activity_id ?? undefined
             : undefined;
 
-          const value = await this.formulaInterpreter.interpret(formulaToUse as any, {
+          const value = await this.formulaInterpreter.interpret(indicator.formula as any, {
             userId,
             activityId: latestActivityId,
             indicatorId: indicator.id,
@@ -221,11 +216,6 @@ export class IndicatorsService {
     return { processed: userIds.length, updated, failed };
   }
 
-  /**
-   * Calcule une vue spécifique d'un indicateur pour un contexte donné.
-   * Supporte les contextes : learner (userId), group (groupId), course (courseId), activity, global.
-   * Persiste le résultat dans indicator_values (valeur scalaire dans value, résultat structuré dans metadata).
-   */
   async getTeacherContext(teacherId: string) {
     return this.platonService.getCoursesWithGroupsForTeacher(teacherId);
   }
@@ -234,10 +224,13 @@ export class IndicatorsService {
     return this.platonService.getActivitiesByCourse(courseId);
   }
 
+  async getCourseStudents(courseId: string) {
+    return this.platonService.getStudentsByCourse(courseId);
+  }
+
   /**
-   * Pré-calcule (et persiste) toutes les vues de tous les indicateurs actifs
-   * pour un contexte donné (course ou group + activité).
-   * Chaque appel interne à computeView vérifie le cache → pas de double calcul.
+   * Pré-calcule tous les indicateurs actifs dont le contextType correspond
+   * au contexte fourni (course, group, activity).
    */
   async precomputeForContext(
     contextType: string,
@@ -248,52 +241,59 @@ export class IndicatorsService {
     let computed = 0;
 
     for (const indicator of indicators) {
-      const configs = this.getEffectiveContextConfigs(indicator);
-      const ctxConfig = configs.find((c: any) => c.contextType === contextType);
-      if (!ctxConfig?.views?.length) continue;
-
-      for (const view of ctxConfig.views) {
-        try {
-          await this.computeView(indicator.id, contextType, contextId, view.id, activityId);
-          computed++;
-        } catch {
-          // erreur sur un indicateur individuel → on continue les autres
-        }
+      if (indicator.contextType !== contextType) continue;
+      try {
+        await this.computeView(indicator.id, contextType, contextId, activityId);
+        computed++;
+      } catch {
+        // erreur sur un indicateur individuel → on continue
       }
     }
 
     return { computed };
   }
 
+  /**
+   * Calcule la formule d'une visualisation donnée d'un indicateur.
+   * Si vizId est fourni, utilise la formule propre à cette visualisation (ou la formule
+   * partagée de l'indicateur si la visualisation n'en a pas).
+   * Si vizId est absent, utilise visualizations[0].
+   * Persiste et met en cache le résultat dans indicator_values (clé = indicatorId+contextId+vizId).
+   */
   async computeView(
     indicatorId: string,
     contextType: string,
     contextId: string,
-    viewId: string,
     activityId?: string,
+    vizId?: string,
   ): Promise<{ value: number; structuredValue?: any; metadata: Record<string, any> }> {
     const indicator = await this.findById(indicatorId);
 
-    // Résoudre la ViewConfig depuis contextConfigs
-    const viewConfig = this.resolveViewConfig(indicator, contextType, viewId);
-    if (!viewConfig) {
+    // Résoudre la visualisation ciblée
+    const vizList = indicator.visualizations ?? [];
+    const viz = vizId
+      ? (vizList.find(v => v.id === vizId) ?? vizList[0])
+      : vizList[0];
+
+    // La formule à utiliser : propre à la viz, sinon formule partagée
+    const formula = viz?.formula?.pipeline?.length ? viz.formula : indicator.formula;
+
+    if (!formula?.pipeline?.length) {
       throw new BadRequestException(
-        `Vue "${viewId}" introuvable pour le contexte "${contextType}" sur l'indicateur "${indicator.name}"`,
+        `L'indicateur "${indicator.name}" n'a pas de formule DSL${viz ? ` pour la vue "${viz.label}"` : ''}`,
       );
     }
 
-    // Pour learner : fallback sur TARGET_ACTIVITY_ID. Pour course/group : l'activityId est fourni par l'appelant.
     const resolvedActivityId = contextType === 'learner'
       ? (activityId ?? process.env.TARGET_ACTIVITY_ID)
       : activityId;
 
-    // Clé de cache composite pour course/group : contextId:activityId:viewId
-    // Garantit qu'une même combinaison (cours/groupe + activité + vue) n'est calculée qu'une seule fois.
-    const cacheContextId = (contextType === 'course' || contextType === 'group') && resolvedActivityId
-      ? `${contextId}:${resolvedActivityId}:${viewId}`
+    // Clé de cache : inclut vizId pour distinguer les vues d'un même indicateur
+    const baseContextId = (contextType === 'course' || contextType === 'group') && resolvedActivityId
+      ? `${contextId}:${resolvedActivityId}`
       : contextId;
+    const cacheContextId = viz?.id ? `${baseContextId}:${viz.id}` : baseContextId;
 
-    // Vérifier le cache avant tout calcul
     const cached = await this.indicatorValueModel.findOne({
       where: { indicatorId, contextType, contextId: cacheContextId },
     });
@@ -305,20 +305,15 @@ export class IndicatorsService {
       };
     }
 
-    // Construire le FormulaContext selon le contextType
     const formulaContext: any = { indicatorId };
     if (contextType === 'learner')  { formulaContext.userId = contextId; formulaContext.activityId = resolvedActivityId; }
+    if (contextType === 'teacher' || contextType === 'admin') { formulaContext.userId = contextId; formulaContext.activityId = resolvedActivityId; }
     if (contextType === 'group')    { formulaContext.groupId = contextId; formulaContext.activityId = resolvedActivityId; }
     if (contextType === 'course')   { formulaContext.courseId = contextId; formulaContext.activityId = resolvedActivityId; }
     if (contextType === 'activity') { formulaContext.activityId = contextId; }
 
-    // Si la vue n'a pas de pipeline propre, on utilise la formule principale de l'indicateur
-    const formulaToUse = (viewConfig.formula?.pipeline?.length)
-      ? viewConfig.formula
-      : indicator.formula;
-    let result = await this.formulaInterpreter.interpret(formulaToUse as any, formulaContext);
+    let result = await this.formulaInterpreter.interpret(formula as any, formulaContext);
 
-    // Si le résultat est un tableau de buckets avec userIds, résoudre en noms lisibles
     if (Array.isArray(result) && result.length > 0 && result[0]?.userIds !== undefined) {
       const allIds: string[] = [...new Set<string>(result.flatMap((b: any) => b.userIds ?? []))];
       const nameMap = await this.platonService.getUserNameMap(allIds);
@@ -347,10 +342,6 @@ export class IndicatorsService {
     return { value: scalarValue, structuredValue, metadata: { lastUpdate: new Date() } };
   }
 
-  /**
-   * Prévisualise le résultat brut d'un pipeline DSL sans persister.
-   * Supporte les contextes learner et group.
-   */
   async preview(
     formula: any,
     context: { userId?: string; groupId?: string; activityId?: string },
@@ -363,39 +354,11 @@ export class IndicatorsService {
     return { result };
   }
 
-  /**
-   * Retourne les contextConfigs d'un indicateur en garantissant la rétro-compatibilité
-   * avec l'ancien format formula + visualization.
-   */
-  getEffectiveContextConfigs(indicator: any): any[] {
-    if (indicator.contextConfigs?.length) return indicator.contextConfigs;
-    // Rétro-compatibilité : construire un contextConfig learner depuis formula + visualization
-    if (indicator.formula) {
-      return [{
-        contextType: 'learner',
-        views: [{
-          id: 'default',
-          label: 'Vue principale',
-          formula: indicator.formula,
-          visualization: indicator.visualization ?? { type: 'card' },
-        }],
-      }];
-    }
-    return [];
-  }
-
-  private resolveViewConfig(indicator: any, contextType: string, viewId: string): any | null {
-    const configs = this.getEffectiveContextConfigs(indicator);
-    const ctxConfig = configs.find((c: any) => c.contextType === contextType);
-    if (!ctxConfig) return null;
-    return ctxConfig.views.find((v: any) => v.id === viewId) ?? null;
-  }
-
   async getPlatonSchema() {
     return this.platonService.getAvailableTables();
   }
 
-  // ── Versioning des formules (tâche 4) ────────────────────────────────────
+  // ── Versioning ────────────────────────────────────────────────────────────
 
   async getFormulaHistory(id: string): Promise<IndicatorFormulaVersion[]> {
     return this.formulaVersionModel.find({
@@ -414,12 +377,9 @@ export class IndicatorsService {
     return this.indicatorModel.save(indicator);
   }
 
-  // ── Logs d'exécution (tâche 5) ───────────────────────────────────────────
+  // ── Logs ─────────────────────────────────────────────────────────────────
 
-  async getExecutionLogs(
-    id: string,
-    limit = 50,
-  ): Promise<IndicatorExecutionLog[]> {
+  async getExecutionLogs(id: string, limit = 50): Promise<IndicatorExecutionLog[]> {
     return this.executionLogModel.find({
       where: { indicatorId: id },
       order: { executedAt: 'DESC' },
@@ -427,7 +387,43 @@ export class IndicatorsService {
     });
   }
 
-  // ── Helpers privés ────────────────────────────────────────────────────────
+  // ── Snapshots ─────────────────────────────────────────────────────────────
+
+  async getSnapshots(indicatorId: string, activityId: string): Promise<IndicatorSnapshot[]> {
+    return this.snapshotModel.find({
+      where: { indicatorId, activityId },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  async createSnapshot(
+    indicatorId: string,
+    body: { contextType: string; contextId: string; activityId: string; title: string },
+  ): Promise<IndicatorSnapshot> {
+    const existing = await this.snapshotModel.findOne({
+      where: { indicatorId, contextType: body.contextType, contextId: body.contextId, activityId: body.activityId },
+    });
+    if (existing) {
+      throw new ConflictException('Un snapshot pour ce groupe et cette activité existe déjà');
+    }
+    const snapshot = this.snapshotModel.create({ indicatorId, ...body });
+    return this.snapshotModel.save(snapshot);
+  }
+
+  async updateSnapshotTitle(indicatorId: string, snapshotId: string, title: string): Promise<IndicatorSnapshot> {
+    const snapshot = await this.snapshotModel.findOne({ where: { id: snapshotId, indicatorId } });
+    if (!snapshot) throw new NotFoundException('Snapshot introuvable');
+    snapshot.title = title;
+    return this.snapshotModel.save(snapshot);
+  }
+
+  async deleteSnapshot(indicatorId: string, snapshotId: string): Promise<void> {
+    const snapshot = await this.snapshotModel.findOne({ where: { id: snapshotId, indicatorId } });
+    if (!snapshot) throw new NotFoundException('Snapshot introuvable');
+    await this.snapshotModel.remove(snapshot);
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
   private async saveFormulaVersion(indicatorId: string, formula: any, createdBy?: string): Promise<void> {
     const lastVersion = await this.formulaVersionModel.findOne({
