@@ -6,6 +6,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { IndicatorDefinition } from '../indicators/entities/indicator-definition.entity';
 import { IndicatorValue } from '../indicators/entities/indicator-value.entity';
 import { FormulaInterpreterService } from '../indicators/interpreter/formula-interpreter.service';
+import { IndicatorsService } from '../indicators/indicators.service';
 
 export interface RawEvent {
   type: string;
@@ -33,6 +34,7 @@ export class IngestionService implements OnModuleInit {
     private indicatorValueModel: Repository<IndicatorValue>,
     private eventEmitter: EventEmitter2,
     private formulaInterpreter: FormulaInterpreterService,
+    private indicatorsService: IndicatorsService,
   ) {}
 
   async onModuleInit() {
@@ -58,6 +60,12 @@ export class IngestionService implements OnModuleInit {
 
       for (const indicator of affectedIndicators) {
         await this.processIndicatorUpdate(indicator, event);
+
+        // Rafraîchit les snapshots liés à cette activité dès que les données changent
+        if (event.activityId) {
+          this.indicatorsService.refreshSnapshots(indicator.id, event.activityId)
+            .catch(err => this.logger.warn(`refreshSnapshots échoué pour indicator=${indicator.id}: ${err.message}`));
+        }
       }
 
       this.eventEmitter.emit('ingestion.event.processed', {

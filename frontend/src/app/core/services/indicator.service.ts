@@ -2,7 +2,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, BehaviorSubject, map, of, tap } from 'rxjs';
-import { CourseActivity, IndicatorDefinition, IndicatorSnapshot, IndicatorValue, TeacherCourse, ViewResult } from '../models/indicator.model';
+import { CourseActivity, IndicatorDefinition, IndicatorSnapshot, IndicatorValue, StepDebugResult, TeacherCourse, ViewResult } from '../models/indicator.model';
 import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
@@ -119,6 +119,13 @@ export class IndicatorService {
     context: { userId?: string; groupId?: string; activityId?: string },
   ): Observable<{ result: any }> {
     return this.http.post<{ result: any }>(`${this.apiUrl}/preview`, { formula, context });
+  }
+
+  previewFormulaSteps(
+    formula: any,
+    context: { userId?: string; groupId?: string; activityId?: string },
+  ): Observable<{ steps: StepDebugResult[] }> {
+    return this.http.post<{ steps: StepDebugResult[] }>(`${this.apiUrl}/preview-steps`, { formula, context });
   }
 
   // ── Versioning ────────────────────────────────────────────────────────────

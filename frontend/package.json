@@ -26,6 +26,7 @@
     "date-fns": "^2.16.1",
     "echarts": "^5.4.3",
     "fuse.js": "^7.4.1",
+    "js-yaml": "^4.2.0",
     "ng-zorro-antd": "^21.3.0",
     "ngx-echarts": "^21.0.0",
     "rxjs": "~7.8.0",
@@ -36,6 +37,7 @@
     "@angular/build": "21.2.14",
     "@angular/cli": "21.2.14",
     "@angular/compiler-cli": "21.2.14",
+    "@types/js-yaml": "^4.0.9",
     "less": "^4.6.4",
     "typescript": "~5.9.2"
   }

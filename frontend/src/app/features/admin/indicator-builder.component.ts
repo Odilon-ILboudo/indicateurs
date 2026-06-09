@@ -21,21 +21,32 @@ import { NzSwitchModule } from 'ng-zorro-antd/switch';
 import { NzTabsModule } from 'ng-zorro-antd/tabs';
 import { NzModalRef, NZ_MODAL_DATA } from 'ng-zorro-antd/modal';
 import { NzMessageService } from 'ng-zorro-antd/message';
+import * as yaml from 'js-yaml';
 import { IndicatorService } from '../../core/services/indicator.service';
 import { IndicatorDefinition, IndicatorScope, ViewVisualizationType, TeacherCourse, CourseActivity } from '../../core/models/indicator.model';
 import { environment } from '../../../environments/environment';
 
 // ── Types DSL ────────────────────────────────────────────────────────────────
 
-type StepType = 'fetch' | 'filter' | 'groupBy' | 'findFirst' | 'extract' | 'aggregate' | 'round' | 'divide' | 'js';
+type StepType = 'fetch' | 'join' | 'filter' | 'groupBy' | 'findFirst' | 'extract' | 'aggregate' | 'round' | 'divide' | 'js';
 
 interface PipelineStep {
   id: string; type: StepType; label: string;
+  // fetch
   table?: string; contextFields?: string[]; useGroupContext?: boolean;
+  // join
+  joinTable?: string; joinContextFields?: string[]; joinLeftKey?: string; joinRightKey?: string;
+  // filter
   filterField?: string; filterOperator?: string; filterValue?: string | number;
+  // groupBy
   groupField?: string;
+  // findFirst
   whereField?: string; whereValue?: string | number; sortField?: string;
-  extractField?: string; aggregateFn?: string;
+  // extract
+  extractField?: string;
+  // aggregate
+  aggregateFn?: string;
+  // round / divide / js
   decimals?: number; divideBy?: number; jsCode?: string;
 }
 
@@ -74,6 +85,7 @@ export const CONTEXT_LABELS: Record<IndicatorScope, string> = {
 
 const STEP_CATALOG: { type: StepType; label: string; icon: string; color: string; desc: string }[] = [
   { type: 'fetch',     label: 'Récupérer données', icon: 'database',     color: '#1890ff', desc: 'Charge les données depuis PLaTon selon le contexte' },
+  { type: 'join',      label: 'Jointure',           icon: 'merge-cells',  color: '#0958d9', desc: 'Joint les données courantes avec une seconde table PLaTon (LEFT JOIN sur une clé commune)' },
   { type: 'filter',    label: 'Filtrer',            icon: 'filter',       color: '#52c41a', desc: 'Filtre les lignes selon une condition sur un champ' },
   { type: 'groupBy',   label: 'Grouper par',        icon: 'apartment',    color: '#fa8c16', desc: 'Regroupe les données par valeur d\'un champ' },
   { type: 'findFirst', label: 'Premier résultat',   icon: 'aim',          color: '#722ed1', desc: 'Prend le premier élément de chaque groupe' },
@@ -151,20 +163,20 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
   <!-- ── ÉTAPE 1 ─────────────────────────────────────────────────────── -->
   <div *ngIf="step === 0" class="step-content">
     <nz-form-item>
-      <nz-form-label [nzRequired]="true">Nom de l'indicateur</nz-form-label>
+      <nz-form-label [nzRequired]="true">Nom de l'indicateur <mat-icon class="info-icon" nz-tooltip="Nom unique affiché dans le tableau de bord et les listes. Doit être court et descriptif. Ex : 'Tentatives avant réussite'." nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
       <nz-form-control>
         <input nz-input [(ngModel)]="def.name" placeholder="ex: Tentatives avant réussite" />
       </nz-form-control>
     </nz-form-item>
     <nz-form-item>
-      <nz-form-label>Description</nz-form-label>
+      <nz-form-label>Description <mat-icon class="info-icon" nz-tooltip="Explication de ce que mesure cet indicateur, visible par les utilisateurs dans la page de sélection." nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
       <nz-form-control>
         <textarea nz-input [(ngModel)]="def.description" rows="3"
           placeholder="Décrivez ce que mesure cet indicateur…"></textarea>
       </nz-form-control>
     </nz-form-item>
     <nz-form-item>
-      <nz-form-label [nzRequired]="true">Événements déclencheurs</nz-form-label>
+      <nz-form-label [nzRequired]="true">Événements déclencheurs <mat-icon class="info-icon" nz-tooltip="Événements PLaTon qui déclenchent l'ingestion de nouvelles données. L'indicateur est recalculé automatiquement quand ces événements surviennent." nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
       <nz-form-control>
         <nz-select [(ngModel)]="def.requiredEvents" nzMode="tags"
           nzPlaceHolder="ex: exercise.answered" style="width:100%">
@@ -181,7 +193,7 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
   <div *ngIf="step === 1" class="step-content">
 
     <nz-form-item>
-      <nz-form-label [nzRequired]="true">Contexte</nz-form-label>
+      <nz-form-label [nzRequired]="true">Contexte <mat-icon class="info-icon" nz-tooltip="À qui s'adresse cet indicateur. Apprenant = tableau de bord personnel. Cours / Groupe = contexte enseignant. Activité = page statistiques d'une activité. Enseignant / Admin = tableau de bord propre à ces rôles." nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
       <nz-form-control>
         <nz-select [(ngModel)]="def.contextType" style="width:100%">
           <nz-option nzValue="learner"  nzLabel="Apprenant (learner)"></nz-option>
@@ -202,7 +214,9 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
         <div class="viz-row-header">
           <span class="viz-index">{{ i + 1 }}</span>
           <input nz-input [(ngModel)]="v.label" placeholder="Libellé de l'onglet"
-            class="viz-label-input" />
+            class="viz-label-input"
+            nz-tooltip="Nom de l'onglet affiché sur la card et la page détail quand l'indicateur a plusieurs visualisations. Ex : 'Vue carte', 'Distribution'."
+            nzTooltipPlacement="top" />
           <button nz-button nzType="text" nzDanger nzSize="small"
             nz-tooltip="Supprimer" [disabled]="vizList.length <= 1"
             (click)="removeViz(i)">
@@ -212,7 +226,7 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
 
         <div class="viz-fields">
           <nz-form-item style="margin:0;flex:2">
-            <nz-form-label>Type</nz-form-label>
+            <nz-form-label>Type <mat-icon class="info-icon" nz-tooltip="Forme d'affichage. Carte = valeur scalaire. Barres = résultat {clé:valeur}. Histogramme = distribution [{bucket, count}]. Jauge = valeur avec plafond. Ligne = historique temporel." nzTooltipPlacement="top">info_outline</mat-icon></nz-form-label>
             <nz-form-control>
               <nz-select [(ngModel)]="v.type" style="width:100%" (ngModelChange)="onVizTypeChange(v)">
                 <nz-option nzValue="card"       nzLabel="Carte (valeur scalaire)"></nz-option>
@@ -224,7 +238,7 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
             </nz-form-control>
           </nz-form-item>
           <nz-form-item style="margin:0;flex:1">
-            <nz-form-label>Icône</nz-form-label>
+            <nz-form-label>Icône <mat-icon class="info-icon" nz-tooltip="Icône Material affichée dans la card indicateur." nzTooltipPlacement="top">info_outline</mat-icon></nz-form-label>
             <nz-form-control>
               <nz-select [(ngModel)]="v.icon" style="width:100%">
                 <nz-option *ngFor="let ic of availableIcons" [nzValue]="ic" [nzLabel]="ic"></nz-option>
@@ -232,13 +246,13 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
             </nz-form-control>
           </nz-form-item>
           <nz-form-item style="margin:0">
-            <nz-form-label>Couleur</nz-form-label>
+            <nz-form-label>Couleur <mat-icon class="info-icon" nz-tooltip="Couleur principale de la visualisation (barres, jauge, courbe)." nzTooltipPlacement="top">info_outline</mat-icon></nz-form-label>
             <nz-form-control>
               <nz-color-picker [(ngModel)]="v.color" [nzFormat]="'hex'"></nz-color-picker>
             </nz-form-control>
           </nz-form-item>
           <nz-form-item style="margin:0;flex:1">
-            <nz-form-label>Unité</nz-form-label>
+            <nz-form-label>Unité <mat-icon class="info-icon" nz-tooltip="Suffixe affiché à côté de la valeur. Ex : 'tentatives', '%', 'min'. Laissez vide si pas d'unité." nzTooltipPlacement="top">info_outline</mat-icon></nz-form-label>
             <nz-form-control>
               <input nz-input [(ngModel)]="v.unit" placeholder="tentatives, %, …" />
             </nz-form-control>
@@ -248,19 +262,19 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
         <div class="threshold-row" *ngIf="v.type === 'card' || v.type === 'gauge'">
           <small>Seuils :</small>
           <nz-form-item style="margin:0">
-            <nz-form-label><span class="dot dot-green"></span> Bon ≤</nz-form-label>
+            <nz-form-label><span class="dot dot-green"></span> Bon ≤ <mat-icon class="info-icon" nz-tooltip="Valeur en dessous de laquelle le résultat est affiché en vert. Ex : pour 'tentatives', bon ≤ 3." nzTooltipPlacement="top">info_outline</mat-icon></nz-form-label>
             <nz-form-control>
               <nz-input-number [(ngModel)]="v.thresholds.good" [nzMin]="0" nzSize="small" style="width:80px"></nz-input-number>
             </nz-form-control>
           </nz-form-item>
           <nz-form-item style="margin:0">
-            <nz-form-label><span class="dot dot-orange"></span> Moyen ≤</nz-form-label>
+            <nz-form-label><span class="dot dot-orange"></span> Moyen ≤ <mat-icon class="info-icon" nz-tooltip="Valeur en dessous de laquelle le résultat est affiché en orange (entre 'Bon' et 'Critique')." nzTooltipPlacement="top">info_outline</mat-icon></nz-form-label>
             <nz-form-control>
               <nz-input-number [(ngModel)]="v.thresholds.warning" [nzMin]="0" nzSize="small" style="width:80px"></nz-input-number>
             </nz-form-control>
           </nz-form-item>
           <nz-form-item style="margin:0">
-            <nz-form-label><span class="dot dot-red"></span> Critique &gt;</nz-form-label>
+            <nz-form-label><span class="dot dot-red"></span> Critique > <mat-icon class="info-icon" nz-tooltip="Valeur au-delà de laquelle le résultat est affiché en rouge." nzTooltipPlacement="top">info_outline</mat-icon></nz-form-label>
             <nz-form-control>
               <nz-input-number [(ngModel)]="v.thresholds.danger" [nzMin]="0" nzSize="small" style="width:80px"></nz-input-number>
             </nz-form-control>
@@ -294,35 +308,62 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
             </button>
           </div>
 
-          <!-- Toggle Visuel / JSON -->
+          <!-- Toggle Visuel / Import -->
           <div class="mode-toggle">
             <button nz-button nzSize="small"
-              [nzType]="activeJsonVizId !== v.id ? 'primary' : 'default'"
-              (click)="leaveJsonMode(v)">
+              [nzType]="activeImportVizId !== v.id ? 'primary' : 'default'"
+              (click)="enterVisualMode(v)">
               <span nz-icon nzType="eye"></span> Visuel
             </button>
             <button nz-button nzSize="small"
-              [nzType]="activeJsonVizId === v.id ? 'primary' : 'default'"
-              (click)="enterJsonMode(v)">
-              <span nz-icon nzType="code"></span> JSON
+              [nzType]="activeImportVizId === v.id ? 'primary' : 'default'"
+              (click)="enterImportMode(v)">
+              <span nz-icon nzType="import"></span> Import
             </button>
           </div>
 
-          <!-- JSON -->
-          <ng-container *ngIf="activeJsonVizId === v.id">
-            <textarea class="json-editor" [(ngModel)]="jsonText" rows="18" spellcheck="false"></textarea>
-            <div *ngIf="jsonError" class="json-error">{{ jsonError }}</div>
+          <!-- Import YAML/JSON -->
+          <ng-container *ngIf="activeImportVizId === v.id">
+            <div class="import-panel">
+              <div class="import-mode-toggle">
+                <button nz-button nzSize="small"
+                  [nzType]="importMode === 'yaml' ? 'primary' : 'default'"
+                  (click)="setImportMode('yaml')">YAML</button>
+                <button nz-button nzSize="small"
+                  [nzType]="importMode === 'json' ? 'primary' : 'default'"
+                  (click)="setImportMode('json')">JSON</button>
+                <button nz-button nzSize="small" nzType="default"
+                  (click)="importDocsOpen = !importDocsOpen">
+                  <span nz-icon nzType="info-circle"></span>
+                  {{ importDocsOpen ? 'Masquer la référence ' + importMode.toUpperCase() : 'Référence ' + importMode.toUpperCase() }}
+                </button>
+                <label class="import-file-btn">
+                  <span nz-icon nzType="upload"></span> Fichier
+                  <input type="file" style="display:none" accept=".yaml,.yml,.json"
+                    (change)="onImportFileUpload($event)">
+                </label>
+              </div>
+              <div *ngIf="importDocsOpen" class="import-docs"><pre>{{ importDocsText }}</pre></div>
+              <textarea class="json-editor" [(ngModel)]="importText" rows="12" spellcheck="false" [placeholder]="importPlaceholder" (keydown)="onImportKeydown($event)"></textarea>
+              <div *ngIf="importError" class="json-error">{{ importError }}</div>
+              <div class="import-actions">
+                <button nz-button nzType="primary" nzSize="small" (click)="applyImport(v)">
+                  <span nz-icon nzType="check"></span> Appliquer
+                </button>
+                <button nz-button nzSize="small" (click)="activeImportVizId = null; importError = ''">Annuler</button>
+              </div>
+            </div>
           </ng-container>
 
           <!-- Visuel -->
-          <ng-container *ngIf="activeJsonVizId !== v.id">
+          <ng-container *ngIf="activeImportVizId !== v.id">
             <div class="pipeline" cdkDropList (cdkDropListDropped)="drop($event, v)">
 
               <div *ngIf="v.pipeline.length === 0" class="pipeline-empty">
                 Aucune étape — choisissez une recette ou ajoutez manuellement.
               </div>
 
-              <div *ngFor="let s of v.pipeline; let si = index"
+              <div *ngFor="let s of v.pipeline; let si = index; trackBy: trackStepById"
                 class="step-card" cdkDrag
                 [style.border-left-color]="getStepMeta(s.type).color">
 
@@ -348,7 +389,7 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
                   <div class="step-params">
                     <ng-container *ngIf="s.type === 'fetch'">
                       <div class="param-row">
-                        <label>Table</label>
+                        <label>Table <mat-icon class="info-icon" nz-tooltip="Table PLaTon à interroger. 'SessionData' contient toutes les sessions d'exercices (user_id, activity_id, resource_id, grade, attempts, created_at)." nzTooltipPlacement="right">info_outline</mat-icon></label>
                         <nz-select [(ngModel)]="s.table" style="width:220px"
                           nzPlaceHolder="Choisir une table" [nzLoading]="schemaLoading"
                           (ngModelChange)="s.contextFields = []">
@@ -356,27 +397,56 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
                         </nz-select>
                       </div>
                       <div class="param-row">
-                        <label>Requête groupe de TP</label>
+                        <label>Requête groupe de TP <mat-icon class="info-icon" nz-tooltip="Activez pour filtrer automatiquement les lignes dont user_id appartient au groupe de TP sélectionné dans le contexte. Nécessite que l'étape reçoive un activityId." nzTooltipPlacement="right">info_outline</mat-icon></label>
                         <nz-switch [(ngModel)]="s.useGroupContext"
                           nzCheckedChildren="Groupe" nzUnCheckedChildren="Non"></nz-switch>
                       </div>
                       <div class="param-row">
-                        <label>Filtrer par contexte</label>
+                        <label>Filtrer par contexte <mat-icon class="info-icon" nz-tooltip="Colonnes sur lesquelles appliquer automatiquement les filtres du contexte courant. Ex : 'user_id' filtre sur l'utilisateur actuel, 'activity_id' sur l'activité sélectionnée." nzTooltipPlacement="right">info_outline</mat-icon></label>
                         <nz-select [(ngModel)]="s.contextFields" nzMode="multiple" style="width:300px"
                           nzPlaceHolder="Colonnes de filtre" [nzDisabled]="!s.table">
                           <nz-option *ngFor="let f of columnsForTable(s.table)" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
                         </nz-select>
                       </div>
                     </ng-container>
+                    <ng-container *ngIf="s.type === 'join'">
+                      <div class="param-row">
+                        <label>Table à joindre <mat-icon class="info-icon" nz-tooltip="Table PLaTon dont les colonnes seront fusionnées avec les données courantes. Les champs de la table gauche (précédente) ont priorité en cas de conflit de nom." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                        <nz-select [(ngModel)]="s.joinTable" nzPlaceHolder="Choisir une table"
+                          [nzLoading]="schemaLoading" (ngModelChange)="s.joinRightKey = undefined">
+                          <nz-option *ngFor="let t of platonSchema" [nzValue]="t.name" [nzLabel]="t.name"></nz-option>
+                        </nz-select>
+                      </div>
+                      <div class="param-row">
+                        <label>Filtrer par contexte <mat-icon class="info-icon" nz-tooltip="Colonnes de la table à joindre sur lesquelles appliquer les filtres du contexte courant (ex : activity_id). Optionnel." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                        <nz-select [(ngModel)]="s.joinContextFields" nzMode="multiple"
+                          nzPlaceHolder="Colonnes de filtre (optionnel)" [nzDisabled]="!s.joinTable">
+                          <nz-option *ngFor="let f of columnsForTable(s.joinTable)" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
+                        </nz-select>
+                      </div>
+                      <div class="param-row">
+                        <label>Clé gauche <mat-icon class="info-icon" nz-tooltip="Colonne de la table courante (résultat du fetch précédent) servant de clé de jointure. Ex : 'activity_id'." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                        <nz-select [(ngModel)]="s.joinLeftKey" nzPlaceHolder="Champ de la table gauche" nzAllowClear>
+                          <nz-option *ngFor="let f of activeColumnsForViz(v)" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
+                        </nz-select>
+                      </div>
+                      <div class="param-row">
+                        <label>Clé droite <mat-icon class="info-icon" nz-tooltip="Colonne de la table à joindre correspondant à la clé gauche. Ex : 'id' pour joindre sur l'identifiant." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                        <nz-select [(ngModel)]="s.joinRightKey" nzPlaceHolder="Champ de la table à joindre"
+                          nzAllowClear [nzDisabled]="!s.joinTable">
+                          <nz-option *ngFor="let f of columnsForTable(s.joinTable)" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
+                        </nz-select>
+                      </div>
+                    </ng-container>
                     <ng-container *ngIf="s.type === 'filter'">
                       <div class="param-row">
-                        <label>Champ</label>
+                        <label>Champ <mat-icon class="info-icon" nz-tooltip="Colonne de la table sur laquelle s'applique la condition de filtrage." nzTooltipPlacement="right">info_outline</mat-icon></label>
                         <nz-select [(ngModel)]="s.filterField" style="width:180px">
                           <nz-option *ngFor="let f of activeColumnsForViz(v)" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
                         </nz-select>
                       </div>
                       <div class="param-row">
-                        <label>Opérateur</label>
+                        <label>Opérateur <mat-icon class="info-icon" nz-tooltip="Opérateur de comparaison entre la valeur du champ et la valeur de référence." nzTooltipPlacement="right">info_outline</mat-icon></label>
                         <nz-select [(ngModel)]="s.filterOperator" style="width:120px">
                           <nz-option nzValue="==" nzLabel="=="></nz-option>
                           <nz-option nzValue="!=" nzLabel="!="></nz-option>
@@ -387,13 +457,13 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
                         </nz-select>
                       </div>
                       <div class="param-row">
-                        <label>Valeur</label>
+                        <label>Valeur <mat-icon class="info-icon" nz-tooltip="Valeur de référence pour la comparaison. Ex : '100' pour garder uniquement les lignes où grade == 100." nzTooltipPlacement="right">info_outline</mat-icon></label>
                         <input nz-input [(ngModel)]="s.filterValue" style="width:120px" />
                       </div>
                     </ng-container>
                     <ng-container *ngIf="s.type === 'groupBy'">
                       <div class="param-row">
-                        <label>Grouper par</label>
+                        <label>Grouper par <mat-icon class="info-icon" nz-tooltip="Regroupe les lignes par valeur unique de cette colonne. Produit un tableau de groupes. Ex : 'resource_id' crée un groupe par exercice." nzTooltipPlacement="right">info_outline</mat-icon></label>
                         <nz-select [(ngModel)]="s.groupField" style="width:200px">
                           <nz-option *ngFor="let f of activeColumnsForViz(v)" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
                         </nz-select>
@@ -401,17 +471,17 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
                     </ng-container>
                     <ng-container *ngIf="s.type === 'findFirst'">
                       <div class="param-row">
-                        <label>Condition (champ)</label>
+                        <label>Condition (champ) <mat-icon class="info-icon" nz-tooltip="Optionnel. Si renseigné, filtre les lignes du groupe pour ne garder que celles où ce champ correspond à la 'Valeur attendue'. Laissez vide pour prendre simplement la 1ère ligne." nzTooltipPlacement="right">info_outline</mat-icon></label>
                         <nz-select [(ngModel)]="s.whereField" nzAllowClear style="width:180px">
                           <nz-option *ngFor="let f of activeColumnsForViz(v)" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
                         </nz-select>
                       </div>
                       <div class="param-row" *ngIf="s.whereField">
-                        <label>Valeur attendue</label>
+                        <label>Valeur attendue <mat-icon class="info-icon" nz-tooltip="Valeur que doit avoir le champ de condition. Ex : '100' pour trouver la première ligne avec grade = 100." nzTooltipPlacement="right">info_outline</mat-icon></label>
                         <input nz-input [(ngModel)]="s.whereValue" style="width:120px" />
                       </div>
                       <div class="param-row">
-                        <label>Trier par</label>
+                        <label>Trier par <mat-icon class="info-icon" nz-tooltip="Trie les lignes du groupe avant de prendre la première. Ex : 'created_at' pour prendre la session la plus ancienne chronologiquement." nzTooltipPlacement="right">info_outline</mat-icon></label>
                         <nz-select [(ngModel)]="s.sortField" nzAllowClear style="width:180px">
                           <nz-option *ngFor="let f of activeColumnsForViz(v)" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
                         </nz-select>
@@ -419,7 +489,7 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
                     </ng-container>
                     <ng-container *ngIf="s.type === 'extract'">
                       <div class="param-row">
-                        <label>Champ à extraire</label>
+                        <label>Champ à extraire <mat-icon class="info-icon" nz-tooltip="Colonne dont la valeur numérique est extraite de chaque ligne. Produit un tableau de nombres passé à l'étape suivante. Ex : 'attempts' extrait le nombre de tentatives." nzTooltipPlacement="right">info_outline</mat-icon></label>
                         <nz-select [(ngModel)]="s.extractField" style="width:200px">
                           <nz-option *ngFor="let f of activeColumnsForViz(v)" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
                         </nz-select>
@@ -427,7 +497,7 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
                     </ng-container>
                     <ng-container *ngIf="s.type === 'aggregate'">
                       <div class="param-row">
-                        <label>Fonction</label>
+                        <label>Fonction <mat-icon class="info-icon" nz-tooltip="avg = moyenne, sum = somme, count = nombre d'éléments, min = minimum, max = maximum. S'applique sur le tableau de nombres en entrée." nzTooltipPlacement="right">info_outline</mat-icon></label>
                         <nz-select [(ngModel)]="s.aggregateFn" style="width:200px">
                           <nz-option nzValue="avg"   nzLabel="avg — Moyenne"></nz-option>
                           <nz-option nzValue="sum"   nzLabel="sum — Somme"></nz-option>
@@ -439,19 +509,19 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
                     </ng-container>
                     <ng-container *ngIf="s.type === 'round'">
                       <div class="param-row">
-                        <label>Décimales</label>
+                        <label>Décimales <mat-icon class="info-icon" nz-tooltip="Nombre de décimales à conserver. Ex : 2 → 3.14159 devient 3.14. Utile pour éviter les valeurs trop précises." nzTooltipPlacement="right">info_outline</mat-icon></label>
                         <nz-input-number [(ngModel)]="s.decimals" [nzMin]="0" [nzMax]="6" style="width:100px"></nz-input-number>
                       </div>
                     </ng-container>
                     <ng-container *ngIf="s.type === 'divide'">
                       <div class="param-row">
-                        <label>Diviser par</label>
+                        <label>Diviser par <mat-icon class="info-icon" nz-tooltip="Constante par laquelle diviser la valeur. Ex : 60 pour convertir des secondes en minutes, 100 pour obtenir un pourcentage." nzTooltipPlacement="right">info_outline</mat-icon></label>
                         <nz-input-number [(ngModel)]="s.divideBy" [nzMin]="0.001" style="width:140px"></nz-input-number>
                       </div>
                     </ng-container>
                     <ng-container *ngIf="s.type === 'js'">
                       <div class="param-row param-row-col">
-                        <label>Code JavaScript (input = sortie précédente)</label>
+                        <label>Code JavaScript (input = sortie précédente) <mat-icon class="info-icon" nz-tooltip="Exécuté dans un sandbox Node.js. La variable 'input' contient la sortie de l'étape précédente. Affectez 'result'. Ex : result = Array.isArray(input) ? input.length : 0;" nzTooltipPlacement="right">info_outline</mat-icon></label>
                         <textarea nz-input [(ngModel)]="s.jsCode" rows="6" class="code-textarea"
                           placeholder="// return Array.isArray(input) ? input.length : 0;"></textarea>
                       </div>
@@ -485,43 +555,104 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
                   <nz-option *ngFor="let c of previewCourses" [nzValue]="c.id" [nzLabel]="c.name"></nz-option>
                 </nz-select>
 
-                <nz-select *ngIf="def.contextType === 'group'"
-                  [(ngModel)]="previewCtx.groupId"
-                  nzPlaceHolder="Groupe"
-                  nzShowSearch
-                  [nzDisabled]="!previewCourseId"
-                  style="width:220px">
-                  <nz-option *ngFor="let g of previewGroups" [nzValue]="g.id" [nzLabel]="g.name"></nz-option>
-                </nz-select>
-
-                <nz-select *ngIf="def.contextType === 'activity'"
+                <nz-select
                   [(ngModel)]="previewCtx.activityId"
-                  nzPlaceHolder="Activité"
+                  nzPlaceHolder="Activité (optionnel)"
                   nzShowSearch
+                  nzAllowClear
                   [nzLoading]="previewActivitiesLoading"
                   [nzDisabled]="!previewCourseId"
-                  style="width:240px">
+                  style="width:220px">
                   <nz-option *ngFor="let a of previewActivities" [nzValue]="a.id" [nzLabel]="a.name"></nz-option>
                 </nz-select>
 
-                <nz-select *ngIf="def.contextType === 'learner' || def.contextType === 'teacher' || def.contextType === 'admin'"
-                  [(ngModel)]="previewCtx.userId"
-                  nzPlaceHolder="Utilisateur"
+                <nz-select
+                  [(ngModel)]="previewCtx.groupId"
+                  nzPlaceHolder="Groupe (optionnel)"
                   nzShowSearch
+                  nzAllowClear
+                  [nzDisabled]="!previewCourseId"
+                  style="width:200px">
+                  <nz-option *ngFor="let g of previewGroups" [nzValue]="g.id" [nzLabel]="g.name"></nz-option>
+                </nz-select>
+
+                <nz-select
+                  [(ngModel)]="previewCtx.userId"
+                  nzPlaceHolder="Utilisateur (optionnel)"
+                  nzShowSearch
+                  nzAllowClear
                   [nzLoading]="previewStudentsLoading"
                   [nzDisabled]="!previewCourseId"
-                  style="width:240px">
+                  style="width:220px">
                   <nz-option *ngFor="let s of previewStudents" [nzValue]="s.id" [nzLabel]="s.name"></nz-option>
                 </nz-select>
 
                 <button nz-button nzType="primary" [nzLoading]="previewing" (click)="runPreview(v)">
                   <span nz-icon nzType="experiment"></span> Tester
                 </button>
+                <button nz-button nzType="default" [nzLoading]="debugging" (click)="runDebug(v)" style="margin-left:8px">
+                  <span nz-icon nzType="bug"></span> Déboguer pas à pas
+                </button>
               </div>
               <div *ngIf="previewResults[v.id] !== undefined" class="preview-result">
                 Résultat : <strong>{{ previewResults[v.id] }}</strong>
               </div>
               <div *ngIf="previewErrors[v.id]" class="preview-error">{{ previewErrors[v.id] }}</div>
+
+              <!-- ── Panneau debug pas à pas ── -->
+              <div *ngIf="debugSteps[v.id]?.length" class="debug-panel">
+                <div class="debug-panel-title"><span nz-icon nzType="bug"></span> Résultats par étape</div>
+                <div class="debug-context">
+                  <strong>Contexte utilisé :</strong>
+                  userId={{ previewCtx.userId || '—' }} &nbsp;|&nbsp;
+                  activityId={{ previewCtx.activityId || '(TARGET_ACTIVITY_ID)' }} &nbsp;|&nbsp;
+                  groupId={{ previewCtx.groupId || '—' }}
+                </div>
+                <div *ngFor="let s of debugSteps[v.id]" class="debug-step" [class.debug-step-error]="s.error">
+                  <div class="debug-step-header">
+                    <span class="debug-step-index">#{{ s.index + 1 }}</span>
+                    <span class="debug-step-type" [style.background]="stepTypeColor(s.type)">{{ s.type }}</span>
+                    <span class="debug-step-duration">{{ s.durationMs }} ms</span>
+                    <span *ngIf="s.error" class="debug-step-error-badge">ERREUR</span>
+                    <span *ngIf="!s.error && s.output !== null">
+                      <ng-container *ngIf="isArray(s.output)">{{ s.output.length }} élément(s)</ng-container>
+                      <ng-container *ngIf="!isArray(s.output) && isObject(s.output)">objet</ng-container>
+                      <ng-container *ngIf="!isArray(s.output) && !isObject(s.output)">{{ s.output }}</ng-container>
+                    </span>
+                  </div>
+                  <pre *ngIf="s.error" class="debug-step-body debug-step-body-error">{{ s.error }}</pre>
+                  <!-- Tableau pour les arrays d'objets -->
+                  <ng-container *ngIf="!s.error && isArrayOfObjects(s.output)">
+                    <div class="debug-table-wrap">
+                      <table class="debug-table">
+                        <thead>
+                          <tr>
+                            <th *ngFor="let col of getTableCols(s.output)">{{ col }}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr *ngFor="let row of getTableRows(s.output, v.id + '_' + s.index)">
+                            <td *ngFor="let cell of row" [title]="cell">{{ cell }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div *ngIf="s.output.length > 5" class="debug-table-more">
+                      <ng-container *ngIf="!debugExpanded.has(v.id + '_' + s.index)">
+                        {{ s.output.length - 5 }} ligne(s) masquée(s) —
+                        <a (click)="toggleExpandStep(v.id + '_' + s.index)">Afficher tout ({{ s.output.length }})</a>
+                      </ng-container>
+                      <ng-container *ngIf="debugExpanded.has(v.id + '_' + s.index)">
+                        {{ s.output.length }} lignes affichées —
+                        <a (click)="toggleExpandStep(v.id + '_' + s.index)">Réduire</a>
+                      </ng-container>
+                    </div>
+                  </ng-container>
+                  <!-- Scalaire / objet simple / array vide -->
+                  <pre *ngIf="!s.error && !isArrayOfObjects(s.output)" class="debug-step-body">{{ formatStepOutput(s.output) }}</pre>
+                </div>
+              </div>
+              <div *ngIf="debugErrors[v.id]" class="preview-error">{{ debugErrors[v.id] }}</div>
             </div>
           </ng-container>
 
@@ -580,8 +711,26 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
       background: #f0f5ff; color: #2f54eb; font-weight: 500; font-size: 13px;
     }
     .step-content { min-height: 280px; }
-    nz-form-label { width: 160px; }
-    nz-form-item  { margin-bottom: 14px; }
+
+    /* ── Layout horizontal pour les nz-form-item (via classes internes ng-zorro) ── */
+    .step-content ::ng-deep .ant-form-item {
+      display: flex !important;
+      flex-wrap: nowrap !important;
+      align-items: flex-start !important;
+      margin-bottom: 14px !important;
+    }
+    .step-content ::ng-deep .ant-form-item-label {
+      flex: 0 0 160px !important;
+      width: 160px !important;
+      max-width: 160px !important;
+      overflow: visible;
+      white-space: normal;
+    }
+    .step-content ::ng-deep .ant-form-item-control {
+      flex: 1 1 0 !important;
+      min-width: 0 !important;
+      max-width: none !important;
+    }
 
     .viz-list { display: flex; flex-direction: column; gap: 12px; }
     .viz-row-card { border: 1px solid #e8e8e8; border-radius: 8px; padding: 12px 16px; background: #fafafa; }
@@ -592,6 +741,20 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
     }
     .viz-label-input { flex: 1; }
     .viz-fields { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+    /* Layout vertical pour les petits items de viz-fields (label au-dessus du champ) */
+    .viz-fields ::ng-deep .ant-form-item {
+      flex-direction: column !important;
+      flex-wrap: wrap !important;
+    }
+    .viz-fields ::ng-deep .ant-form-item-label {
+      flex: none !important;
+      width: auto !important;
+      max-width: none !important;
+      padding-bottom: 4px;
+    }
+    .viz-fields ::ng-deep .ant-form-item-control {
+      max-width: 100% !important;
+    }
 
     .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
     .dot-green  { background: #52c41a; }
@@ -635,6 +798,9 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
     .param-row-col { flex-direction: column; align-items: flex-start; }
     .param-row label { width: 160px; font-size: 12px; color: #666; flex-shrink: 0; }
     .param-row-col label { width: auto; }
+    .param-row nz-select,
+    .param-row nz-input-number,
+    .param-row input[nz-input] { flex: 1; min-width: 0; width: auto !important; }
     .code-textarea { width: 100%; font-family: monospace; font-size: 12px; }
 
     .connector { text-align: center; padding: 3px 0; }
@@ -658,8 +824,56 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
     .preview-result  { font-size: 15px; padding: 8px 14px; background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 8px; }
     .preview-error   { color: #ff4d4f; font-size: 13px; }
 
+    .debug-panel { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+    .debug-panel-title { font-size: 13px; font-weight: 600; color: #595959; display: flex; align-items: center; gap: 6px; }
+    .debug-context { font-size: 11px; color: #8c8c8c; padding: 4px 8px; background: #fafafa; border-radius: 4px; border: 1px solid #f0f0f0; font-family: monospace; }
+    .debug-step { border: 1px solid #d9d9d9; border-radius: 6px; overflow: hidden; }
+    .debug-step-error { border-color: #ff4d4f; }
+    .debug-step-header { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #fafafa; font-size: 12px; }
+    .debug-step-index { font-weight: 700; color: #595959; min-width: 20px; }
+    .debug-step-type { color: #fff; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    .debug-step-duration { color: #8c8c8c; margin-left: auto; }
+    .debug-step-error-badge { color: #ff4d4f; font-weight: 700; font-size: 11px; }
+    .debug-step-body { margin: 0; padding: 8px 10px; font-size: 11px; font-family: monospace; background: #fff; white-space: pre-wrap; word-break: break-all; max-height: 180px; overflow-y: auto; border-top: 1px solid #f0f0f0; }
+    .debug-step-body-error { color: #ff4d4f; }
+    .debug-table-wrap { overflow-x: auto; border-top: 1px solid #f0f0f0; max-height: 220px; overflow-y: auto; }
+    .debug-table { border-collapse: collapse; font-size: 11px; font-family: monospace; width: max-content; min-width: 100%; }
+    .debug-table th { background: #f5f5f5; padding: 4px 8px; border: 1px solid #e8e8e8; font-weight: 600; white-space: nowrap; position: sticky; top: 0; }
+    .debug-table td { padding: 3px 8px; border: 1px solid #f0f0f0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .debug-table tr:nth-child(even) td { background: #fafafa; }
+    .debug-table-more { font-size: 11px; color: #8c8c8c; padding: 4px 10px; background: #fafafa; border-top: 1px solid #f0f0f0; }
+    .debug-table-more a { color: #1890ff; cursor: pointer; text-decoration: underline; }
+
     .nav-actions { display: flex; justify-content: space-between; }
     .nav-right   { display: flex; gap: 8px; }
+
+    .info-icon {
+      font-size: 14px !important; height: 14px; width: 14px; line-height: 1 !important;
+      color: #8c8c8c; cursor: help; margin-left: 4px; vertical-align: middle;
+      transition: color .15s;
+    }
+    .info-icon:hover { color: #1890ff; }
+
+    .import-panel-toggle { margin-bottom: 10px; }
+    .import-panel {
+      background: #f8f9fa; border: 1px solid #d9d9d9; border-radius: 8px;
+      padding: 14px 16px; margin-bottom: 16px;
+    }
+    .import-mode-toggle { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+    .import-file-btn {
+      display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; height: 24px;
+      border: 1px dashed #d9d9d9; border-radius: 4px; font-size: 12px;
+      cursor: pointer; color: #595959; background: #fff;
+    }
+    .import-file-btn:hover { border-color: #1890ff; color: #1890ff; }
+    .import-docs {
+      background: #1e1e1e; color: #d4d4d4; border-radius: 6px;
+      padding: 10px 14px; font-size: 11px; font-family: monospace;
+      margin-bottom: 10px; max-height: 200px; overflow-y: auto;
+    }
+    .import-docs pre { margin: 0; white-space: pre; }
+    .import-actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+    .import-hint { font-size: 11px; color: #8c8c8c; }
   `],
 })
 export class IndicatorBuilderComponent implements OnInit {
@@ -689,11 +903,6 @@ export class IndicatorBuilderComponent implements OnInit {
   saving = false;
   activeVizIndex = 0;
 
-  // JSON mode: on garde le vizId actif + le texte JSON
-  activeJsonVizId: string | null = null;
-  jsonText = '';
-  jsonError = '';
-
   // Picker d'étape
   stepPickerViz: FlatViz | null = null;
 
@@ -701,6 +910,193 @@ export class IndicatorBuilderComponent implements OnInit {
   previewing = false;
   previewResults: Record<string, string> = {};
   previewErrors: Record<string, string> = {};
+
+  // Debug pas à pas
+  debugging = false;
+  debugSteps: Record<string, import('../../core/models/indicator.model').StepDebugResult[]> = {};
+  debugErrors: Record<string, string> = {};
+  debugExpanded = new Set<string>();
+
+  // Import YAML/JSON step-level
+  activeImportVizId: string | null = null;
+  importMode: 'yaml' | 'json' = 'yaml';
+  importText = '';
+  importError = '';
+  importDocsOpen = false;
+
+  get importPlaceholder(): string {
+    return this.importMode === 'yaml'
+      ? '# pipeline:\n#   - type: fetch\n#     label: "..."'
+      : '{ "pipeline": [ { "type": "fetch", "label": "...", "params": {} } ] }';
+  }
+
+  get importDocsText(): string {
+    return `╔══════════════════════════════════════════════════════════════════╗
+║   RÉFÉRENCE COMPLÈTE — Format ${this.importMode.toUpperCase().padEnd(4)} — Pipeline DSL           ║
+╚══════════════════════════════════════════════════════════════════╝
+
+${this.importMode === 'yaml' ? `STRUCTURE DE BASE
+─────────────────
+pipeline:
+  - type: <type>      # obligatoire — nom technique de l'étape (voir liste ci-dessous)
+    label: "..."      # optionnel  — nom affiché dans le builder (généré auto si absent)
+    params:           # obligatoire — paramètres propres à chaque type
+      ...` : `{
+  "pipeline": [
+    {
+      "type": "<type>",    // obligatoire — nom technique (voir liste ci-dessous)
+      "label": "...",      // optionnel  — affiché dans le builder (généré auto si absent)
+      "params": { ... }    // obligatoire — paramètres propres à chaque type
+    }
+  ]
+}`}
+
+══════════════════════════════════════════════════════════════════
+  TYPES D'ÉTAPES DISPONIBLES
+══════════════════════════════════════════════════════════════════
+
+┌─ fetch ─────────────────────────────────────────────────────────
+│  Charge des lignes depuis une table PLaTon.
+│  C'est toujours la 1ère étape d'un pipeline.
+${this.importMode === 'yaml' ? `│
+│  params:
+│    table: SessionData          # NOM EXACT de la table (liste ci-bas)
+│    contextFields:              # colonnes filtrées automatiquement selon le contexte
+│      - user_id                 #   → filtre sur l'apprenant courant
+│      - activity_id             #   → filtre sur l'activité sélectionnée
+│      - group_id                #   → filtre sur les membres du groupe de TP` : `│
+│  "params": {
+│    "table": "SessionData",
+│    "contextFields": ["user_id", "activity_id"]
+│  }`}
+│
+│  Tables disponibles :
+│    SessionData       → sessions d'exercices (grade, attempts, created_at,
+│                         user_id, activity_id, resource_id)
+│    Activities        → activités (id, source, course_id, open_at, close_at)
+│    Courses           → cours (id, name, owner_id)
+│    CourseGroups      → groupes de TP (id, name, course_id)
+│    CourseGroupsMember→ membres des groupes (group_id, user_id)
+│    CourseMembers     → membres d'un cours (course_id, user_id, role)
+│    Resources         → ressources (id, name, type)
+│    Users             → utilisateurs (id, first_name, last_name)
+
+┌─ join ──────────────────────────────────────────────────────────
+│  Fusionne les données courantes avec une 2ème table (LEFT JOIN).
+${this.importMode === 'yaml' ? `│
+│  params:
+│    table: Activities           # table à joindre
+│    contextFields: []           # filtres contexte sur cette table (optionnel)
+│    leftKey: activity_id        # colonne dans les données courantes
+│    rightKey: id                # colonne correspondante dans la 2ème table` : `│
+│  "params": {
+│    "table": "Activities",
+│    "contextFields": [],
+│    "leftKey": "activity_id",
+│    "rightKey": "id"
+│  }`}
+
+┌─ filter ────────────────────────────────────────────────────────
+│  Garde uniquement les lignes qui respectent une condition.
+${this.importMode === 'yaml' ? `│
+│  params:
+│    field: grade                # colonne à tester
+│    operator: ">="              # opérateurs : ==  !=  >  <  >=  <=
+│    value: 100                  # valeur de comparaison (nombre ou texte)` : `│
+│  "params": {
+│    "field": "grade",
+│    "operator": ">=",
+│    "value": 100
+│  }`}
+
+┌─ groupBy ───────────────────────────────────────────────────────
+│  Regroupe les lignes par valeur d'une colonne.
+│  → produit un tableau de groupes, à utiliser avant findFirst.
+${this.importMode === 'yaml' ? `│
+│  params:
+│    groupField: resource_id     # colonne de regroupement` : `│
+│  "params": { "groupField": "resource_id" }`}
+
+┌─ findFirst ─────────────────────────────────────────────────────
+│  Dans chaque groupe, prend la 1ère ligne (après tri optionnel).
+${this.importMode === 'yaml' ? `│
+│  params:
+│    whereField: grade           # (optionnel) colonne de filtrage dans le groupe
+│    whereValue: 100             # valeur attendue pour whereField
+│    sortField: created_at       # (optionnel) trie avant de prendre le 1er` : `│
+│  "params": {
+│    "whereField": "grade",
+│    "whereValue": 100,
+│    "sortField": "created_at"
+│  }`}
+
+┌─ extract ───────────────────────────────────────────────────────
+│  Extrait la valeur d'une colonne de chaque ligne.
+│  → produit un tableau de valeurs (nombres), prêt pour aggregate.
+${this.importMode === 'yaml' ? `│
+│  params:
+│    extractField: attempts      # colonne à extraire` : `│
+│  "params": { "extractField": "attempts" }`}
+
+┌─ aggregate ─────────────────────────────────────────────────────
+│  Calcule une valeur unique à partir du tableau.
+${this.importMode === 'yaml' ? `│
+│  params:
+│    aggregateFn: avg            # avg=moyenne  sum=somme  count=nombre
+│                                # min=minimum  max=maximum` : `│
+│  "params": { "aggregateFn": "avg" }
+│  // aggregateFn: avg | sum | count | min | max`}
+
+┌─ round ─────────────────────────────────────────────────────────
+│  Arrondit le résultat numérique final.
+${this.importMode === 'yaml' ? `│
+│  params:
+│    decimals: 2                 # 0=entier  1=1 décimale  2=2 décimales` : `│  "params": { "decimals": 2 }`}
+
+┌─ divide ────────────────────────────────────────────────────────
+│  Divise le résultat par une constante.
+${this.importMode === 'yaml' ? `│
+│  params:
+│    divideBy: 60                # ex: 60=secondes→minutes, 100=proportion→%` : `│  "params": { "divideBy": 60 }`}
+
+┌─ js ────────────────────────────────────────────────────────────
+│  Calcul personnalisé en JavaScript.
+│  La variable "input" contient la sortie de l'étape précédente.
+│  Utiliser "return", pas "result =".
+${this.importMode === 'yaml' ? `│
+│  params:
+│    code: |
+│      // input = tableau ou valeur de l'étape précédente
+│      return Array.isArray(input) ? input.length : 0;` : `│
+│  "params": {
+│    "code": "return Array.isArray(input) ? input.length : 0;"
+│  }`}
+
+══════════════════════════════════════════════════════════════════
+  EXEMPLE COMPLET — Note moyenne d'un apprenant
+══════════════════════════════════════════════════════════════════
+${this.importMode === 'yaml' ? `pipeline:
+  - type: fetch
+    params:
+      table: SessionData
+      contextFields: [user_id, activity_id]
+  - type: extract
+    params:
+      extractField: grade
+  - type: aggregate
+    params:
+      aggregateFn: avg
+  - type: round
+    params:
+      decimals: 1` : `{
+  "pipeline": [
+    { "type": "fetch",     "params": { "table": "SessionData", "contextFields": ["user_id","activity_id"] } },
+    { "type": "extract",   "params": { "extractField": "grade" } },
+    { "type": "aggregate", "params": { "aggregateFn": "avg" } },
+    { "type": "round",     "params": { "decimals": 1 } }
+  ]
+}`}`;
+  }
   previewCtx = {
     userId:     (environment as any).defaultUserId || '',
     groupId:    '',
@@ -731,6 +1127,8 @@ export class IndicatorBuilderComponent implements OnInit {
   platonSchema: PlatonTable[] = [];
   schemaLoading = false;
 
+  private readonly _colsCache = new Map<string, { value: string; label: string }[]>();
+
   // ── Modèle du formulaire ─────────────────────────────────────────────────
 
   def: {
@@ -747,7 +1145,7 @@ export class IndicatorBuilderComponent implements OnInit {
   ngOnInit(): void {
     this.schemaLoading = true;
     this.indicatorSvc.getPlatonSchema().subscribe({
-      next: s  => { this.platonSchema = s; this.schemaLoading = false; this.cdr.detectChanges(); },
+      next: s  => { this.platonSchema = s; this._colsCache.clear(); this.schemaLoading = false; this.cdr.detectChanges(); },
       error: () => { this.schemaLoading = false; },
     });
     if (this.modalData?.indicator) this.hydrate(this.modalData.indicator);
@@ -769,21 +1167,17 @@ export class IndicatorBuilderComponent implements OnInit {
     this.previewStudents = [];
     if (!courseId) return;
 
-    if (this.def.contextType === 'activity') {
-      this.previewActivitiesLoading = true;
-      this.indicatorSvc.getCourseActivities(courseId).subscribe({
-        next: activities => { this.previewActivities = activities; this.previewActivitiesLoading = false; this.cdr.detectChanges(); },
-        error: () => { this.previewActivitiesLoading = false; },
-      });
-    }
+    this.previewActivitiesLoading = true;
+    this.indicatorSvc.getCourseActivities(courseId).subscribe({
+      next: activities => { this.previewActivities = activities; this.previewActivitiesLoading = false; this.cdr.detectChanges(); },
+      error: () => { this.previewActivitiesLoading = false; },
+    });
 
-    if (this.def.contextType === 'learner' || this.def.contextType === 'teacher' || this.def.contextType === 'admin') {
-      this.previewStudentsLoading = true;
-      this.indicatorSvc.getCourseStudents(courseId).subscribe({
-        next: students => { this.previewStudents = students; this.previewStudentsLoading = false; this.cdr.detectChanges(); },
-        error: () => { this.previewStudentsLoading = false; },
-      });
-    }
+    this.previewStudentsLoading = true;
+    this.indicatorSvc.getCourseStudents(courseId).subscribe({
+      next: students => { this.previewStudents = students; this.previewStudentsLoading = false; this.cdr.detectChanges(); },
+      error: () => { this.previewStudentsLoading = false; },
+    });
   }
 
   // ── Navigation ───────────────────────────────────────────────────────────
@@ -854,6 +1248,8 @@ export class IndicatorBuilderComponent implements OnInit {
     this.stepPickerViz = null;
   }
 
+  trackStepById(_: number, s: PipelineStep): string { return s.id; }
+
   removeStep(v: FlatViz, i: number): void { v.pipeline.splice(i, 1); }
 
   applyRecipe(r: (typeof FORMULA_RECIPES)[0], v: FlatViz): void {
@@ -871,33 +1267,13 @@ export class IndicatorBuilderComponent implements OnInit {
 
   columnsForTable(name: string | undefined): { value: string; label: string }[] {
     if (!name) return [];
+    const cached = this._colsCache.get(name);
+    if (cached) return cached;
     const map: Record<string, string> = { sessions: 'SessionData', activities: 'Activities' };
     const resolved = map[name] ?? name;
-    return this.platonSchema.find(t => t.name === resolved)?.columns.map(c => ({ value: c.name, label: c.name })) ?? [];
-  }
-
-  // ── JSON mode ────────────────────────────────────────────────────────────
-
-  enterJsonMode(v: FlatViz): void {
-    this.jsonError = '';
-    this.jsonText = JSON.stringify(
-      v.pipeline.map(s => ({ id: s.id, type: s.type, label: s.label, params: this.extractParams(s) })),
-      null, 2,
-    );
-    this.activeJsonVizId = v.id;
-  }
-
-  leaveJsonMode(v: FlatViz): void {
-    if (this.activeJsonVizId !== v.id) return;
-    this.jsonError = '';
-    try {
-      const parsed: any[] = JSON.parse(this.jsonText);
-      if (!Array.isArray(parsed)) throw new Error('Doit être un tableau');
-      v.pipeline = parsed.map(s => this.dehydrateStep(s));
-      this.activeJsonVizId = null;
-    } catch (e: any) {
-      this.jsonError = `JSON invalide : ${e.message}`;
-    }
+    const cols = this.platonSchema.find(t => t.name === resolved)?.columns.map(c => ({ value: c.name, label: c.name })) ?? [];
+    this._colsCache.set(name, cols);
+    return cols;
   }
 
   // ── Preview ──────────────────────────────────────────────────────────────
@@ -925,17 +1301,221 @@ export class IndicatorBuilderComponent implements OnInit {
     });
   }
 
+  runDebug(v: FlatViz): void {
+    this.debugging = true;
+    this.debugSteps  = { ...this.debugSteps,  [v.id]: [] };
+    this.debugErrors = { ...this.debugErrors, [v.id]: '' };
+
+    this.indicatorSvc.previewFormulaSteps(this.buildFormulaForViz(v), {
+      userId:     this.previewCtx.userId     || undefined,
+      groupId:    this.previewCtx.groupId    || undefined,
+      activityId: this.previewCtx.activityId || undefined,
+    }).subscribe({
+      next: ({ steps }) => {
+        this.debugSteps[v.id] = steps;
+        this.debugging = false;
+        this.cdr.detectChanges();
+      },
+      error: err => {
+        this.debugErrors[v.id] = err?.error?.message ?? 'Erreur lors du débogage';
+        this.debugging = false;
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  formatStepOutput(output: any): string {
+    if (output === null || output === undefined) return '—';
+    if (Array.isArray(output)) {
+      const preview = output.slice(0, 3).map(r => JSON.stringify(r)).join('\n');
+      return output.length > 3 ? `${preview}\n… (${output.length} éléments au total)` : preview || '[]';
+    }
+    return JSON.stringify(output, null, 2);
+  }
+
+  isArray(v: any): boolean { return Array.isArray(v); }
+  isObject(v: any): boolean { return v !== null && typeof v === 'object' && !Array.isArray(v); }
+  isArrayOfObjects(v: any): boolean { return Array.isArray(v) && v.length > 0 && typeof v[0] === 'object' && v[0] !== null; }
+
+  getTableCols(arr: any[]): string[] {
+    const allKeys = new Set<string>();
+    arr.slice(0, 5).forEach(row => Object.keys(row).forEach(k => allKeys.add(k)));
+    return Array.from(allKeys);
+  }
+
+  getTableRows(arr: any[], key: string): string[][] {
+    const cols = this.getTableCols(arr);
+    const rows = this.debugExpanded.has(key) ? arr : arr.slice(0, 5);
+    return rows.map(row =>
+      cols.map(col => {
+        const val = row[col];
+        if (val === null || val === undefined) return '—';
+        const str = typeof val === 'object' ? JSON.stringify(val) : String(val);
+        return str.length > 40 ? str.slice(0, 38) + '…' : str;
+      })
+    );
+  }
+
+  toggleExpandStep(key: string): void {
+    this.debugExpanded.has(key) ? this.debugExpanded.delete(key) : this.debugExpanded.add(key);
+  }
+
+  // ── Import YAML/JSON ─────────────────────────────────────────────────────
+
+  enterVisualMode(v: FlatViz): void {
+    void v;
+    this.activeImportVizId = null;
+    this.importError = '';
+  }
+
+  enterImportMode(v: FlatViz): void {
+    this.importText = '';
+    this.importError = '';
+    this.activeImportVizId = v.id;
+  }
+
+  setImportMode(mode: 'yaml' | 'json'): void {
+    this.importMode = mode;
+    this.importError = '';
+  }
+
+  applyImport(v: FlatViz): void {
+    this.importError = '';
+    try {
+      const pipelines = this.parseStep3Text(this.importText, this.importMode);
+      v.pipeline = pipelines[0];
+      this.activeImportVizId = null;
+      this.messageSvc.success(`Pipeline importé dans "${v.label}"`);
+      this.cdr.detectChanges();
+    } catch (e: any) {
+      this.importError = e.message;
+    }
+  }
+
+  onImportKeydown(event: KeyboardEvent): void {
+    const ta = event.target as HTMLTextAreaElement;
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      const indent = '  ';
+      ta.value = ta.value.substring(0, start) + indent + ta.value.substring(end);
+      ta.selectionStart = ta.selectionEnd = start + indent.length;
+      this.importText = ta.value;
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      const start = ta.selectionStart;
+      const linesBefore = ta.value.substring(0, start).split('\n');
+      const currentLine = linesBefore[linesBefore.length - 1] ?? '';
+      const indent = currentLine.match(/^(\s*)/)?.[1] ?? '';
+      const extraIndent = currentLine.trimEnd().endsWith(':') ? '  ' : '';
+      const insertion = '\n' + indent + extraIndent;
+      ta.value = ta.value.substring(0, start) + insertion + ta.value.substring(ta.selectionEnd);
+      ta.selectionStart = ta.selectionEnd = start + insertion.length;
+      this.importText = ta.value;
+    }
+  }
+
+  onImportFileUpload(event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    this.importMode = file.name.endsWith('.json') ? 'json' : 'yaml';
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      this.importText = (e.target?.result as string) ?? '';
+      this.importError = '';
+      this.cdr.detectChanges();
+    };
+    reader.readAsText(file);
+  }
+
+  private parseStep3Text(text: string, mode: 'yaml' | 'json'): PipelineStep[][] {
+    if (!text.trim()) throw new Error('Le champ est vide. Collez votre pipeline ci-dessus avant d\'appliquer.');
+    let raw: any;
+    try {
+      raw = mode === 'yaml' ? yaml.load(text) : JSON.parse(text);
+    } catch {
+      throw new Error(
+        mode === 'yaml'
+          ? 'Le YAML contient une erreur de syntaxe. Vérifiez l\'indentation (utilisez des espaces, pas des tabulations) et les guillemets.'
+          : 'Le JSON contient une erreur de syntaxe. Vérifiez les virgules, les guillemets et les accolades.'
+      );
+    }
+    if (!raw || typeof raw !== 'object') {
+      throw new Error('Le document doit commencer par "pipeline:" (YAML) ou { "pipeline": [...] } (JSON).');
+    }
+    if (!Array.isArray(raw.pipeline)) {
+      throw new Error('Clé "pipeline" introuvable ou invalide. Elle doit contenir une liste d\'étapes.');
+    }
+    return [raw.pipeline.map((s: any, j: number) => this.validateAndDehydrate(s, j + 1))];
+  }
+
+  private validateAndDehydrate(raw: any, stepNum: number): PipelineStep {
+    const VALID_TYPES: StepType[] = ['fetch', 'join', 'filter', 'groupBy', 'findFirst', 'extract', 'aggregate', 'round', 'divide', 'js'];
+    const TYPE_LABELS: Record<string, string> = {
+      fetch: 'Récupérer données', join: 'Jointure', filter: 'Filtrer',
+      groupBy: 'Grouper par', findFirst: 'Premier résultat', extract: 'Extraire champ',
+      aggregate: 'Agréger', round: 'Arrondir', divide: 'Diviser', js: 'Code JS',
+    };
+    if (!raw || typeof raw !== 'object') {
+      throw new Error(`Étape ${stepNum} : doit être un objet avec les clés "type", "label" et "params".`);
+    }
+    if (!raw.type) {
+      throw new Error(`Étape ${stepNum} : la clé "type" est manquante. Types disponibles : ${VALID_TYPES.join(', ')}.`);
+    }
+    if (!VALID_TYPES.includes(raw.type)) {
+      throw new Error(`Étape ${stepNum} : type "${raw.type}" inconnu. Types valides : ${VALID_TYPES.map(t => `${t} (${TYPE_LABELS[t]})`).join(', ')}.`);
+    }
+    // label facultatif : on le génère depuis le catalogue si absent
+    if (!raw.label) raw.label = TYPE_LABELS[raw.type] ?? raw.type;
+    const p = raw.params ?? {};
+    switch (raw.type as StepType) {
+      case 'fetch':
+        if (!p.table) throw new Error(`Étape ${stepNum} (Récupérer données) : "params.table" est requis — indiquez le nom de la table PLaTon, ex: SessionData.`);
+        break;
+      case 'join':
+        if (!p.table) throw new Error(`Étape ${stepNum} (Jointure) : "params.table" est requis — nom de la table à joindre.`);
+        if (!p.leftKey) throw new Error(`Étape ${stepNum} (Jointure) : "params.leftKey" est requis — colonne dans les données courantes servant de clé.`);
+        if (!p.rightKey) throw new Error(`Étape ${stepNum} (Jointure) : "params.rightKey" est requis — colonne correspondante dans la table à joindre.`);
+        break;
+      case 'filter':
+        if (!p.field) throw new Error(`Étape ${stepNum} (Filtrer) : "params.field" est requis — nom de la colonne à tester.`);
+        if (!p.operator) throw new Error(`Étape ${stepNum} (Filtrer) : "params.operator" est requis. Opérateurs disponibles : == != > < >= <=`);
+        break;
+      case 'groupBy':
+        if (!p.groupField) throw new Error(`Étape ${stepNum} (Grouper par) : "params.groupField" est requis — colonne de regroupement.`);
+        break;
+      case 'extract':
+        if (!p.extractField) throw new Error(`Étape ${stepNum} (Extraire champ) : "params.extractField" est requis — colonne dont on extrait la valeur.`);
+        break;
+      case 'aggregate':
+        if (!p.aggregateFn) throw new Error(`Étape ${stepNum} (Agréger) : "params.aggregateFn" est requis. Fonctions disponibles : avg (moyenne), sum (somme), count (nombre), min, max.`);
+        break;
+      case 'round':
+        if (p.decimals === undefined) throw new Error(`Étape ${stepNum} (Arrondir) : "params.decimals" est requis — nombre de décimales (ex: 0, 1, 2).`);
+        break;
+      case 'divide':
+        if (p.divideBy === undefined) throw new Error(`Étape ${stepNum} (Diviser) : "params.divideBy" est requis — constante par laquelle diviser (ex: 60, 100).`);
+        break;
+      case 'js':
+        if (!p.code) throw new Error(`Étape ${stepNum} (Code JS) : "params.code" est requis — le code JavaScript à exécuter. Utilisez "return", ex: return input.length;`);
+        break;
+    }
+    return this.dehydrateStep({ id: crypto.randomUUID(), type: raw.type, label: raw.label, params: p });
+  }
+
+  stepTypeColor(type: string): string {
+    const map: Record<string, string> = {
+      fetch: '#0958d9', join: '#531dab', filter: '#c41d7f',
+      groupBy: '#d46b08', findFirst: '#389e0d', extract: '#08979c',
+      aggregate: '#1d39c4', round: '#8c8c8c', divide: '#8c8c8c', js: '#ad6800',
+    };
+    return map[type] ?? '#595959';
+  }
+
   // ── Soumission ───────────────────────────────────────────────────────────
 
   submit(): void {
-    // Valider les modes JSON ouverts
-    for (const v of this.vizList) {
-      if (this.activeJsonVizId === v.id) {
-        this.leaveJsonMode(v);
-        if (this.jsonError) return;
-      }
-    }
-
     if (!this.def.name.trim()) { this.messageSvc.error('Le nom est requis'); return; }
 
     this.saving = true;
@@ -1002,6 +1582,7 @@ export class IndicatorBuilderComponent implements OnInit {
         if (s.useGroupContext) fields.unshift('group_id');
         return { table: s.table, contextFields: fields };
       }
+      case 'join':      return { table: s.joinTable, contextFields: s.joinContextFields ?? [], leftKey: s.joinLeftKey, rightKey: s.joinRightKey };
       case 'filter':    return { field: s.filterField, operator: s.filterOperator, value: s.filterValue };
       case 'groupBy':   return { groupField: s.groupField };
       case 'findFirst': return { whereField: s.whereField, whereValue: s.whereValue, sortField: s.sortField };
@@ -1019,9 +1600,15 @@ export class IndicatorBuilderComponent implements OnInit {
       id:              s.id ?? crypto.randomUUID(),
       type:            s.type,
       label:           s.label ?? s.type,
-      table:           s.params?.table,
-      contextFields:   s.params?.contextFields,
-      useGroupContext: s.params?.contextFields?.includes('group_id'),
+      // fetch
+      table:           s.type === 'fetch' ? s.params?.table : undefined,
+      contextFields:   s.type === 'fetch' ? s.params?.contextFields : undefined,
+      useGroupContext: s.type === 'fetch' ? s.params?.contextFields?.includes('group_id') : undefined,
+      // join
+      joinTable:          s.type === 'join' ? s.params?.table : undefined,
+      joinContextFields:  s.type === 'join' ? s.params?.contextFields : undefined,
+      joinLeftKey:        s.type === 'join' ? s.params?.leftKey : undefined,
+      joinRightKey:       s.type === 'join' ? s.params?.rightKey : undefined,
       filterField:     s.params?.field,
       filterOperator:  s.params?.operator,
       filterValue:     s.params?.value,

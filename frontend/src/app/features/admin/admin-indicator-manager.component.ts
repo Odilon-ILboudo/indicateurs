@@ -341,7 +341,7 @@ export class IndicatorFamilyStartModalComponent {
           <td>
             <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">
 
-              <button nz-button nzType="default" nzSize="small"
+              <button nz-button nzType="text" nzSize="small"
                 nz-tooltip="Modifier la formule et la définition"
                 (click)="openBuilder(ind)">
                 <mat-icon style="font-size:16px;line-height:1.3">edit</mat-icon>
@@ -364,19 +364,19 @@ export class IndicatorFamilyStartModalComponent {
                 <mat-icon *ngIf="!historyLoading.has(ind.id)" style="font-size:16px;line-height:1.3">history</mat-icon>
               </button>
 
-              <!-- Logs d'exécution (seulement si DSL) -->
-              <button *ngIf="hasFormula(ind)"
-                nz-button nzType="default" nzSize="small"
+              <!-- Logs d'exécution -->
+              <button
+                nz-button nzType="text" nzSize="small"
                 nz-tooltip="Logs d'exécution"
                 [nzLoading]="logsLoading.has(ind.id)"
                 (click)="openLogs(ind)">
-                <mat-icon *ngIf="!logsLoading.has(ind.id)" style="font-size:16px;line-height:1.3">receipt_long</mat-icon>
+                <mat-icon *ngIf="!logsLoading.has(ind.id)" style="font-size:16px;line-height:1.3">description</mat-icon>
               </button>
 
-              <!-- Recalcul (seulement si DSL) -->
-              <button *ngIf="hasFormula(ind)"
-                nz-button nzType="default" nzSize="small"
-                nz-tooltip="Recalculer pour tous les utilisateurs"
+              <!-- Recalcul -->
+              <button
+                nz-button nzType="text" nzSize="small"
+                nz-tooltip="Recalculer pour tous les utilisateurs ayant ajouté cet indicateur"
                 [nzLoading]="recalculating.has(ind.id)"
                 nz-popconfirm
                 nzPopconfirmTitle="Recalculer les valeurs pour tous les utilisateurs actifs ?"

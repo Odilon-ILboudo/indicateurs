@@ -1,11 +1,11 @@
 <div class="indicator-selector">
   <div class="filters">
     <nz-select
-      nzPlaceHolder="Filtrer par étendue"
+      nzPlaceHolder="Filtrer par contexte"
       [(ngModel)]="filters.scope"
       (ngModelChange)="applyFilters()"
       style="width: 200px">
-      <nz-option nzValue="all" nzLabel="Toutes les étendues" />
+      <nz-option nzValue="all" nzLabel="Tous les contextes" />
       <nz-option nzValue="global" nzLabel="Global" />
       <nz-option nzValue="course" nzLabel="Cours" />
       <nz-option nzValue="activity" nzLabel="Activité" />
@@ -50,7 +50,7 @@
     <thead>
       <tr>
         <th>Nom</th>
-        <th nzWidth="100px">Étendue</th>
+        <th nzWidth="100px">Contextes</th>
         <th nzWidth="100px">Utilisations</th>
         <th nzWidth="150px">Visualisations</th>
         <th nzWidth="120px">Actions</th>

@@ -167,12 +167,21 @@ export class IndicatorsService {
   async recalculate(id: string): Promise<{ processed: number; updated: number; failed: number }> {
     const indicator = await this.findById(id);
 
-    if (!indicator.formula?.pipeline?.length) {
+    // Résolution de la formule : visualizations[n].formula en priorité, puis indicator.formula (legacy)
+    const vizList = indicator.visualizations ?? [];
+    const formula = vizList.find(v => v.formula?.pipeline?.length)?.formula
+      ?? indicator.formula;
+
+    if (!formula?.pipeline?.length) {
       throw new BadRequestException(`L'indicateur "${indicator.name}" n'a pas de formule DSL`);
     }
 
-    const userIds = await this.platonService.getAllUserIds();
-    this.logger.log(`Recalcul de "${indicator.name}" pour ${userIds.length} utilisateurs`);
+    const prefs = await this.preferenceModel.find({
+      where: { indicatorId: id },
+      select: ['userId'],
+    });
+    const userIds = prefs.map(p => p.userId);
+    this.logger.log(`Recalcul de "${indicator.name}" pour ${userIds.length} utilisateurs (ayant activé cet indicateur)`);
 
     let updated = 0;
     let failed = 0;
@@ -189,18 +198,19 @@ export class IndicatorsService {
               )[0]?.activity_id ?? undefined
             : undefined;
 
-          const value = await this.formulaInterpreter.interpret(indicator.formula as any, {
+          const value = await this.formulaInterpreter.interpret(formula as any, {
             userId,
             activityId: latestActivityId,
             indicatorId: indicator.id,
           });
+          const isScalar = typeof value === 'number';
           await this.indicatorValueModel.upsert(
             {
               indicatorId: indicator.id,
               contextType: 'learner',
               contextId: userId,
-              value,
-              metadata: { lastUpdate: new Date(), history: [] } as any,
+              value: isScalar ? value : 0,
+              metadata: { lastUpdate: new Date(), structuredValue: isScalar ? undefined : value, history: [] } as any,
             },
             { conflictPaths: ['indicatorId', 'contextType', 'contextId'] },
           );
@@ -266,6 +276,7 @@ export class IndicatorsService {
     contextId: string,
     activityId?: string,
     vizId?: string,
+    forceRefresh = false,
   ): Promise<{ value: number; structuredValue?: any; metadata: Record<string, any> }> {
     const indicator = await this.findById(indicatorId);
 
@@ -294,15 +305,17 @@ export class IndicatorsService {
       : contextId;
     const cacheContextId = viz?.id ? `${baseContextId}:${viz.id}` : baseContextId;
 
-    const cached = await this.indicatorValueModel.findOne({
-      where: { indicatorId, contextType, contextId: cacheContextId },
-    });
-    if (cached) {
-      return {
-        value: cached.value,
-        structuredValue: (cached.metadata as any)?.structuredValue,
-        metadata: cached.metadata as any,
-      };
+    if (!forceRefresh) {
+      const cached = await this.indicatorValueModel.findOne({
+        where: { indicatorId, contextType, contextId: cacheContextId },
+      });
+      if (cached) {
+        return {
+          value: cached.value,
+          structuredValue: (cached.metadata as any)?.structuredValue,
+          metadata: cached.metadata as any,
+        };
+      }
     }
 
     const formulaContext: any = { indicatorId };
@@ -352,6 +365,17 @@ export class IndicatorsService {
       activityId: context.activityId ?? process.env.TARGET_ACTIVITY_ID,
     });
     return { result };
+  }
+
+  async previewSteps(
+    formula: any,
+    context: { userId?: string; groupId?: string; activityId?: string },
+  ) {
+    return this.formulaInterpreter.interpretWithSteps(formula, {
+      userId: context.userId,
+      groupId: context.groupId,
+      activityId: context.activityId ?? process.env.TARGET_ACTIVITY_ID,
+    });
   }
 
   async getPlatonSchema() {
@@ -421,6 +445,40 @@ export class IndicatorsService {
     const snapshot = await this.snapshotModel.findOne({ where: { id: snapshotId, indicatorId } });
     if (!snapshot) throw new NotFoundException('Snapshot introuvable');
     await this.snapshotModel.remove(snapshot);
+  }
+
+  /**
+   * Rafraîchit (force-recalcul) tous les snapshots d'un indicateur liés à une activité donnée.
+   * Appelé automatiquement par l'ingestion dès qu'un événement affecte cet indicateur.
+   * Chaque visualisation de l'indicateur est recalculée indépendamment.
+   */
+  async refreshSnapshots(indicatorId: string, activityId: string): Promise<void> {
+    const snapshots = await this.snapshotModel.find({ where: { indicatorId, activityId } });
+    if (!snapshots.length) return;
+
+    const indicator = await this.indicatorModel.findOne({ where: { id: indicatorId } });
+    if (!indicator) return;
+
+    const vizList = indicator.visualizations ?? [];
+
+    for (const snapshot of snapshots) {
+      for (const viz of vizList) {
+        try {
+          await this.computeView(
+            snapshot.indicatorId,
+            snapshot.contextType,
+            snapshot.contextId,
+            snapshot.activityId,
+            viz.id,
+            true,
+          );
+        } catch (err) {
+          this.logger.warn(
+            `Snapshot refresh échoué — indicatorId=${snapshot.indicatorId} contextId=${snapshot.contextId} viz=${viz.id}: ${(err as Error).message}`,
+          );
+        }
+      }
+    }
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

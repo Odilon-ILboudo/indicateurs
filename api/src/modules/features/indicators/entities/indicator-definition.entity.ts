@@ -17,6 +17,7 @@ export interface IndicatorVisualization {
   type: VizType;
   icon?: string;
   color?: string;
+  /** Métadonnées d’affichage propres à cette visualisation (unité + seuils de performance). */
   unit?: string;
   thresholds?: { good: number; warning: number; danger: number };
   /** Formule propre à cette vue. Si absente, utilise indicator.formula. */

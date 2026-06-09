@@ -185,4 +185,16 @@ export class IndicatorCardComponent implements OnInit, OnChanges {
     };
     return labels[type] ?? type;
   }
+
+  getContextLabel(scope: string): string {
+    const labels: Record<string, string> = {
+      learner: 'Apprenant',
+      teacher: 'Enseignant',
+      admin: 'Admin',
+      course: 'Cours',
+      activity: 'Activité',
+      group: 'Groupe',
+    };
+    return labels[scope] ?? scope;
+  }
 }

@@ -19,6 +19,7 @@ export interface IndicatorVisualization {
   type: ViewVisualizationType;
   icon?: string;
   color?: string;
+  /** Métadonnées d’affichage propres à cette visualisation (unité + seuils de performance). */
   unit?: string;
   thresholds?: { good: number; warning: number; danger: number };
   /** Formule propre à cette vue. Si absente, utilise indicator.formula. */
@@ -88,6 +89,14 @@ export interface IndicatorSnapshot {
   title: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface StepDebugResult {
+  index: number;
+  type: string;
+  durationMs: number;
+  output: any;
+  error?: string;
 }
 
 export interface UserDashboardSettings {

@@ -8,7 +8,7 @@ import { IndicatorExecutionLog } from '../entities/indicator-execution-log.entit
 
 export interface FormulaStep {
   id: string;
-  type: 'fetch' | 'filter' | 'groupBy' | 'findFirst' | 'extract' | 'aggregate' | 'round' | 'divide' | 'js';
+  type: 'fetch' | 'join' | 'filter' | 'groupBy' | 'findFirst' | 'extract' | 'aggregate' | 'round' | 'divide' | 'js';
   label?: string;
   params: Record<string, any>;
 }
@@ -36,6 +36,30 @@ export class FormulaInterpreterService {
     @InjectRepository(IndicatorExecutionLog, 'indicators')
     private readonly logRepo: Repository<IndicatorExecutionLog>,
   ) {}
+
+  /** Exécute le pipeline étape par étape et retourne le snapshot de chaque étape (pour debug). */
+  async interpretWithSteps(
+    formula: FormulaDefinition,
+    context: FormulaContext,
+  ): Promise<{ steps: Array<{ index: number; type: string; durationMs: number; output: any; error?: string }> }> {
+    if (!formula?.pipeline?.length) return { steps: [] };
+
+    const steps: Array<{ index: number; type: string; durationMs: number; output: any; error?: string }> = [];
+    let current: any = null;
+
+    for (let i = 0; i < formula.pipeline.length; i++) {
+      const step = formula.pipeline[i];
+      const t0 = Date.now();
+      try {
+        current = await this.executeStep(step, current, context);
+        steps.push({ index: i, type: step.type, durationMs: Date.now() - t0, output: current });
+      } catch (err) {
+        steps.push({ index: i, type: step.type, durationMs: Date.now() - t0, output: null, error: (err as Error).message });
+        break;
+      }
+    }
+    return { steps };
+  }
 
   /**
    * Exécute un pipeline DSL et retourne le résultat brut du pipeline.
@@ -89,6 +113,7 @@ export class FormulaInterpreterService {
   private async executeStep(step: FormulaStep, input: any, context: FormulaContext): Promise<any> {
     switch (step.type) {
       case 'fetch':     return this.executeFetch(step.params, context);
+      case 'join':      return this.executeJoin(step.params, input, context);
       case 'filter':    return this.executeFilter(step.params, input);
       case 'groupBy':   return this.executeGroupBy(step.params, input);
       case 'findFirst': return this.executeFindFirst(step.params, input);
@@ -151,6 +176,60 @@ export class FormulaInterpreterService {
     }
 
     return this.platonService.queryTable(table, filters);
+  }
+
+  /**
+   * LEFT JOIN entre les lignes en entrée (table gauche) et une seconde table PLaTon (table droite).
+   * Params : table, contextFields (optionnel), leftKey, rightKey
+   * Logique : pour chaque ligne gauche, cherche les lignes droites où rightKey = leftRow[leftKey].
+   *   - Match trouvé → fusionne (champs droits ajoutés, champs gauches prioritaires en cas de conflit)
+   *   - Pas de match  → conserve la ligne gauche telle quelle (LEFT JOIN)
+   */
+  private async executeJoin(params: Record<string, any>, input: any, context: FormulaContext): Promise<any[]> {
+    if (!Array.isArray(input) || !input.length) return [];
+
+    const { leftKey, rightKey } = params;
+    const rawTable: string = params['table'] ?? '';
+    if (!rawTable || !leftKey || !rightKey) {
+      this.logger.warn('[join] paramètres incomplets (table / leftKey / rightKey requis)');
+      return input;
+    }
+
+    const table = FormulaInterpreterService.LEGACY_TABLE_MAP[rawTable] ?? rawTable;
+    const contextFields: string[] = params['contextFields'] ?? [];
+
+    const filters: Record<string, string> = {};
+    for (const col of contextFields) {
+      const ctxKey = FormulaInterpreterService.CONTEXT_FIELD_MAP[col];
+      const val = ctxKey ? context[ctxKey] : undefined;
+      if (val) filters[col] = val as string;
+    }
+
+    const rightRows = await this.platonService.queryTable(table, filters);
+
+    // Index la table droite par la valeur de rightKey pour éviter O(n²)
+    const rightIndex = new Map<string, any[]>();
+    for (const row of rightRows) {
+      const key = String(row[rightKey] ?? '__null__');
+      if (!rightIndex.has(key)) rightIndex.set(key, []);
+      rightIndex.get(key)!.push(row);
+    }
+
+    const result: any[] = [];
+    for (const leftRow of input) {
+      const key = String(leftRow[leftKey] ?? '__null__');
+      const matches = rightIndex.get(key);
+      if (matches?.length) {
+        for (const rightRow of matches) {
+          // Champs gauches prioritaires (écrasent les champs droits en cas de conflit de nom)
+          result.push({ ...rightRow, ...leftRow });
+        }
+      } else {
+        result.push({ ...leftRow });
+      }
+    }
+
+    return result;
   }
 
   private executeFilter(params: Record<string, any>, rows: any[]): any[] {

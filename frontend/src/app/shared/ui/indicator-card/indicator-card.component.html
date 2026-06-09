@@ -43,11 +43,9 @@
         <mat-icon class="arrow-icon">arrow_forward</mat-icon>
       </div>
 
-      <div class="card-metadata" *ngIf="value?.metadata?.lastUpdate">
-        <span class="update-time">
-          <mat-icon>update</mat-icon>
-          {{ value?.metadata?.lastUpdate | date:'dd/MM/yyyy' }}
-        </span>
+      <div class="card-context" *ngIf="indicator?.contextType">
+        <mat-icon>label</mat-icon>
+        <span>{{ getContextLabel(indicator.contextType) }}</span>
       </div>
 
       <!-- Sélecteur de visualisation (uniquement si plusieurs vizes disponibles) -->

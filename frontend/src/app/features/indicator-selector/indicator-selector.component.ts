@@ -17,6 +17,18 @@ import { NzEmptyModule } from 'ng-zorro-antd/empty';
 import { IndicatorService } from '../../core/services/indicator.service';
 import { DashboardSettingsService } from '../../core/services/dashboard-settings.service';
 import { RoleService } from '../../core/services/role.service';
+
+const REQUIRED_EVENT_LABELS: Record<string, string> = {
+  'exercise.answered': 'Réponse à un exercice',
+  'exercise.viewed': 'Ouverture d’un exercice',
+  'activity.completed': 'Activité terminée',
+  'activity.started': 'Début d’activité',
+  'session.started': 'Début de session',
+  'session.completed': 'Fin de session',
+  'lesson.started': 'Début de leçon',
+  'lesson.completed': 'Fin de leçon',
+  'resource.viewed': 'Consultation d’une ressource',
+};
 import { IndicatorDefinition, IndicatorScope, IndicatorVisualization } from '../../core/models/indicator.model';
 import { buildIndicatorDisplayRows, IndicatorDisplayRow } from '../../shared/utils/indicator-family-grouping';
 import { environment } from '../../../environments/environment';
@@ -139,7 +151,7 @@ const CTX_ICONS: Record<string, string> = {
           <div class="info-row">
             <span class="info-label">Déclencheurs</span>
             <div class="info-value tags-row">
-              <nz-tag *ngFor="let ev of (ind.requiredEvents ?? [])" nzColor="purple">{{ ev }}</nz-tag>
+              <nz-tag *ngFor="let ev of triggerLabels" nzColor="purple">{{ ev }}</nz-tag>
               <span *ngIf="!(ind.requiredEvents?.length)" class="empty-val">Aucun</span>
             </div>
           </div>
@@ -529,11 +541,22 @@ const CTX_ICONS: Record<string, string> = {
 })
 export class IndicatorViewModalComponent {
   readonly modalData = inject(NZ_MODAL_DATA) as { indicator: IndicatorDefinition };
+  private readonly roleService = inject(RoleService);
 
   get ind(): IndicatorDefinition { return this.modalData.indicator; }
 
+  get triggerLabels(): string[] {
+    const events = this.ind.requiredEvents ?? [];
+    if (this.isAdminUser()) return events;
+    return events.map(event => REQUIRED_EVENT_LABELS[event] ?? event);
+  }
+
   get contexts(): string[] {
     return this.ind.contextType ? [this.ind.contextType] : [];
+  }
+
+  isAdminUser(): boolean {
+    return this.roleService.getRole() === 'admin';
   }
 
   ctxLabel(ctx: string): string  { return CTX_LABELS[ctx] ?? ctx; }
