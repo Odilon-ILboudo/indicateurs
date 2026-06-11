@@ -5,7 +5,7 @@ import { IndicatorScope } from '../models/indicator.model';
 export type UserRole = 'student' | 'teacher' | 'admin' | 'demo';
 
 /** Qui peut voir les indicateurs de chaque contexte (le rôle 'demo' suit la règle la plus
- *  restrictive — celle de 'student' — par défaut, faute de spécification dédiée). */
+ *  restrictive - celle de 'student' - par défaut, faute de spécification dédiée). */
 const INDICATOR_VISIBILITY: Record<IndicatorScope, UserRole[]> = {
   learner:  ['student'],
   teacher:  ['teacher'],

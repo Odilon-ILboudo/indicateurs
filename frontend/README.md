@@ -1,4 +1,4 @@
-# Indicateurs — Frontend (Angular)
+# Indicateurs - Frontend (Angular)
 
 > Documentation complète du projet (architecture, modèle de données, moteur DSL,
 > routes, sécurité) : voir [`../readme.md`](../readme.md).

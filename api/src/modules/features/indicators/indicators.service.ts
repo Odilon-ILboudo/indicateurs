@@ -474,7 +474,7 @@ export class IndicatorsService {
           );
         } catch (err) {
           this.logger.warn(
-            `Snapshot refresh échoué — indicatorId=${snapshot.indicatorId} contextId=${snapshot.contextId} viz=${viz.id}: ${(err as Error).message}`,
+            `Snapshot refresh échoué - indicatorId=${snapshot.indicatorId} contextId=${snapshot.contextId} viz=${viz.id}: ${(err as Error).message}`,
           );
         }
       }

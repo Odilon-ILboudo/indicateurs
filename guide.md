@@ -1,4 +1,4 @@
-# Guide pratique — Créer et exploiter des indicateurs
+# Guide pratique - Créer et exploiter des indicateurs
 
 Ce guide construit **6 indicateurs**, un par `contextType` possible
 (`learner`, `activity`, `course`, `group`, `teacher`, `admin`), classés du
@@ -12,7 +12,7 @@ pas-à-pas, l'import/export YAML/JSON, les recettes, et le précalcul de
 contexte.
 
 Pour la référence complète de l'architecture, du modèle de données et du
-moteur DSL, voir [`readme.md`](readme.md) — ce guide s'appuie dessus et ne
+moteur DSL, voir [`readme.md`](readme.md) - ce guide s'appuie dessus et ne
 répète que ce qui est nécessaire à l'action.
 
 ---
@@ -25,7 +25,7 @@ répète que ce qui est nécessaire à l'action.
    **Tableau de bord → Indicateurs** (`/dashboard/indicators`), section
    admin (`AdminIndicatorManagerComponent`).
 3. **Changement de rôle** (rappel readme §8) : `localStorage` n'a aucun
-   effet — éditez `frontend/src/environments/environment.ts`, champ
+   effet - éditez `frontend/src/environments/environment.ts`, champ
    `defaultUserId`, puis rechargez la page (F5). Le rôle est dérivé de cet
    utilisateur à chaque chargement.
 
@@ -50,12 +50,12 @@ rôle Admin.**
 
 | # | Indicateur | `contextType` | Visualisations | Nouveautés introduites |
 |---|---|---|---|---|
-| 1 | Tentatives avant réussite — Apprenant | `learner` | 1 (carte) | wizard 3 étapes, recette, `fetch`/`groupBy`/`findFirst`/`extract`/`aggregate(avg)`/`round`, seuils carte, activation, recalcul |
-| 2 | Tentatives avant réussite — Activité | `activity` | 2 (carte + jauge) | multi-vue, jauge + seuils jauge, sélection de vue active (`activeVizId`), masquage de vue (`enabledVizIds`), recette "Note moyenne", étape `filter` (variante) |
-| 3 | Tentatives avant réussite — Cours | `course` | 3 (carte, carte, barres) | `filter` + `aggregate(count)`, `join` (gauche, implicite) + `js` → objet, recette "Notes moyennes par ressource" |
-| 4 | Tentatives avant réussite — Groupe de TP | `group` | 3 (barres, carte, histogramme) | `useGroupContext`, `join` avec `Users`, `aggregate(sum)`, histogramme, **snapshots** |
-| 5 | Vue d'ensemble plateforme — Enseignant | `teacher` | 2 (cartes) | `requiredEvents` vide (cron uniquement), `fetch` global (`contextFields: []`), `join` **interne** (inner), `divide` + `round` |
-| 6 | Diagnostic plateforme — Admin | `admin` | 4 (carte, carte, courbe, barres) | `aggregate(min)`/`aggregate(max)`, `join` **complète** (full) et **droite** (right), code JS avancé, courbe, **historique/rollback**, **logs d'exécution**, import/export YAML/JSON |
+| 1 | Tentatives avant réussite - Apprenant | `learner` | 1 (carte) | wizard 3 étapes, recette, `fetch`/`groupBy`/`findFirst`/`extract`/`aggregate(avg)`/`round`, seuils carte, activation, recalcul |
+| 2 | Tentatives avant réussite - Activité | `activity` | 2 (carte + jauge) | multi-vue, jauge + seuils jauge, sélection de vue active (`activeVizId`), masquage de vue (`enabledVizIds`), recette "Note moyenne", étape `filter` (variante) |
+| 3 | Tentatives avant réussite - Cours | `course` | 3 (carte, carte, barres) | `filter` + `aggregate(count)`, `join` (gauche, implicite) + `js` → objet, recette "Notes moyennes par ressource" |
+| 4 | Tentatives avant réussite - Groupe de TP | `group` | 3 (barres, carte, histogramme) | `useGroupContext`, `join` avec `Users`, `aggregate(sum)`, histogramme, **snapshots** |
+| 5 | Vue d'ensemble plateforme - Enseignant | `teacher` | 2 (cartes) | `requiredEvents` vide (cron uniquement), `fetch` global (`contextFields: []`), `join` **interne** (inner), `divide` + `round` |
+| 6 | Diagnostic plateforme - Admin | `admin` | 4 (carte, carte, courbe, barres) | `aggregate(min)`/`aggregate(max)`, `join` **complète** (full) et **droite** (right), code JS avancé, courbe, **historique/rollback**, **logs d'exécution**, import/export YAML/JSON |
 
 Les indicateurs 1 à 4 partagent une **famille** (`familyName = "Tentatives
 avant réussite"`), créée en une fois via le wizard "Créer une famille". Les
@@ -63,7 +63,7 @@ indicateurs 5 et 6 sont autonomes.
 
 ---
 
-## Étape A — Famille "Tentatives avant réussite" (indicateurs 1 à 4)
+## Étape A - Famille "Tentatives avant réussite" (indicateurs 1 à 4)
 
 ### A.0 Lancer le wizard de famille
 
@@ -77,7 +77,7 @@ indicateurs 5 et 6 sont autonomes.
      sélection détermine l'ordre d'enchaînement des wizards).
 3. Cliquer **"Configurer les indicateurs"** → ouvre directement le builder
    pour le 1er contexte (Apprenant), pré-rempli avec le nom
-   `Tentatives avant réussite — Apprenant`, la description et
+   `Tentatives avant réussite - Apprenant`, la description et
    `requiredEvents = [exercise.answered]`.
 
 À chaque "Créer", la modale se ferme et celle du contexte suivant s'ouvre
@@ -85,13 +85,13 @@ automatiquement, jusqu'au dernier (Groupe de TP).
 
 ---
 
-### A.1 Indicateur 1/6 — Apprenant (`learner`) — LE PLUS SIMPLE
+### A.1 Indicateur 1/6 - Apprenant (`learner`) - LE PLUS SIMPLE
 
 **Étape 1 « Définition »** (déjà pré-remplie par la famille) : vérifier
 nom, description, `requiredEvents = [exercise.answered]`.
 
 **Étape 2 « Contexte »** : `contextType = learner` (pré-rempli, en tête de
-la liste déroulante). Une visualisation "Vue principale" existe par défaut —
+la liste déroulante). Une visualisation "Vue principale" existe par défaut -
 la configurer :
 
 | Champ | Valeur |
@@ -121,21 +121,21 @@ réussite"**. Cela applique automatiquement le pipeline :
 - Cliquer **"Tester"** → un résultat scalaire (nombre) s'affiche.
 - Cliquer **"Déboguer pas à pas"** → un panneau affiche le contexte effectif
   (`userId=…`, `activityId=(TARGET_ACTIVITY_ID)` si non précisé,
-  `groupId=—`) puis, pour chacune des 6 étapes : type, durée, et un aperçu
+  `groupId=-`) puis, pour chacune des 6 étapes : type, durée, et un aperçu
   tabulaire du résultat (avec "Afficher tout" si > 5 lignes).
 
 Cliquer **"Créer"** → enchaîne automatiquement sur l'indicateur "Activité".
 
-#### 🧪 À tester côté utilisateur (rôle Étudiant)
+####  À tester côté utilisateur (rôle Étudiant)
 
 1. Passer `defaultUserId` sur l'**Étudiant**, F5.
 2. `/dashboard/indicators` → onglet "Indicateurs" (sélecteur,
    `IndicatorSelectorComponent`) → activer l'indicateur "Tentatives avant
-   réussite — Apprenant" via le **switch ✓/✗**.
+   réussite - Apprenant" via le **switch ✓/✗**.
 3. `/dashboard/overview` → la carte apparaît, colorée selon les seuils
    configurés.
 
-#### 🔧 Manipulation admin : recalcul
+####  Manipulation admin : recalcul
 
 1. Repasser en rôle **Admin**, F5, `/dashboard/indicators`.
 2. Sur la ligne de l'indicateur, cliquer l'icône **"Recalculer"** (replay) →
@@ -144,23 +144,23 @@ Cliquer **"Créer"** → enchaîne automatiquement sur l'indicateur "Activité".
    `learner` de tous les utilisateurs ayant activé l'indicateur (ici
    l'étudiant de l'étape précédente).
 
-#### 🔬 Variantes à explorer (débogueur pas-à-pas)
+####  Variantes à explorer (débogueur pas-à-pas)
 
 - **`findFirst` sans condition** : retirez `whereField`/`whereValue` de
   l'étape "Première réussite" (ne garder que `sortField = created_at`) →
   re-déboguer : `findFirst` prend alors la **1ère ligne triée**, peu importe
-  la note — la valeur change.
+  la note - la valeur change.
 - **Autres fonctions d'agrégation** : changez `aggregateFn` de `avg` à
   `max` → observez le pire cas (nombre maximal de tentatives avant
   réussite, tous exercices confondus).
 
 ---
 
-### A.2 Indicateur 2/6 — Activité (`activity`)
+### A.2 Indicateur 2/6 - Activité (`activity`)
 
-**Étape 1** : nom pré-rempli `Tentatives avant réussite — Activité`. Ajouter
+**Étape 1** : nom pré-rempli `Tentatives avant réussite - Activité`. Ajouter
 un second tag dans "Événements déclencheurs" : `activity.completed` (en plus
-de `exercise.answered`) — démontre l'édition d'un champ multi-tags
+de `exercise.answered`) - démontre l'édition d'un champ multi-tags
 pré-rempli.
 
 **Étape 2** : `contextType = activity` (pré-rempli). Configurer 2
@@ -201,7 +201,7 @@ si besoin) :
 Tester chaque onglet (Tester + Déboguer). Cliquer **"Créer"** → enchaîne sur
 "Cours".
 
-#### 🧪 À tester côté utilisateur (rôle Enseignant)
+####  À tester côté utilisateur (rôle Enseignant)
 
 1. Passer `defaultUserId` sur l'**Enseignant**, F5.
 2. `/dashboard/overview` → utiliser le **sélecteur de contexte enseignant**
@@ -211,19 +211,19 @@ Tester chaque onglet (Tester + Déboguer). Cliquer **"Créer"** → enchaîne su
    fire-and-forget) qui pré-calcule toutes les valeurs `course`/`group`/
    `activity` pour ce contexte avant même qu'on clique sur une carte.
 3. Aller sur `/dashboard/courses/:id/activities/:activityId` → section
-   **"Indicateurs"** → carte "Tentatives avant réussite — Activité".
+   **"Indicateurs"** → carte "Tentatives avant réussite - Activité".
 4. **Sélection de vue active** (`activeVizId`) : cliquer sur les **chips**
    (une par visualisation) pour basculer entre "Note moyenne" (carte) et
    "Tentatives avant réussite" (jauge). Ce choix est persisté en base
-   (`user_indicator_preferences.active_viz_id` via `setVizPreference`) —
+   (`user_indicator_preferences.active_viz_id` via `setVizPreference`) -
    recharger la page : le choix est conservé, et identique entre la carte et
    la page détail (`/dashboard/indicator/:id`).
 
-#### 🔧 Masquage de visualisation (`enabledVizIds`)
+####  Masquage de visualisation (`enabledVizIds`)
 
 1. `/dashboard/indicators` → sélecteur → repérer cet indicateur, colonne
-   **"Visualisations"** : 2 icônes (une par vue), avec info-bulle "visible —
-   cliquer pour masquer" / "masquée — cliquer pour afficher".
+   **"Visualisations"** : 2 icônes (une par vue), avec info-bulle "visible -
+   cliquer pour masquer" / "masquée - cliquer pour afficher".
 2. Cliquer sur l'icône d'une des 2 vues → elle grise → persiste
    `enabledVizIds` (`PATCH /preferences/:indicatorId`). Sur la carte / page
    détail, seule l'autre vue reste sélectionnable.
@@ -231,7 +231,7 @@ Tester chaque onglet (Tester + Déboguer). Cliquer **"Créer"** → enchaîne su
    restante, un message *"Vous devez garder au moins une visualisation
    active."* l'empêche.
 
-#### 🔬 Variante : étape `filter`
+####  Variante : étape `filter`
 
 Sur l'onglet "Note moyenne", cliquer **"Ajouter une étape"** → choisir
 **"Filtrer"**, l'insérer entre `fetch` et `extract` :
@@ -248,9 +248,9 @@ avec/sans ce filtre.
 
 ---
 
-### A.3 Indicateur 3/6 — Cours (`course`)
+### A.3 Indicateur 3/6 - Cours (`course`)
 
-**Étape 1** : nom pré-rempli `Tentatives avant réussite — Cours`,
+**Étape 1** : nom pré-rempli `Tentatives avant réussite - Cours`,
 `requiredEvents` inchangé (`exercise.answered`).
 
 **Étape 2** : `contextType = course`. Configurer **3 visualisations** :
@@ -259,12 +259,12 @@ avec/sans ce filtre.
 |---|---|---|---|---|---|
 | 1 (défaut) | `Tentatives avant réussite (cours)` | Carte | `repeat` | `tentatives` | Bon ≤ `2` · Moyen ≤ `4` · Critique > `4` |
 | 2 (ajoutée) | `Exercices réussis` | Carte | `check_circle` | `exercices` | Bon ≤ `10` · Moyen ≤ `5` · Critique > `0` *(à ajuster selon votre jeu de données)* |
-| 3 (ajoutée) | `Notes moyennes par ressource` | Barres horizontales | `bar_chart` | *(vide — pas de seuils pour ce type)* | — |
+| 3 (ajoutée) | `Notes moyennes par ressource` | Barres horizontales | `bar_chart` | *(vide - pas de seuils pour ce type)* | - |
 
 **Étape 3** :
 
 - Onglet **"Tentatives avant réussite (cours)"** : recette **"Tentatives
-  avant réussite"** (identique à A.1/A.2 — comme pour `activity`, le contexte
+  avant réussite"** (identique à A.1/A.2 - comme pour `activity`, le contexte
   `course` ne fournit pas de `userId`, donc le calcul porte sur tous les
   étudiants).
 - Onglet **"Exercices réussis"** : recette **"Exercices réussis"** →
@@ -292,21 +292,21 @@ avec/sans ce filtre.
 Tester chaque onglet (Tester + Déboguer). Cliquer **"Créer"** → enchaîne sur
 "Groupe de TP".
 
-#### 🧪 À tester (rôle Enseignant)
+####  À tester (rôle Enseignant)
 
 1. Sélecteur de contexte enseignant → "Voir par : cours entier".
-2. `/dashboard/overview` → carte "Tentatives avant réussite — Cours" avec ses
+2. `/dashboard/overview` → carte "Tentatives avant réussite - Cours" avec ses
    3 vues (chips). Sélectionner "Notes moyennes par ressource" → graphique en
    barres horizontales avec **noms de ressources lisibles** (jamais d'UUID),
    tronqués à 25 caractères avec info-bulle complète.
 
-#### 🔧 Masquage (rappel)
+####  Masquage (rappel)
 
 Comme à l'étape A.2, masquez la vue "Exercices réussis" via le sélecteur
 (icônes "Visualisations") pour ne garder que 2 vues actives, puis
 réaffichez-la.
 
-#### 🔬 Variantes : tous les opérateurs `filter`
+####  Variantes : tous les opérateurs `filter`
 
 Sur l'onglet "Exercices réussis", éditez l'étape "Filtrer" et testez
 successivement (en relançant **"Déboguer pas à pas"** à chaque fois pour
@@ -326,18 +326,18 @@ réussis" attendu.
 
 ---
 
-### A.4 Indicateur 4/6 — Groupe de TP (`group`)
+### A.4 Indicateur 4/6 - Groupe de TP (`group`)
 
-**Étape 1** : nom pré-rempli `Tentatives avant réussite — Groupe de TP`.
+**Étape 1** : nom pré-rempli `Tentatives avant réussite - Groupe de TP`.
 Ajouter un second tag : `exercise.viewed` (en plus de `exercise.answered`).
 
 **Étape 2** : `contextType = group`. Configurer **3 visualisations** :
 
 | Vue | Libellé | Type | Icône | Unité | Seuils |
 |---|---|---|---|---|---|
-| 1 (défaut) | `Tentatives par étudiant` | Barres horizontales | `groups` | *(vide)* | — |
+| 1 (défaut) | `Tentatives par étudiant` | Barres horizontales | `groups` | *(vide)* | - |
 | 2 (ajoutée) | `Total tentatives du groupe` | Carte | `analytics` | `tentatives` | Bon ≤ `20` · Moyen ≤ `40` · Critique > `40` |
-| 3 (ajoutée) | `Distribution des notes du groupe` | Histogramme | `leaderboard` | *(vide)* | — |
+| 3 (ajoutée) | `Distribution des notes du groupe` | Histogramme | `leaderboard` | *(vide)* | - |
 
 **Étape 3** :
 
@@ -355,7 +355,7 @@ Ajouter un second tag : `exercise.viewed` (en plus de `exercise.answered`).
   seules les lignes `SessionData` dont `user_id` appartient au groupe de TP
   sélectionné dans le contexte sont conservées (nécessite `activityId`).
 
-- Onglet **"Total tentatives du groupe"** — pipeline **manuel**, via
+- Onglet **"Total tentatives du groupe"** - pipeline **manuel**, via
   **"Ajouter une étape"** :
 
   | # | Étape | Paramètres |
@@ -364,7 +364,7 @@ Ajouter un second tag : `exercise.viewed` (en plus de `exercise.answered`).
   | 2 | `extract` | extractField = `attempts` |
   | 3 | `aggregate` | aggregateFn = **`sum`** |
 
-- Onglet **"Distribution des notes du groupe"** — pipeline **manuel** :
+- Onglet **"Distribution des notes du groupe"** - pipeline **manuel** :
 
   | # | Étape | Paramètres |
   |---|---|---|
@@ -396,23 +396,23 @@ Ajouter un second tag : `exercise.viewed` (en plus de `exercise.answered`).
   ```
 
 **Tester** : dans "Tester cette formule", choisir un **Cours** puis un
-**Groupe** (`previewCtx.groupId`) — pas besoin de sélectionner d'utilisateur
+**Groupe** (`previewCtx.groupId`) - pas besoin de sélectionner d'utilisateur
 pour ce contexte. "Tester" / "Déboguer pas à pas".
 
 Cliquer **"Créer"** → fin de la famille (4/4), la modale se ferme.
 
-#### 🧪 À tester (rôle Enseignant)
+####  À tester (rôle Enseignant)
 
 Sélecteur de contexte enseignant → "Voir par : groupe de TP" → la carte
-"Tentatives avant réussite — Groupe de TP" affiche ses 3 vues (chips :
+"Tentatives avant réussite - Groupe de TP" affiche ses 3 vues (chips :
 barres / carte / histogramme).
 
-#### 🧩 Snapshots — fonctionnalité spécifique au contexte `group`
+####  Snapshots - fonctionnalité spécifique au contexte `group`
 
 1. Aller sur `/dashboard/courses/:id/activities/:activityId` → section
    **"Par groupe"** (`GroupSnapshotsPanelComponent`), distincte de la section
    "Indicateurs" (qui ne montre que les indicateurs `activity`).
-2. Pour l'indicateur "Tentatives avant réussite — Groupe de TP" : utiliser le
+2. Pour l'indicateur "Tentatives avant réussite - Groupe de TP" : utiliser le
    **menu déroulant des groupes** (les groupes déjà épinglés sont masqués) →
    choisir un groupe → ajoute une `IndicatorSnapshot` (carte épinglée),
    `POST /indicators/:id/snapshots` (**409** si le groupe est déjà épinglé,
@@ -424,10 +424,10 @@ barres / carte / histogramme).
 5. Ces snapshots sont **rafraîchis automatiquement**
    (`forceRefresh = true`, pour les 3 visualisations) à chaque ingestion
    d'événement PLaTon pour cette activité (`IngestionService` →
-   `refreshSnapshots()`, fire-and-forget) — aucune action manuelle requise
+   `refreshSnapshots()`, fire-and-forget) - aucune action manuelle requise
    pour observer ce mécanisme en usage normal de la plateforme.
 
-#### 🔬 Variante : type de jointure
+####  Variante : type de jointure
 
 Sur l'onglet "Tentatives par étudiant", changez le **"Type de jointure"** de
 `Gauche` à `Interne (inner)` puis relancez le débogueur : avec `inner`, un
@@ -437,7 +437,7 @@ disparaîtrait du résultat (alors qu'il restait avec `left`). Remettez
 
 ---
 
-## Étape B — Indicateur 5/6 — Enseignant (`teacher`) — autonome
+## Étape B - Indicateur 5/6 - Enseignant (`teacher`) - autonome
 
 Cet indicateur n'appartient à aucune famille. `/dashboard/indicators` →
 bouton **"Nouvel indicateur"**.
@@ -447,12 +447,12 @@ bouton **"Nouvel indicateur"**.
 - Description : `Indicateurs globaux non personnalisés, à destination des enseignants.`
 - **Événements déclencheurs : laisser vide.** Sans `requiredEvents`, le
   détail de l'indicateur affichera *"Cron quotidien uniquement"* au lieu de
-  *"Temps réel à chaque événement"* — la valeur n'est alors mise à jour que
+  *"Temps réel à chaque événement"* - la valeur n'est alors mise à jour que
   par le cron quotidien ou par un recalcul manuel (voir plus bas).
 
 **Étape 2** : `contextType = teacher`. Pour ce contexte, `computeView`
 construit `formulaContext = { userId: <id enseignant>, activityId:
-undefined }` — **pas de fallback `TARGET_ACTIVITY_ID`** (contrairement à
+undefined }` - **pas de fallback `TARGET_ACTIVITY_ID`** (contrairement à
 `learner`). Configurer **2 visualisations** :
 
 | Vue | Libellé | Type | Icône | Unité | Seuils |
@@ -460,19 +460,19 @@ undefined }` — **pas de fallback `TARGET_ACTIVITY_ID`** (contrairement à
 | 1 (défaut) | `Activités liées à un cours` | Carte | `school` | `activités` | Bon ≤ `5` · Moyen ≤ `2` · Critique > `0` *(à ajuster)* |
 | 2 (ajoutée) | `Volume hebdomadaire moyen` | Carte | `timeline` | `sessions/jour` | Bon ≤ `50` · Moyen ≤ `100` · Critique > `100` *(à ajuster)* |
 
-**Étape 3** — pipelines **manuels** (pas de recette adaptée) :
+**Étape 3** - pipelines **manuels** (pas de recette adaptée) :
 
 - Onglet **"Activités liées à un cours"** :
 
   | # | Étape | Paramètres |
   |---|---|---|
-  | 1 | `fetch` | table **`Activities`**, contextFields = **(laisser vide — aucune sélection)** → requête globale, non filtrée par contexte |
+  | 1 | `fetch` | table **`Activities`**, contextFields = **(laisser vide - aucune sélection)** → requête globale, non filtrée par contexte |
   | 2 | `join` | table **`Courses`**, **type Interne (inner)**, clé gauche `course_id`, clé droite `id`, "Filtrer par contexte" = vide |
   | 3 | `extract` | extractField = `id` |
   | 4 | `aggregate` | aggregateFn = `count` |
 
   La jointure **interne** ne conserve que les activités dont le `course_id`
-  correspond effectivement à un cours existant — `extract` + `aggregate
+  correspond effectivement à un cours existant - `extract` + `aggregate
   (count)` donnent leur nombre.
 
 - Onglet **"Volume hebdomadaire moyen"** :
@@ -489,18 +489,18 @@ undefined }` — **pas de fallback `TARGET_ACTIVITY_ID`** (contrairement à
   et **`round`**, ici utilisées pour estimer un nombre moyen de sessions par
   jour sur une semaine.
 
-> ℹ️ Pour des pipelines avec `contextFields: []` (requêtes globales), la
+>  Pour des pipelines avec `contextFields: []` (requêtes globales), la
 > sélection Cours/Activité/Groupe/Utilisateur du panneau "Tester" n'a aucune
-> influence sur le résultat — le pipeline ignore le contexte. "Tester" /
+> influence sur le résultat - le pipeline ignore le contexte. "Tester" /
 > "Déboguer pas à pas" fonctionnent normalement.
 
 Cliquer **"Créer"**.
 
-#### 🧪 À tester (rôle Enseignant)
+####  À tester (rôle Enseignant)
 
 1. Passer `defaultUserId` sur l'**Enseignant**, F5.
 2. `/dashboard/overview` affiche cet indicateur dans le tableau de bord
-   personnel de l'enseignant — un `contextType: 'teacher'` est traité comme
+   personnel de l'enseignant - un `contextType: 'teacher'` est traité comme
    un contexte "orphelin" : `contextId = son propre userId`, exactement comme
    le flux `learner` (readme §8).
 3. Comme `requiredEvents` est vide, la valeur n'existe pas tant qu'elle n'a
@@ -510,7 +510,7 @@ Cliquer **"Créer"**.
 
 ---
 
-## Étape C — Indicateur 6/6 — Admin (`admin`) — LE PLUS COMPLEXE
+## Étape C - Indicateur 6/6 - Admin (`admin`) - LE PLUS COMPLEXE
 
 Toujours en rôle **Admin** : `/dashboard/indicators` → **"Nouvel
 indicateur"**.
@@ -530,8 +530,8 @@ visualisations** :
 |---|---|---|---|---|---|
 | 1 (défaut) | `Tentatives minimales (plateforme)` | Carte | `trending_down` | `tentatives` | Bon ≤ `1` · Moyen ≤ `2` · Critique > `2` |
 | 2 (ajoutée) | `Tentatives maximales (plateforme)` | Carte | `trending_up` | `tentatives` | Bon ≤ `5` · Moyen ≤ `15` · Critique > `15` |
-| 3 (ajoutée) | `Note moyenne globale` | Graphique ligne | `show_chart` | *(vide)* | — |
-| 4 (ajoutée) | `Comptes sans session enregistrée` | Barres horizontales | `groups` | *(vide)* | — |
+| 3 (ajoutée) | `Note moyenne globale` | Graphique ligne | `show_chart` | *(vide)* | - |
+| 4 (ajoutée) | `Comptes sans session enregistrée` | Barres horizontales | `groups` | *(vide)* | - |
 
 **Étape 3** :
 
@@ -557,16 +557,16 @@ visualisations** :
   | 5 | `round` | decimals = `1` |
 
   Une jointure **complète (full)** conserve à la fois les sessions sans
-  utilisateur correspondant *et* les utilisateurs sans session — ces
+  utilisateur correspondant *et* les utilisateurs sans session - ces
   dernières lignes n'ont pas de champ `grade`, mais `extract` filtre déjà les
   valeurs non numériques (`isNaN`), donc `aggregate(avg)` reste correct.
 
-  > ⚠️ **Limite connue** : la visualisation **"Graphique ligne"**
+  >  **Limite connue** : la visualisation **"Graphique ligne"**
   > (`line-chart`) affiche `result.metadata.history`, qui n'est **jamais
   > alimenté** par `computeView` (toujours `[]`, voir readme §13). La courbe
   > s'affichera donc vide même si "Tester" renvoie une valeur correcte.
   > Configurez tout de même cette vue pour explorer l'UI (type, icône,
-  > couleur, absence de seuils pour ce type) — c'est une limite du frontend,
+  > couleur, absence de seuils pour ce type) - c'est une limite du frontend,
   > pas une erreur de configuration de votre part.
 
 - Onglet **"Comptes sans session enregistrée"** :
@@ -589,11 +589,11 @@ visualisations** :
 
   Une jointure **droite (right)** ajoute les lignes de `Users` qui n'ont
   **aucune** correspondance dans `SessionData` (champ `user_id` alors
-  `undefined`) — ce code les compte.
+  `undefined`) - ce code les compte.
 
 Tester chaque onglet (Tester + Déboguer pas à pas).
 
-#### 🔧 Import / export YAML / JSON (round-trip)
+####  Import / export YAML / JSON (round-trip)
 
 Sur l'onglet **"Note moyenne globale"** :
 
@@ -611,15 +611,15 @@ Sur l'onglet **"Note moyenne globale"** :
 6. Revenir en mode **"Visuel"** → vérifier que le `label` modifié apparaît
    bien sur l'étape "Arrondir".
 
-> ℹ️ **Escape hatch** : dans le panneau Import, une étape avec un `type`
+>  **Escape hatch** : dans le panneau Import, une étape avec un `type`
 > inconnu mais un `params.code` non vide est automatiquement convertie en
-> étape `js` (avec un avertissement listant les étapes converties) — utile
+> étape `js` (avec un avertissement listant les étapes converties) - utile
 > pour migrer un pipeline écrit pour un type d'étape pas encore supporté côté
 > UI.
 
 Cliquer **"Créer"**.
 
-#### 🧪 À tester (rôle Admin)
+####  À tester (rôle Admin)
 
 `/dashboard/overview` (rôle Admin) affiche cet indicateur dans le tableau de
 bord personnel de l'administrateur (contexte "orphelin" `admin`, comme
@@ -627,13 +627,13 @@ bord personnel de l'administrateur (contexte "orphelin" `admin`, comme
 
 ---
 
-## Étape D — Manipulation / configuration côté utilisateur (récapitulatif)
+## Étape D - Manipulation / configuration côté utilisateur (récapitulatif)
 
 Ces actions sont disponibles dès qu'au moins un des 6 indicateurs existe ;
 exercez-les sur n'importe lequel d'entre eux dans
 `/dashboard/indicators` (sélecteur) :
 
-- **Activer / désactiver** un indicateur dans son tableau de bord — switch
+- **Activer / désactiver** un indicateur dans son tableau de bord - switch
   ✓/✗ sur chaque ligne (`toggleIndicator`, persiste dans
   `UserDashboardSettings.activeIndicators`).
 - **Filtres de la liste** :
@@ -649,14 +649,14 @@ exercez-les sur n'importe lequel d'entre eux dans
   des visualisations avec leur pipeline (chips colorés par type d'étape,
   "(formule globale)" si la vue n'a pas de pipeline propre).
 - **Familles repliables** : ligne violette avec chevron + badge "N
-  indicateurs" — cliquer pour déplier/replier (`toggleFamily`,
+  indicateurs" - cliquer pour déplier/replier (`toggleFamily`,
   `buildIndicatorDisplayRows`). Avec le filtre "Familles uniquement", seule la
   famille "Tentatives avant réussite" (4 membres) doit apparaître.
 - **Sélection de vue active** + **masquage de vues** : voir étapes A.2/A.3.
 
 ---
 
-## Étape E — Test de la visibilité par rôle
+## Étape E - Test de la visibilité par rôle
 
 Table de référence (`RoleService.INDICATOR_VISIBILITY`) :
 
@@ -678,14 +678,14 @@ ouvrez `/dashboard/indicators` (sélecteur) et vérifiez :
 | Enseignant | Activité, Cours, Groupe de TP, Enseignant | Apprenant, Admin |
 | Admin | Activité, Cours, Groupe de TP, Admin | Apprenant, Enseignant |
 
-> ℹ️ `AdminIndicatorManagerComponent` (la table de **gestion**, étapes A à C)
-> **n'applique pas** ce filtre — il montre toujours les 6 indicateurs, quel
+>  `AdminIndicatorManagerComponent` (la table de **gestion**, étapes A à C)
+> **n'applique pas** ce filtre - il montre toujours les 6 indicateurs, quel
 > que soit le rôle courant. C'est volontaire : c'est l'outil
 > d'administration.
 
 ---
 
-## Étape F — Outils admin avancés
+## Étape F - Outils admin avancés
 
 Toujours dans `/dashboard/indicators` (rôle **Admin**), table de gestion :
 
@@ -713,17 +713,17 @@ Toujours dans `/dashboard/indicators` (rôle **Admin**), table de gestion :
 - **Supprimer** (icône corbeille rouge, popconfirm) →
   `DELETE /indicators/:id`.
 
-  ⚠️ Pour exercer cette action sans perdre l'un des 6 indicateurs du guide,
+   Pour exercer cette action sans perdre l'un des 6 indicateurs du guide,
   créez d'abord un **7ᵉ indicateur jetable** (`/dashboard/indicators` →
   "Nouvel indicateur", n'importe quel contexte, nom `Test suppression`, sans
   formule particulière), puis supprimez-le immédiatement.
 
 - **Schéma PLaTon** (`GET /indicators/schema`) : déjà utilisé implicitement à
   chaque fois que vous avez ouvert un sélecteur "Table" ou "Colonnes de
-  filtre" dans le builder — c'est ce endpoint qui peuple ces listes
+  filtre" dans le builder - c'est ce endpoint qui peuple ces listes
   (`platonSchema`, avec mise en cache `_colsCache`).
 - **Précalcul de contexte** (`POST /indicators/precompute-context`) : déjà
-  exercé en A.2 via le sélecteur de contexte enseignant — aucun appel manuel
+  exercé en A.2 via le sélecteur de contexte enseignant - aucun appel manuel
   nécessaire.
 
 ### À propos de `joinContextFields`
@@ -741,7 +741,7 @@ activités du cours courant.
 
 ---
 
-## Récapitulatif — couverture des fonctionnalités
+## Récapitulatif - couverture des fonctionnalités
 
 | Fonctionnalité | Où l'exercer |
 |---|---|
@@ -750,20 +750,20 @@ activités du cours courant.
 | `requiredEvents` : 1 événement, 2, vide, 4 (tous) | A.1 / A.2+A.4 / B / C |
 | Les 6 `contextType` | A.1–A.4, B, C |
 | `fetch` (avec/sans `contextFields`, `useGroupContext`) | toutes ; `useGroupContext` en A.4 ; `contextFields: []` en B/C |
-| `join` — gauche (left) | A.3, A.4 |
-| `join` — interne (inner) | B |
-| `join` — droite (right) | C |
-| `join` — complète (full) | C |
+| `join` - gauche (left) | A.3, A.4 |
+| `join` - interne (inner) | B |
+| `join` - droite (right) | C |
+| `join` - complète (full) | C |
 | `joinContextFields` | documenté en F |
 | `filter` (tous opérateurs) | A.3 (recette + variantes), A.2 (variante) |
 | `groupBy` | A.1–A.3 (recette) |
 | `findFirst` (avec et sans condition) | A.1 (recette + variante) |
 | `extract` | toutes |
-| `aggregate` — `avg` | A.1–A.3, C |
-| `aggregate` — `sum` | A.4 |
-| `aggregate` — `count` | A.3, B |
-| `aggregate` — `min` | C |
-| `aggregate` — `max` | A.1 (variante), C |
+| `aggregate` - `avg` | A.1–A.3, C |
+| `aggregate` - `sum` | A.4 |
+| `aggregate` - `count` | A.3, B |
+| `aggregate` - `min` | C |
+| `aggregate` - `max` | A.1 (variante), C |
 | `round` | A.1, A.2, B, C |
 | `divide` | B |
 | `js` (objet, tableau de buckets) | A.3, A.4, C |

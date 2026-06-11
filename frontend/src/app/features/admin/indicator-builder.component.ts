@@ -196,7 +196,7 @@ return totals;` },
 
   <div class="indicator-header" *ngIf="def.name">
     {{ isEditMode ? 'Édition : ' : 'Nouvel indicateur : ' }}{{ def.name }}
-    <span *ngIf="familyProgress"> — {{ familyProgress }}</span>
+    <span *ngIf="familyProgress"> - {{ familyProgress }}</span>
   </div>
 
   <nz-divider></nz-divider>
@@ -401,7 +401,7 @@ return totals;` },
             <div class="pipeline" cdkDropList (cdkDropListDropped)="drop($event, v)">
 
               <div *ngIf="v.pipeline.length === 0" class="pipeline-empty">
-                Aucune étape — choisissez une recette ou ajoutez manuellement.
+                Aucune étape - choisissez une recette ou ajoutez manuellement.
               </div>
 
               <div *ngFor="let s of v.pipeline; let si = index; trackBy: trackStepById"
@@ -461,10 +461,10 @@ return totals;` },
                       <div class="param-row">
                         <label>Type de jointure <mat-icon class="info-icon" nz-tooltip="Détermine quelles lignes sont conservées : 'gauche' garde toutes les lignes courantes, 'interne' ne garde que les correspondances, 'droite' garde toutes les lignes de la table jointe, 'complète' garde tout." nzTooltipPlacement="right">info_outline</mat-icon></label>
                         <nz-select [(ngModel)]="s.joinType" style="width:260px" nzPlaceHolder="Gauche (par défaut)">
-                          <nz-option nzValue="left"  nzLabel="Gauche — garder toutes les lignes courantes"></nz-option>
-                          <nz-option nzValue="inner" nzLabel="Interne — seulement les correspondances"></nz-option>
-                          <nz-option nzValue="right" nzLabel="Droite — garder toutes les lignes jointes"></nz-option>
-                          <nz-option nzValue="full"  nzLabel="Complète — garder toutes les lignes des deux côtés"></nz-option>
+                          <nz-option nzValue="left"  nzLabel="Gauche - garder toutes les lignes courantes"></nz-option>
+                          <nz-option nzValue="inner" nzLabel="Interne - seulement les correspondances"></nz-option>
+                          <nz-option nzValue="right" nzLabel="Droite - garder toutes les lignes jointes"></nz-option>
+                          <nz-option nzValue="full"  nzLabel="Complète - garder toutes les lignes des deux côtés"></nz-option>
                         </nz-select>
                       </div>
                       <div class="param-row">
@@ -549,11 +549,11 @@ return totals;` },
                       <div class="param-row">
                         <label>Fonction <mat-icon class="info-icon" nz-tooltip="avg = moyenne, sum = somme, count = nombre d'éléments, min = minimum, max = maximum. S'applique sur le tableau de nombres en entrée." nzTooltipPlacement="right">info_outline</mat-icon></label>
                         <nz-select [(ngModel)]="s.aggregateFn" style="width:200px">
-                          <nz-option nzValue="avg"   nzLabel="avg — Moyenne"></nz-option>
-                          <nz-option nzValue="sum"   nzLabel="sum — Somme"></nz-option>
-                          <nz-option nzValue="count" nzLabel="count — Nombre"></nz-option>
-                          <nz-option nzValue="min"   nzLabel="min — Minimum"></nz-option>
-                          <nz-option nzValue="max"   nzLabel="max — Maximum"></nz-option>
+                          <nz-option nzValue="avg"   nzLabel="avg - Moyenne"></nz-option>
+                          <nz-option nzValue="sum"   nzLabel="sum - Somme"></nz-option>
+                          <nz-option nzValue="count" nzLabel="count - Nombre"></nz-option>
+                          <nz-option nzValue="min"   nzLabel="min - Minimum"></nz-option>
+                          <nz-option nzValue="max"   nzLabel="max - Maximum"></nz-option>
                         </nz-select>
                       </div>
                     </ng-container>
@@ -654,9 +654,9 @@ return totals;` },
                 <div class="debug-panel-title"><span nz-icon nzType="bug"></span> Résultats par étape</div>
                 <div class="debug-context">
                   <strong>Contexte utilisé :</strong>
-                  userId={{ previewCtx.userId || '—' }} &nbsp;|&nbsp;
+                  userId={{ previewCtx.userId || '-' }} &nbsp;|&nbsp;
                   activityId={{ previewCtx.activityId || '(TARGET_ACTIVITY_ID)' }} &nbsp;|&nbsp;
-                  groupId={{ previewCtx.groupId || '—' }}
+                  groupId={{ previewCtx.groupId || '-' }}
                 </div>
                 <div *ngFor="let s of debugSteps[v.id]" class="debug-step" [class.debug-step-error]="s.error">
                   <div class="debug-step-header">
@@ -689,11 +689,11 @@ return totals;` },
                     </div>
                     <div *ngIf="s.output.length > 5" class="debug-table-more">
                       <ng-container *ngIf="!debugExpanded.has(v.id + '_' + s.index)">
-                        {{ s.output.length - 5 }} ligne(s) masquée(s) —
+                        {{ s.output.length - 5 }} ligne(s) masquée(s) -
                         <a (click)="toggleExpandStep(v.id + '_' + s.index)">Afficher tout ({{ s.output.length }})</a>
                       </ng-container>
                       <ng-container *ngIf="debugExpanded.has(v.id + '_' + s.index)">
-                        {{ s.output.length }} lignes affichées —
+                        {{ s.output.length }} lignes affichées -
                         <a (click)="toggleExpandStep(v.id + '_' + s.index)">Réduire</a>
                       </ng-container>
                     </div>
@@ -946,7 +946,7 @@ export class IndicatorBuilderComponent implements OnInit {
     const remaining = this.modalData?.familyQueue?.length ?? 0;
     const total = remaining + 1;
     const current = total - remaining;
-    return `Famille « ${preset.familyName} » — contexte ${current}/${total} (${CONTEXT_LABELS[preset.contextType]})`;
+    return `Famille « ${preset.familyName} » - contexte ${current}/${total} (${CONTEXT_LABELS[preset.contextType]})`;
   }
 
   step = 0;
@@ -982,21 +982,21 @@ export class IndicatorBuilderComponent implements OnInit {
 
   get importDocsText(): string {
     return `╔══════════════════════════════════════════════════════════════════╗
-║   RÉFÉRENCE COMPLÈTE — Format ${this.importMode.toUpperCase().padEnd(4)} — Pipeline DSL           ║
+║   RÉFÉRENCE COMPLÈTE - Format ${this.importMode.toUpperCase().padEnd(4)} - Pipeline DSL           ║
 ╚══════════════════════════════════════════════════════════════════╝
 
 ${this.importMode === 'yaml' ? `STRUCTURE DE BASE
 ─────────────────
 pipeline:
-  - type: <type>      # obligatoire — nom technique de l'étape (voir liste ci-dessous)
-    label: "..."      # optionnel  — nom affiché dans le builder (généré auto si absent)
-    params:           # obligatoire — paramètres propres à chaque type
+  - type: <type>      # obligatoire - nom technique de l'étape (voir liste ci-dessous)
+    label: "..."      # optionnel  - nom affiché dans le builder (généré auto si absent)
+    params:           # obligatoire - paramètres propres à chaque type
       ...` : `{
   "pipeline": [
     {
-      "type": "<type>",    // obligatoire — nom technique (voir liste ci-dessous)
-      "label": "...",      // optionnel  — affiché dans le builder (généré auto si absent)
-      "params": { ... }    // obligatoire — paramètres propres à chaque type
+      "type": "<type>",    // obligatoire - nom technique (voir liste ci-dessous)
+      "label": "...",      // optionnel  - affiché dans le builder (généré auto si absent)
+      "params": { ... }    // obligatoire - paramètres propres à chaque type
     }
   ]
 }`}
@@ -1136,7 +1136,7 @@ ${this.importMode === 'yaml' ? `│
 Si "type" est absent ou ne correspond à aucun type ci-dessus, MAIS que
 "params.code" contient du JavaScript, l'étape est automatiquement
 importée comme une étape "Code JS" (votre code est repris tel quel).
-Un avertissement liste les étapes converties après l'import — vérifiez-
+Un avertissement liste les étapes converties après l'import - vérifiez-
 les dans l'éditeur visuel.
 
 ${this.importMode === 'yaml' ? `  - label: "Mon étape personnalisée"
@@ -1154,7 +1154,7 @@ listant les types valides (pour ne pas confondre un type custom
 volontaire avec une simple faute de frappe sur un type connu).
 
 ══════════════════════════════════════════════════════════════════
-  EXEMPLE COMPLET — Note moyenne d'un apprenant
+  EXEMPLE COMPLET - Note moyenne d'un apprenant
 ══════════════════════════════════════════════════════════════════
 ${this.importMode === 'yaml' ? `pipeline:
   - type: fetch
@@ -1406,7 +1406,7 @@ ${this.importMode === 'yaml' ? `pipeline:
   }
 
   formatStepOutput(output: any): string {
-    if (output === null || output === undefined) return '—';
+    if (output === null || output === undefined) return '-';
     if (Array.isArray(output)) {
       const preview = output.slice(0, 3).map(r => JSON.stringify(r)).join('\n');
       return output.length > 3 ? `${preview}\n… (${output.length} éléments au total)` : preview || '[]';
@@ -1430,7 +1430,7 @@ ${this.importMode === 'yaml' ? `pipeline:
     return rows.map(row =>
       cols.map(col => {
         const val = row[col];
-        if (val === null || val === undefined) return '—';
+        if (val === null || val === undefined) return '-';
         const str = typeof val === 'object' ? JSON.stringify(val) : String(val);
         return str.length > 40 ? str.slice(0, 38) + '…' : str;
       })
@@ -1458,7 +1458,7 @@ ${this.importMode === 'yaml' ? `pipeline:
   setImportMode(mode: 'yaml' | 'json', v: FlatViz): void {
     this.importMode = mode;
     this.importError = '';
-    // Re-sérialise dans le nouveau format à partir du pipeline courant — un éventuel texte
+    // Re-sérialise dans le nouveau format à partir du pipeline courant - un éventuel texte
     // collé/édité manuellement est régénéré, mais reste cohérent avec l'état affiché.
     this.importText = this.pipelineToText(v.pipeline, mode);
   }
@@ -1484,7 +1484,7 @@ ${this.importMode === 'yaml' ? `pipeline:
       this.activeImportVizId = null;
       if (convertedSteps.length) {
         this.messageSvc.warning(
-          `Pipeline importé dans "${v.label}" — étape(s) n°${convertedSteps.join(', ')} : type non reconnu, ` +
+          `Pipeline importé dans "${v.label}" - étape(s) n°${convertedSteps.join(', ')} : type non reconnu, ` +
           `converties en "Code JS" à partir de "params.code". Vérifiez-les dans l'éditeur visuel.`,
           { nzDuration: 8000 },
         );
@@ -1583,19 +1583,19 @@ ${this.importMode === 'yaml' ? `pipeline:
       if (!raw.type) {
         throw new Error(`Étape ${stepNum} : la clé "type" est manquante. Types disponibles : ${VALID_TYPES.join(', ')}. Pour une étape personnalisée, utilisez "type: js" avec "params.code", ou fournissez directement "params.code".`);
       }
-      throw new Error(`Étape ${stepNum} : type "${raw.type}" inconnu. Types valides : ${VALID_TYPES.map(t => `${t} (${TYPE_LABELS[t]})`).join(', ')}. Pour une étape personnalisée non standard, ajoutez "params.code" avec votre logique JS — elle sera importée comme étape "Code JS".`);
+      throw new Error(`Étape ${stepNum} : type "${raw.type}" inconnu. Types valides : ${VALID_TYPES.map(t => `${t} (${TYPE_LABELS[t]})`).join(', ')}. Pour une étape personnalisée non standard, ajoutez "params.code" avec votre logique JS - elle sera importée comme étape "Code JS".`);
     }
     // label facultatif : on le génère depuis le catalogue si absent
     if (!raw.label) raw.label = TYPE_LABELS[raw.type] ?? raw.type;
     const p = raw.params ?? {};
     switch (raw.type as StepType) {
       case 'fetch':
-        if (!p.table) throw new Error(`Étape ${stepNum} (Récupérer données) : "params.table" est requis — indiquez le nom de la table PLaTon, ex: SessionData.`);
+        if (!p.table) throw new Error(`Étape ${stepNum} (Récupérer données) : "params.table" est requis - indiquez le nom de la table PLaTon, ex: SessionData.`);
         break;
       case 'join': {
-        if (!p.table) throw new Error(`Étape ${stepNum} (Jointure) : "params.table" est requis — nom de la table à joindre.`);
-        if (!p.leftKey) throw new Error(`Étape ${stepNum} (Jointure) : "params.leftKey" est requis — colonne dans les données courantes servant de clé.`);
-        if (!p.rightKey) throw new Error(`Étape ${stepNum} (Jointure) : "params.rightKey" est requis — colonne correspondante dans la table à joindre.`);
+        if (!p.table) throw new Error(`Étape ${stepNum} (Jointure) : "params.table" est requis - nom de la table à joindre.`);
+        if (!p.leftKey) throw new Error(`Étape ${stepNum} (Jointure) : "params.leftKey" est requis - colonne dans les données courantes servant de clé.`);
+        if (!p.rightKey) throw new Error(`Étape ${stepNum} (Jointure) : "params.rightKey" est requis - colonne correspondante dans la table à joindre.`);
         const validJoinTypes = ['left', 'inner', 'right', 'full'];
         if (p.joinType !== undefined && !validJoinTypes.includes(p.joinType)) {
           throw new Error(`Étape ${stepNum} (Jointure) : "params.joinType" invalide ("${p.joinType}"). Valeurs possibles : ${validJoinTypes.join(', ')} (par défaut : left).`);
@@ -1603,26 +1603,26 @@ ${this.importMode === 'yaml' ? `pipeline:
         break;
       }
       case 'filter':
-        if (!p.field) throw new Error(`Étape ${stepNum} (Filtrer) : "params.field" est requis — nom de la colonne à tester.`);
+        if (!p.field) throw new Error(`Étape ${stepNum} (Filtrer) : "params.field" est requis - nom de la colonne à tester.`);
         if (!p.operator) throw new Error(`Étape ${stepNum} (Filtrer) : "params.operator" est requis. Opérateurs disponibles : == != > < >= <=`);
         break;
       case 'groupBy':
-        if (!p.groupField) throw new Error(`Étape ${stepNum} (Grouper par) : "params.groupField" est requis — colonne de regroupement.`);
+        if (!p.groupField) throw new Error(`Étape ${stepNum} (Grouper par) : "params.groupField" est requis - colonne de regroupement.`);
         break;
       case 'extract':
-        if (!p.extractField) throw new Error(`Étape ${stepNum} (Extraire champ) : "params.extractField" est requis — colonne dont on extrait la valeur.`);
+        if (!p.extractField) throw new Error(`Étape ${stepNum} (Extraire champ) : "params.extractField" est requis - colonne dont on extrait la valeur.`);
         break;
       case 'aggregate':
         if (!p.aggregateFn) throw new Error(`Étape ${stepNum} (Agréger) : "params.aggregateFn" est requis. Fonctions disponibles : avg (moyenne), sum (somme), count (nombre), min, max.`);
         break;
       case 'round':
-        if (p.decimals === undefined) throw new Error(`Étape ${stepNum} (Arrondir) : "params.decimals" est requis — nombre de décimales (ex: 0, 1, 2).`);
+        if (p.decimals === undefined) throw new Error(`Étape ${stepNum} (Arrondir) : "params.decimals" est requis - nombre de décimales (ex: 0, 1, 2).`);
         break;
       case 'divide':
-        if (p.divideBy === undefined) throw new Error(`Étape ${stepNum} (Diviser) : "params.divideBy" est requis — constante par laquelle diviser (ex: 60, 100).`);
+        if (p.divideBy === undefined) throw new Error(`Étape ${stepNum} (Diviser) : "params.divideBy" est requis - constante par laquelle diviser (ex: 60, 100).`);
         break;
       case 'js':
-        if (!p.code) throw new Error(`Étape ${stepNum} (Code JS) : "params.code" est requis — le code JavaScript à exécuter. Utilisez "return", ex: return input.length;`);
+        if (!p.code) throw new Error(`Étape ${stepNum} (Code JS) : "params.code" est requis - le code JavaScript à exécuter. Utilisez "return", ex: return input.length;`);
         break;
     }
     return this.dehydrateStep({ id: crypto.randomUUID(), type: raw.type, label: raw.label, params: p });

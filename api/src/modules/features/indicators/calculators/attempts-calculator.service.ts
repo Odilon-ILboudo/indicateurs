@@ -28,7 +28,7 @@ export class AttemptsCalculatorService {
       this.logger.log(` SessionData reçues: ${sessionData?.length || 0} enregistrements`);
       
       if (!sessionData || sessionData.length === 0) {
-        this.logger.warn(`⚠️ Aucune donnée pour user ${userId}, activité ${activityId}`);
+        this.logger.warn(` Aucune donnée pour user ${userId}, activité ${activityId}`);
         return 0;
       }
 

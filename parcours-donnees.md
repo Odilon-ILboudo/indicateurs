@@ -1,4 +1,4 @@
-# Parcours de données — du composant frontend à la base de données
+# Parcours de données - du composant frontend à la base de données
 
 Ce document complète `readme.md` (qui liste les routes API par contrôleur, §9)
 en traçant, **fichier par fichier et ligne par ligne**, le chemin complet de
@@ -13,18 +13,18 @@ toute la chaîne de fichiers sans avoir à grep le projet.
 ## Sommaire
 
 0. [Conventions](#0-conventions)
-1. [Fichier pivot frontend — `indicator.service.ts`](#1-fichier-pivot-frontend--indicatorservicets)
-2. [A — Tableau de bord (Overview)](#a--tableau-de-bord-overview)
-3. [B — Carte indicateur (`IndicatorCardComponent`)](#b--carte-indicateur-indicatorcardcomponent)
-4. [C — Détail d'un indicateur](#c--détail-dun-indicateur)
-5. [D — Préférences utilisateur](#d--préférences-utilisateur)
-6. [E — Administration des indicateurs](#e--administration-des-indicateurs)
-7. [F — Page activité & snapshots de groupe](#f--page-activité--snapshots-de-groupe)
-8. [G — Cours](#g--cours)
-9. [H — Ressources](#h--ressources)
-10. [I — Ingestion d'événements PLaTon](#i--ingestion-dévénements-platon)
-11. [J — Modules legacy / orphelins](#j--modules-legacy--orphelins)
-12. [Annexe — Tables et entités référencées](#annexe--tables-et-entités-référencées)
+1. [Fichier pivot frontend - `indicator.service.ts`](#1-fichier-pivot-frontend--indicatorservicets)
+2. [A - Tableau de bord (Overview)](#a--tableau-de-bord-overview)
+3. [B - Carte indicateur (`IndicatorCardComponent`)](#b--carte-indicateur-indicatorcardcomponent)
+4. [C - Détail d'un indicateur](#c--détail-dun-indicateur)
+5. [D - Préférences utilisateur](#d--préférences-utilisateur)
+6. [E - Administration des indicateurs](#e--administration-des-indicateurs)
+7. [F - Page activité & snapshots de groupe](#f--page-activité--snapshots-de-groupe)
+8. [G - Cours](#g--cours)
+9. [H - Ressources](#h--ressources)
+10. [I - Ingestion d'événements PLaTon](#i--ingestion-dévénements-platon)
+11. [J - Modules legacy / orphelins](#j--modules-legacy--orphelins)
+12. [Annexe - Tables et entités référencées](#annexe--tables-et-entités-référencées)
 
 ---
 
@@ -36,7 +36,7 @@ toute la chaîne de fichiers sans avoir à grep le projet.
 - `fichier.ts:42` = ligne 42 ; `fichier.ts:42-50` = plage de lignes.
 - Préfixe global de l'API : `/api` (`main.ts:30`, `setGlobalPrefix('api')`).
 - `environment.apiUrl` et `environment.indicatorsApiUrl` valent tous deux
-  `http://localhost:3001/api` (`environments/environment.ts:4-5`) — ce sont
+  `http://localhost:3001/api` (`environments/environment.ts:4-5`) - ce sont
   deux alias de la même base.
 - Deux connexions TypeORM : `'platon'` (lecture seule, tables PLaTon en
   `PascalCase` type `"Users"`, `"Courses"`...) et `'indicators'`
@@ -44,7 +44,7 @@ toute la chaîne de fichiers sans avoir à grep le projet.
 
 ---
 
-## 1. Fichier pivot frontend — `indicator.service.ts`
+## 1. Fichier pivot frontend - `indicator.service.ts`
 
 `core/services/indicator.service.ts` est injecté par presque toutes les
 pages. `apiUrl = ${environment.apiUrl}/indicators` (L11),
@@ -86,9 +86,9 @@ pages. `apiUrl = ${environment.apiUrl}/indicators` (L11),
 
 ---
 
-## A — Tableau de bord (Overview)
+## A - Tableau de bord (Overview)
 
-### A.1 Chargement initial — `/dashboard/overview`
+### A.1 Chargement initial - `/dashboard/overview`
 
 1. `features/dashboard/pages/overview/overview.page.ts:58-66` `ngOnInit()` :
    restaure le contexte enseignant sauvegardé
@@ -109,7 +109,7 @@ pages. `apiUrl = ${environment.apiUrl}/indicators` (L11),
    `user-preferences.service.ts:24-51` → repo `preferenceRepository`
    (table `user_indicator_preferences`, relation jointe → `indicator_definitions`).
 
-### A.2 Sélecteur de contexte enseignant — `TeacherContextSelectorComponent`
+### A.2 Sélecteur de contexte enseignant - `TeacherContextSelectorComponent`
 
 `features/dashboard/pages/widgets/teacher-context-selector/teacher-context-selector.component.ts`
 
@@ -141,7 +141,7 @@ pages. `apiUrl = ${environment.apiUrl}/indicators` (L11),
      - L250 `findAllActive()` → tous les indicateurs actifs
      - L253-261 boucle : skip si `indicator.contextType !== contextType`
        (L254), sinon `this.computeView(indicator.id, contextType, contextId, activityId)`
-       — **cascade complète décrite en B.2** (sans `vizId`, donc
+       - **cascade complète décrite en B.2** (sans `vizId`, donc
        `visualizations[0]`)
      - try/catch par indicateur (L258-260), retourne `{ computed: n }`
      - **But** : pré-remplir `indicator_values` avant que l'utilisateur
@@ -149,11 +149,11 @@ pages. `apiUrl = ${environment.apiUrl}/indicators` (L11),
 
 ---
 
-## B — Carte indicateur (`IndicatorCardComponent`)
+## B - Carte indicateur (`IndicatorCardComponent`)
 
 `shared/ui/indicator-card/indicator-card.component.ts`
 
-### B.1 Contexte `learner` / `teacher` / `admin` — valeur déjà pré-calculée
+### B.1 Contexte `learner` / `teacher` / `admin` - valeur déjà pré-calculée
 
 1. `ngOnInit()`/`ngOnChanges()` (L35-45) → `loadValue()` L78-126.
 2. Branche L109-126 : `indicatorService.getIndicatorValue(indicator.id, scope, context.scopeId)`
@@ -167,10 +167,10 @@ pages. `apiUrl = ${environment.apiUrl}/indicators` (L11),
      valeur précédente)
    - **Aucun calcul DSL ici** : si `indicator_values` ne contient rien pour
      ce contexte (ex. l'utilisateur n'a jamais activé l'indicateur), la
-     valeur retournée est vide/0 — la ligne est créée par
+     valeur retournée est vide/0 - la ligne est créée par
      `calculateAndStoreValue` (voir D.1) ou `recalculate` (E.3).
 
-### B.2 Contexte `course` / `group` / `activity` — `compute-view` (cascade complète)
+### B.2 Contexte `course` / `group` / `activity` - `compute-view` (cascade complète)
 
 1. Branche L82-107 de `loadValue()` : `activityId = scope === 'activity' ? undefined : context.activityId`
    (L89), puis `indicatorService.computeView(indicator.id, scope, context.scopeId, activityId, vizId)`
@@ -200,7 +200,7 @@ pages. `apiUrl = ${environment.apiUrl}/indicators` (L11),
       buckets avec `userIds`, appel
       `PlatonService.getUserNameMap(allIds)`
       (`platon.service.ts:173-184`) → `SELECT id, first_name, last_name
-      FROM "Users" WHERE id = ANY($1)` (table PLaTon `Users`) — remplace les
+      FROM "Users" WHERE id = ANY($1)` (table PLaTon `Users`) - remplace les
       UUID par des noms lisibles dans `structuredValue`.
    8. **Écriture cache** L344-353 : `indicatorValueModel.upsert(...)` sur
       `indicator_values` (clé de conflit `indicatorId, contextType, contextId`).
@@ -210,7 +210,7 @@ pages. `apiUrl = ${environment.apiUrl}/indicators` (L11),
       toujours défini ici (étape 5).
    10. L355 : retourne `{ value, structuredValue, metadata }`.
 
-### B.3 Sélection de visualisation — `selectViz`
+### B.3 Sélection de visualisation - `selectViz`
 
 1. Clic sur un `.viz-chip` (template `indicator-card.component.html:59`,
    visible si `visibleVisualizations.length > 1`) → `selectViz(viz, event)`
@@ -227,12 +227,12 @@ pages. `apiUrl = ${environment.apiUrl}/indicators` (L11),
 
 `indicator-card.component.html:7-8` :
 `[routerLink]="['/dashboard/indicator', indicator.id]"` avec
-`[queryParams]="queryParams"` — `queryParams` est passé en `@Input` par le
+`[queryParams]="queryParams"` - `queryParams` est passé en `@Input` par le
 parent (voir F pour `from: 'activity'` / `from: 'group-snapshot'`).
 
 ---
 
-## C — Détail d'un indicateur
+## C - Détail d'un indicateur
 
 `features/indicator-detail/indicator-detail.component.ts`
 
@@ -244,7 +244,7 @@ parent (voir F pour `from: 'activity'` / `from: 'group-snapshot'`).
    - Si `q['from'] === 'activity'` (L129-136) : initialise un contexte
      `activity` (transmis par `activity.page.ts`, voir F).
    - Sinon, si l'utilisateur est enseignant (L137-148) : restaure
-     `dashboard-settings.service.ts` → `getTeacherState()` — affiche la
+     `dashboard-settings.service.ts` → `getTeacherState()` - affiche la
      bannière lecture seule "Cours > Activité > Scope" décrite dans
      `readme.md` §10.
    - Appelle `loadIndicator(id)` L150.
@@ -258,11 +258,11 @@ parent (voir F pour `from: 'activity'` / `from: 'group-snapshot'`).
    `indicator-detail.component.html`) :
    - `indicatorService.setVizPreference(environment.defaultUserId, indicator.id, viz.id)`
      (L186) → **`PATCH /api/preferences/:indicatorId?userId=`** body
-     `{activeVizId}` — même endpoint que B.3 → D.2.
+     `{activeVizId}` - même endpoint que B.3 → D.2.
    - Si pas encore calculé pour cette viz → `computeViz(viz)`.
 4. `computeViz(viz)` L194-220 :
    `indicatorService.computeView(indicator.id, activeContextType, activeContextId, activityIdParam, viz.id)`
-   (L201-207) → **`POST /api/indicators/:id/compute-view`** — **cascade
+   (L201-207) → **`POST /api/indicators/:id/compute-view`** - **cascade
    identique à B.2**. Le résultat est stocké dans `results[viz.id]`, puis
    `buildChartOptions(viz, result)` (L222-279, purement local) construit les
    options ECharts (bar/gauge/line/histogram, voir `readme.md` §10
@@ -270,12 +270,12 @@ parent (voir F pour `from: 'activity'` / `from: 'group-snapshot'`).
 
 ---
 
-## D — Préférences utilisateur
+## D - Préférences utilisateur
 
-`api/src/modules/features/user-preferences/` — préfixe `@Controller('preferences')`
+`api/src/modules/features/user-preferences/` - préfixe `@Controller('preferences')`
 → `/api/preferences` (PAS de sous-préfixe `/indicators`).
 
-### D.1 Activer / désactiver un indicateur — `IndicatorSelectorComponent`
+### D.1 Activer / désactiver un indicateur - `IndicatorSelectorComponent`
 
 `features/indicator-selector/indicator-selector.component.ts`
 
@@ -311,8 +311,8 @@ parent (voir F pour `from: 'activity'` / `from: 'group-snapshot'`).
       - transition `true → false` : L131 `decrementUsageCount(indicatorId)`
         (L190-192 → `usageCount` -1).
 
-> ⚠️ **Précision** : le body accepte un champ `userRole`, mais il n'est
-> **jamais lu** côté service — la condition de skip de
+>  **Précision** : le body accepte un champ `userRole`, mais il n'est
+> **jamais lu** côté service - la condition de skip de
 > `calculateAndStoreValue` (ci-dessous) se base uniquement sur
 > `indicator.contextType` (champ de `IndicatorDefinition`), pas sur
 > `userRole`.
@@ -350,23 +350,23 @@ Méthode privée appelée par `createPreference` (POST, L84) et
 `DELETE /api/preferences/:indicatorId?userId=` →
 `user-preferences.controller.ts:41-47` `deletePreference` →
 `user-preferences.service.ts:137-152` :
-1. L138-140 `findOne({ where: { userId, indicatorId } })` — 404 si absent
+1. L138-140 `findOne({ where: { userId, indicatorId } })` - 404 si absent
    (L143).
 2. L147 `delete({ userId, indicatorId })` → suppression dans
    `user_indicator_preferences`.
 3. Si `wasVisible` était `true` : L150-151 `decrementUsageCount(indicatorId)`.
 
-*(Aucun composant identifié n'appelle ce DELETE — endpoint exposé mais non
+*(Aucun composant identifié n'appelle ce DELETE - endpoint exposé mais non
 câblé côté UI à ce jour.)*
 
 ---
 
-## E — Administration des indicateurs
+## E - Administration des indicateurs
 
 Onglet "Indicateurs" → `features/dashboard/pages/indicators/indicators.page.ts`,
 visible pour `canManageIndicators`/`canCreateIndicators` (`RoleService`).
 
-### E.1 Liste admin + CRUD — `AdminIndicatorManagerComponent`
+### E.1 Liste admin + CRUD - `AdminIndicatorManagerComponent`
 
 `features/admin/admin-indicator-manager.component.ts`
 
@@ -393,10 +393,10 @@ visible pour `canManageIndicators`/`canCreateIndicators` (`RoleService`).
    (modale CRUD complète, voir tableau ci-dessous) ; recharge `load()` si la
    modale retourne "saved".
 5. `openFamilyWizard()` / `openFamilyMember()` L483-522 : enchaîne plusieurs
-   `IndicatorBuilderComponent` (un par contexte de la famille) — voir
+   `IndicatorBuilderComponent` (un par contexte de la famille) - voir
    `project_indicateur_famille_feature` pour le détail fonctionnel.
 
-### `IndicatorBuilderComponent` — `features/admin/indicator-builder.component.ts`
+### `IndicatorBuilderComponent` - `features/admin/indicator-builder.component.ts`
 
 | Action UI | Méthode (L) | Appel → URL |
 |---|---|---|
@@ -406,10 +406,10 @@ visible pour `canManageIndicators`/`canCreateIndicators` (`RoleService`).
 | Sélection cours pour "Tester" (élèves) | L1258 | `getCourseStudents(courseId)` → **`GET /api/indicators/course/:courseId/students`** |
 | Bouton "Prévisualiser" | L1367 | `previewFormulaRaw(buildFormulaForViz(v), context)` → **`POST /api/indicators/preview`** |
 | Bouton "Étapes de débogage" | L1390 | `previewFormulaSteps(buildFormulaForViz(v), context)` → **`POST /api/indicators/preview-steps`** |
-| Sauvegarde — édition | L1672-1673 | `updateIndicator(modalData.indicator.id, payload)` → **`PATCH /api/indicators/:id`** |
-| Sauvegarde — création | L1672-1673 | `createIndicator(payload)` → **`POST /api/indicators`** |
+| Sauvegarde - édition | L1672-1673 | `updateIndicator(modalData.indicator.id, payload)` → **`PATCH /api/indicators/:id`** |
+| Sauvegarde - création | L1672-1673 | `createIndicator(payload)` → **`POST /api/indicators`** |
 
-#### `POST /indicators` et `PATCH /indicators/:id` — cascade
+#### `POST /indicators` et `PATCH /indicators/:id` - cascade
 
 - `indicators.controller.ts:108-110` `createIndicator` →
   `indicators.service.ts:117-135` `create` : insère dans
@@ -445,7 +445,7 @@ jointure sur `CourseMembers`).
   en erreur (avec `error`, sans réduire le résultat à 0), n'écrit jamais de
   log. Retourne `{ steps: [...] }`.
 
-### E.3 Recalcul d'un indicateur — `recalculate`
+### E.3 Recalcul d'un indicateur - `recalculate`
 
 `AdminIndicatorManagerComponent.recalculate(indicator)` L607-622
 (`nz-popconfirm`) → `indicatorSvc.recalculateIndicator(indicator.id)`
@@ -463,7 +463,7 @@ jointure sur `CourseMembers`).
      (table PLaTon `SessionData`).
    - L195-199 : détermine `latestActivityId` (session la plus récente).
    - L201-205 : `formulaInterpreter.interpret(formula, { userId, activityId, indicatorId })`
-     (`formula-interpreter.service.ts:71`) — écrit aussi un log dans
+     (`formula-interpreter.service.ts:71`) - écrit aussi un log dans
      `indicator_execution_logs` (car `indicatorId` fourni).
    - L207-216 : `indicatorValueModel.upsert(...)` sur `indicator_values`,
      `contextType: 'learner'`, `contextId: userId`.
@@ -485,7 +485,7 @@ jointure sur `CourseMembers`).
   `indicators.controller.ts:188-193` `rollbackFormula` →
   `indicators.service.ts:395-402` `rollbackFormula` :
   1. L396 `formulaVersionModel.findOne({ where: { id: versionId, indicatorId: id } })`
-     (table `indicator_formula_versions`) — 404 si introuvable.
+     (table `indicator_formula_versions`) - 404 si introuvable.
   2. L399-400 `findById(id)` (L43-47), puis `indicator.formula = version.formula`.
   3. L401 `indicatorModel.save(indicator)` → écrit `indicator_definitions`.
   4. Le rollback **ne crée pas** de nouvelle version (contrairement à
@@ -513,20 +513,20 @@ triées par date décroissante). Ces lignes sont écrites par `interpret()`
    triée par `table_name, ordinal_position`.
 2. **Filtrage de sécurité** L358 :
    `if (PlatonService.SENSITIVE_COLUMN_PATTERN.test(row.column_name)) continue;`
-   — pattern défini `platon.service.ts:14-15` :
+   - pattern défini `platon.service.ts:14-15` :
    `/password|passwd|secret|token|api[_-]?key|hash|salt|credential|email|phone|discord|ip_address/i`.
 3. L356-363 : regroupe par table dans une `Map`, retourne
    `[{ name, columns: [{name, type}] }]`.
 
 > Le même pattern est réutilisé par `getSafeColumns` (L372-393) et
 > `buildSafeSelect` (L396-399), utilisés par les étapes `fetch`/`join` du
-> moteur DSL et par `queryTableForGroup` (L263-299) — la sécurité est donc
+> moteur DSL et par `queryTableForGroup` (L263-299) - la sécurité est donc
 > cohérente entre le schéma exposé au builder et les requêtes réellement
 > exécutées par `interpret()` (B.2).
 
 ---
 
-## F — Page activité & snapshots de groupe
+## F - Page activité & snapshots de groupe
 
 `/dashboard/courses/:id/activities/:activityId` →
 `features/courses/course/activity/activity.page.ts`
@@ -539,16 +539,16 @@ triées par date décroissante). Ces lignes sont écrites par `interpret()`
    Filtre `activityIndicators` (`contextType === 'activity'`) et
    `groupIndicators` (`contextType === 'group'`).
 2. `presenter.contextChange.subscribe(...)` L124-161 (déclenché par
-   `ActivityPresenter`, qui charge l'activité — voir G.4) construit :
-   - `activityContext: DashboardContext` (`scope: 'activity'`, L136-140) —
+   `ActivityPresenter`, qui charge l'activité - voir G.4) construit :
+   - `activityContext: DashboardContext` (`scope: 'activity'`, L136-140) -
      consommé par `<ui-indicator-card>` pour `activityIndicators` →
      **cascade B.2** avec `contextType: 'activity'`.
    - `indicatorQueryParams` (`from: 'activity', activityId, courseId,
-     activityName, courseName`, L143-149) — passé en `[queryParams]` aux
+     activityName, courseName`, L143-149) - passé en `[queryParams]` aux
      `<ui-indicator-card>` pour la navigation vers `indicator-detail` (C,
      branche `q['from'] === 'activity'`).
 
-### F.2 Section "Par groupe" — `GroupSnapshotsPanelComponent`
+### F.2 Section "Par groupe" - `GroupSnapshotsPanelComponent`
 
 `features/courses/course/activity/group-snapshots-panel.component.ts`
 
@@ -596,9 +596,9 @@ triées par date décroissante). Ces lignes sont écrites par `interpret()`
    `indicators.service.ts:444-448` : `findOne` puis
    `snapshotModel.remove(snapshot)` → delete dans `indicator_snapshots`.
 
-### F.3 Rafraîchissement automatique des snapshots — `refreshSnapshots`
+### F.3 Rafraîchissement automatique des snapshots - `refreshSnapshots`
 
-`indicators.service.ts:455-482` `refreshSnapshots(indicatorId, activityId)` —
+`indicators.service.ts:455-482` `refreshSnapshots(indicatorId, activityId)` -
 **non exposée par une route** ; appelée en fire-and-forget depuis
 l'ingestion d'événements (voir I.3). Flux :
 
@@ -607,7 +607,7 @@ l'ingestion d'événements (voir I.3). Flux :
 2. L459-460 : récupère l'`IndicatorDefinition` correspondant (sinon return).
 3. L462-481 : double boucle snapshot × visualisation de l'indicateur →
    `computeView(snapshot.indicatorId, snapshot.contextType, snapshot.contextId, snapshot.activityId, viz.id, true)`
-   (`forceRefresh = true`, bypass du cache existant) — **cascade identique à
+   (`forceRefresh = true`, bypass du cache existant) - **cascade identique à
    B.2**, avec écriture forcée dans `indicator_values` et log dans
    `indicator_execution_logs`.
 4. L475-479 : try/catch par snapshot/viz, `logger.warn` en cas d'erreur sans
@@ -615,7 +615,7 @@ l'ingestion d'événements (voir I.3). Flux :
 
 ---
 
-## G — Cours
+## G - Cours
 
 Module `api/src/modules/features/courses/` (`@Controller('v1/courses')` →
 `/api/v1/courses`). Le service interroge directement
@@ -627,7 +627,7 @@ Côté frontend, ces pages utilisent `CourseService`
 L57) via `CoursePresenter` (`features/courses/course/course.presenter.ts`).
 **Important** : la plupart des opérations d'**écriture** (membres, sections,
 groupes, démos...) sont des **stubs no-op** côté `course-browser.ts`
-(`of({} as Course)` ou `of(undefined)`) — seules les **lectures** listées
+(`of({} as Course)` ou `of(undefined)`) - seules les **lectures** listées
 ci-dessous déclenchent un vrai appel HTTP.
 
 ### G.1 Liste / recherche des cours
@@ -713,7 +713,7 @@ Backend : `courses.controller.ts:9-24` `search` (params `search`, `members`,
 ### G.3 Membres et groupes de TP d'un cours
 
 - `features/courses/course/members/members.page.ts:74-98` `ngOnInit()` :
-  pas d'appel direct — `CourseMemberSearchBarComponent`/
+  pas d'appel direct - `CourseMemberSearchBarComponent`/
   `CourseMemberTableComponent` (stubs `@platon/feature/course/browser`)
   appellent en interne `courseService.searchMembers` (`course-browser.ts`
   ~L154-163) → **`GET /api/v1/courses/:id/members?roles=&role=&search=`** →
@@ -756,7 +756,7 @@ Backend : `courses.controller.ts:9-24` `search` (params `search`, `members`,
     `deleteGroup` (`groups.page.ts:63-90`) → tous **stubs no-op** côté
     `course-browser.ts`.
 
-### G.4 Page activité — résultats, détail, CSV
+### G.4 Page activité - résultats, détail, CSV
 
 `ActivityPresenter` (consommé par `activity.page.ts`, voir F.1) :
 
@@ -772,7 +772,7 @@ Backend : `courses.controller.ts:9-24` `search` (params `search`, `members`,
 
 - **Résultats** : `getActivityResults(activityId)` →
   **`GET /api/v1/courses/:courseId/activities/:activityId/results`**
-  (`:courseId` déclaré mais **non lu** par le contrôleur — ignoré) →
+  (`:courseId` déclaré mais **non lu** par le contrôleur - ignoré) →
   `courses.controller.ts:56-58` `getActivityResults` →
   `courses.service.ts:419-541` `getActivityResults` (3 requêtes) :
   1. `exerciseRows` : `SELECT sd.resource_id, ..., AVG(sd.grade),
@@ -817,7 +817,7 @@ Backend : `courses.controller.ts:9-24` `search` (params `search`, `members`,
 
 ---
 
-## H — Ressources
+## H - Ressources
 
 Module `api/src/modules/features/resources/` (`@Controller('v1/resources')`
 → `/api/v1/resources`), même pattern SQL brut sur `'platon'`. Frontend :
@@ -827,7 +827,7 @@ Module `api/src/modules/features/resources/` (`@Controller('v1/resources')`
 Là aussi, la plupart des opérations d'écriture (`update`, `delete`, `join`,
 `duplicate`, `watch`...) sont des **stubs no-op** `of(undefined)`.
 
-### H.1 Page de recherche — `features/resources/resources.page.ts`
+### H.1 Page de recherche - `features/resources/resources.page.ts`
 
 `ngOnInit()` L188-300 :
 
@@ -878,12 +878,12 @@ Là aussi, la plupart des opérations d'écriture (`update`, `delete`, `join`,
   - L87-103 : `SELECT r.id, r.name, ... FROM "Resources" r ${where} ORDER BY
     ${orderField} ${orderDir} LIMIT $n OFFSET $n`. Mapping `mapResource(r)`
     (L106, L220-239).
-  - ⚠️ Le paramètre `views=true` ("récemment consultées", commentaire L27)
-    **n'est pas implémenté** — aucune condition basée sur `filters.views`.
+  -  Le paramètre `views=true` ("récemment consultées", commentaire L27)
+    **n'est pas implémenté** - aucune condition basée sur `filters.views`.
 - `loadMore()` L340-361 (scroll infini, `ViewportIntersectionDirective`) →
   même `search()` avec `offset: items.length`.
 
-### H.2 Détail ressource — `ResourcePresenter.refresh(id)`
+### H.2 Détail ressource - `ResourcePresenter.refresh(id)`
 
 `resource.presenter.ts:403-425` (déclenché par `activatedRoute.paramMap`,
 L48-51) :
@@ -901,11 +901,11 @@ Sous-pages `features/resources/resource/{overview,browse,settings,events}` :
 consomment `ResourcePresenter.contextChange` déjà chargé, pas de nouveaux
 appels indicateurs identifiés. `settings/members/members.page.ts` utilise
 `presenter.searchMembers()` → stub `of({resources:[], total:0})`
-(`resource-browser.ts:120-122`) — aucune donnée réelle.
+(`resource-browser.ts:120-122`) - aucune donnée réelle.
 
 ---
 
-## I — Ingestion d'événements PLaTon
+## I - Ingestion d'événements PLaTon
 
 Module `api/src/modules/features/ingestion/` (`@Controller('ingest')` →
 `/api/ingest`).
@@ -926,12 +926,12 @@ même normalisation par event (L39-42), **fire-and-forget**
 `ingestionService.ingestBatch(processedEvents)` (L44-46), répond
 `{ status: 'accepted', message: '<n> events received' }` (HTTP 202).
 
-### I.3 Cascade — `IngestionService.ingestEvent` (`ingestion.service.ts:45-87`)
+### I.3 Cascade - `IngestionService.ingestEvent` (`ingestion.service.ts:45-87`)
 
-1. L49 `isValidEvent(event)` (L204-220) — vérifie `type`, `userId`, force
+1. L49 `isValidEvent(event)` (L204-220) - vérifie `type`, `userId`, force
    `timestamp` si absent. Invalide → warning + `return`.
 2. L54 `findAffectedIndicators(event)` (L106-118) :
-   - `refreshIndicatorCache()` (L107, L180-202) — recharge
+   - `refreshIndicatorCache()` (L107, L180-202) - recharge
      `indicatorDefinitionModel.find({ where: { isActive: true } })`
      (L188-190, table `indicator_definitions`) si le cache (TTL 60000 ms,
      L28) est expiré ou vide.
@@ -956,14 +956,14 @@ même normalisation par event (L39-42), **fire-and-forget**
         {...})` (L169-177, `EventEmitter2` interne).
    b. **Fire-and-forget** L65-67 : si `event.activityId` présent,
       `this.indicatorsService.refreshSnapshots(indicator.id, event.activityId)`
-      (sans `await`, `.catch()` warning) — **cascade décrite en F.3**.
+      (sans `await`, `.catch()` warning) - **cascade décrite en F.3**.
 5. L71-75 `eventEmitter.emit('ingestion.event.processed', { eventType,
    indicatorsCount, processingTime })`.
 6. Erreur globale → `eventEmitter.emit('ingestion.event.error', {...})`
-   (L80-84) puis re-throw (L85) — capturée par le `.catch()` du contrôleur.
+   (L80-84) puis re-throw (L85) - capturée par le `.catch()` du contrôleur.
 
 `ingestBatch(events)` (L89-104) : boucle séquentielle, appelle `ingestEvent`
-pour chaque event (L95), comptabilise `{ total, processed, failed }` (L103) —
+pour chaque event (L95), comptabilise `{ total, processed, failed }` (L103) -
 valeur jamais consultée par le contrôleur (appel fire-and-forget).
 
 ### I.4 Méthodes annexes (non routées)
@@ -986,13 +986,13 @@ valeur jamais consultée par le contrôleur (appel fire-and-forget).
 > intercepte les requêtes `POST/PUT/PATCH/DELETE` et, si l'URL contient
 > `/exercises/.../answers` ou `/sessions`, traduit la réponse en
 > `IndicatorEvent` (`indicator.interceptor.ts:24-58`). **Ces URLs
-> (`/exercises`, `/sessions`) ne sont pas exposées par ce microservice** —
+> (`/exercises`, `/sessions`) ne sont pas exposées par ce microservice** -
 > l'interceptor est prévu pour s'activer une fois le frontend intégré dans
 > l'application PLaTon principale (où ces routes existent réellement).
 
 ---
 
-## J — Modules legacy / orphelins
+## J - Modules legacy / orphelins
 
 ### J.1 `activity-attempts` (legacy)
 
@@ -1018,7 +1018,7 @@ avant réussite", puis fait la moyenne sur les exercices réussis.
 appelle `core/services/activity-indicator.service.ts:29-31`
 `getValue(userId, activityId, indicatorId)` → **`GET /indicators/activity-attempts/value?userId=&activityId=&indicatorId=`**.
 Ce composant est exporté par `shared/ui/index.ts:8` mais **n'est monté dans
-aucune route** (`app.routes.ts`/`dashboard.routes.ts`) — orphelin, non
+aucune route** (`app.routes.ts`/`dashboard.routes.ts`) - orphelin, non
 accessible depuis l'UI. `readme.md` §13 note que ce module devrait être migré
 vers le moteur DSL.
 
@@ -1027,7 +1027,7 @@ vers le moteur DSL.
 - **`core/services/group.service.ts`** : `getGroupsForTeacher(teacherId)`
   (L18-20 → `GET /api/groups?teacherId=`) et `getGroupMembers(groupId)`
   (L22-24 → `GET /api/groups/members?groupId=`). **Aucun composant n'injecte
-  `GroupService`** — service défini mais jamais utilisé. Backend
+  `GroupService`** - service défini mais jamais utilisé. Backend
   correspondant : `groups.controller.ts:13-16`/`24-27` → `groups.service.ts:8-14`
   → `PlatonService.getGroupsForTeacher` (`platon.service.ts:240-255`,
   `SELECT cg.id, cg.name, cg.course_id, c.name FROM "CourseGroups" cg JOIN
@@ -1046,13 +1046,13 @@ vers le moteur DSL.
   'Utilisateur non trouvé' }` (HTTP 200, pas de 404). Sinon projection
   camelCase sans exposer les champs sensibles (`active`, `*_login`,
   `*_at`, `discord_id`, `last_activity`).
-- **`core/services/indicator-event.service.ts`** : voir I.4 — utilisé par
+- **`core/services/indicator-event.service.ts`** : voir I.4 - utilisé par
   l'intercepteur global mais ses cibles (`/exercises`, `/sessions`) ne sont
   pas exposées par ce microservice.
 
 ---
 
-## Annexe — Tables et entités référencées
+## Annexe - Tables et entités référencées
 
 ### Tables PLaTon (connexion `'platon'`, lecture seule)
 

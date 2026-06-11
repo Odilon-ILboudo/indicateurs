@@ -135,7 +135,7 @@ export interface FamilyStartResult {
   template: `
     <div class="family-start">
       <p style="color:#888;font-size:13px;margin-top:0">
-        Une famille regroupe plusieurs indicateurs créés ensemble — un par contexte sélectionné —
+        Une famille regroupe plusieurs indicateurs créés ensemble - un par contexte sélectionné -
         partageant le même nom de base, la même description et les mêmes événements déclencheurs.
         Vous configurerez ensuite la visualisation et la formule de chacun, l'un après l'autre.
       </p>
@@ -501,7 +501,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
       description: start.description,
       requiredEvents: start.requiredEvents,
       contextType,
-      name: `${start.familyName} — ${CONTEXT_LABELS[contextType]}`,
+      name: `${start.familyName} - ${CONTEXT_LABELS[contextType]}`,
     };
     const ref = this.modalSvc.create({
       nzTitle: preset.name,

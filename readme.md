@@ -1,4 +1,4 @@
-# Indicateurs — Documentation complète du projet
+# Indicateurs - Documentation complète du projet
 
 Ce document décrit l'état réel du dépôt `indicateurs/` : architecture, modèle de
 données, moteur de calcul DSL, routes API, frontend, sécurité et limites connues.
@@ -6,9 +6,9 @@ L'objectif est qu'une lecture complète de ce fichier suffise à comprendre le
 fonctionnement global du projet sans avoir à parcourir tout le code source.
 
 > Documents complémentaires :
-> - [`guide.md`](guide.md) — guide pas-à-pas pour créer et tester chaque type
+> - [`guide.md`](guide.md) - guide pas-à-pas pour créer et tester chaque type
 >   d'indicateur (les 6 `contextType`, toutes les fonctionnalités du DSL).
-> - [`parcours-donnees.md`](parcours-donnees.md) — pour chaque route listée en
+> - [`parcours-donnees.md`](parcours-donnees.md) - pour chaque route listée en
 >   §9, trace fichier par fichier et ligne par ligne le chemin complet
 >   composant frontend → service → contrôleur → service backend → accès BDD.
 
@@ -18,14 +18,14 @@ fonctionnement global du projet sans avoir à parcourir tout le code source.
 2. [Démarrage](#2-démarrage)
 3. [Architecture des dossiers](#3-architecture-des-dossiers)
 4. [Bases de données](#4-bases-de-données)
-5. [Modèle de données — entités `indicators`](#5-modèle-de-données--entités-indicators)
-6. [Moteur DSL — calcul des indicateurs](#6-moteur-dsl--calcul-des-indicateurs)
-7. [Modèle "Option B+" — contextType + visualizations](#7-modèle-option-b--contexttype--visualizations)
+5. [Modèle de données - entités `indicators`](#5-modèle-de-données--entités-indicators)
+6. [Moteur DSL - calcul des indicateurs](#6-moteur-dsl--calcul-des-indicateurs)
+7. [Modèle "Option B+" - contextType + visualizations](#7-modèle-option-b--contexttype--visualizations)
 8. [Familles d'indicateurs et visibilité par rôle](#8-familles-dindicateurs-et-visibilité-par-rôle)
 9. [Routes API](#9-routes-api)
 10. [Frontend](#10-frontend)
 11. [Flux métier de bout en bout](#11-flux-métier-de-bout-en-bout)
-12. [Sécurité — état actuel](#12-sécurité--état-actuel)
+12. [Sécurité - état actuel](#12-sécurité--état-actuel)
 13. [Limites connues / reste à faire](#13-limites-connues--reste-à-faire)
 
 ---
@@ -44,7 +44,7 @@ plateforme PLaTon. Il combine :
 **Philosophie centrale : zéro redéploiement.** Un administrateur crée et configure
 des indicateurs (formule de calcul, visualisations, seuils, contextes) entièrement
 depuis l'interface. La formule est stockée en JSONB et interprétée à la volée par
-un **moteur DSL "pipeline"** (voir section 6) — aucune modification de code ni
+un **moteur DSL "pipeline"** (voir section 6) - aucune modification de code ni
 redéploiement n'est nécessaire pour ajouter un nouvel indicateur.
 
 ---
@@ -55,8 +55,8 @@ redéploiement n'est nécessaire pour ajouter un nouvel indicateur.
 
 - Node.js + npm
 - Deux bases PostgreSQL accessibles :
-  - **PLaTon** (lecture seule — données pédagogiques existantes)
-  - **indicators** (lecture/écriture — créée/synchronisée automatiquement par
+  - **PLaTon** (lecture seule - données pédagogiques existantes)
+  - **indicators** (lecture/écriture - créée/synchronisée automatiquement par
     TypeORM en développement, `synchronize: true`)
 
 ### Variables d'environnement (`api/.env`)
@@ -95,7 +95,7 @@ cd api
 npm install
 nest start --watch     # mode développement, recommandé (recompile auto)
 # ou
-npm run build && npm run start   # mode prod — lit dist/, recompiler après chaque changement
+npm run build && npm run start   # mode prod - lit dist/, recompiler après chaque changement
 ```
 
 Le serveur écoute sur `http://localhost:3001`, préfixe global `/api`, CORS ouvert
@@ -118,65 +118,65 @@ Application disponible sur `http://localhost:4200`.
 ### 3.1 Backend (`api/src/`)
 
 ```
-main.ts                — bootstrap NestJS, prefix /api, CORS, ValidationPipe global
-app.module.ts          — module racine, importe tous les modules ci-dessous
+main.ts                - bootstrap NestJS, prefix /api, CORS, ValidationPipe global
+app.module.ts          - module racine, importe tous les modules ci-dessous
 modules/
   core/
-    config/configuration.ts     — lecture des variables d'env (ports, BDD, Redis, cron)
-    database/                   — connexions TypeORM (PLATON_DATA_SOURCE + connexion 'indicators')
-    guards/admin.guard.ts       — STUB : retourne toujours true, non branché sur les routes
-    platon/platon.service.ts    — toutes les requêtes SQL brutes vers la BDD PLaTon
+    config/configuration.ts     - lecture des variables d'env (ports, BDD, Redis, cron)
+    database/                   - connexions TypeORM (PLATON_DATA_SOURCE + connexion 'indicators')
+    guards/admin.guard.ts       - STUB : retourne toujours true, non branché sur les routes
+    platon/platon.service.ts    - toutes les requêtes SQL brutes vers la BDD PLaTon
   features/
-    indicators/                 — cœur du projet : entités, moteur DSL, CRUD, snapshots
-      entities/                 — 5 entités TypeORM (voir section 5)
-      calculators/              — legacy hardcodé, ne plus utiliser
-      interpreter/formula-interpreter.service.ts — moteur DSL (voir section 6)
-      indicators.controller.ts  — toutes les routes /api/indicators*
-      indicators.service.ts     — logique métier (computeView, recalculate, snapshots…)
-    user-preferences/           — préférences d'affichage par utilisateur
-    ingestion/                  — réception d'événements PLaTon en temps réel
-    aggregation/                — cron quotidien/hebdo (agrégations)
-    activity-indicator/         — endpoint legacy spécifique à un indicateur d'activité
-    courses/                    — proxy lecture PLaTon : cours, sections, activités, groupes, résultats
-    resources/                  — proxy lecture PLaTon : ressources, arbre de cercles
-    groups/                     — groupes de TP d'un enseignant
-    users/                      — accès utilisateurs PLaTon (lecture)
+    indicators/                 - cœur du projet : entités, moteur DSL, CRUD, snapshots
+      entities/                 - 5 entités TypeORM (voir section 5)
+      calculators/              - legacy hardcodé, ne plus utiliser
+      interpreter/formula-interpreter.service.ts - moteur DSL (voir section 6)
+      indicators.controller.ts  - toutes les routes /api/indicators*
+      indicators.service.ts     - logique métier (computeView, recalculate, snapshots…)
+    user-preferences/           - préférences d'affichage par utilisateur
+    ingestion/                  - réception d'événements PLaTon en temps réel
+    aggregation/                - cron quotidien/hebdo (agrégations)
+    activity-indicator/         - endpoint legacy spécifique à un indicateur d'activité
+    courses/                    - proxy lecture PLaTon : cours, sections, activités, groupes, résultats
+    resources/                  - proxy lecture PLaTon : ressources, arbre de cercles
+    groups/                     - groupes de TP d'un enseignant
+    users/                      - accès utilisateurs PLaTon (lecture)
 ```
 
 ### 3.2 Frontend (`frontend/src/app/`)
 
 ```
-app.routes.ts           — route racine → redirige vers /dashboard
+app.routes.ts           - route racine → redirige vers /dashboard
 core/
-  guards/indicator.guard.ts        — vérifie l'existence d'un indicateur :id
-  interceptors/auth.interceptor.ts — VIDE (stub, aucun token injecté)
-  models/indicator.model.ts        — types partagés (IndicatorDefinition, IndicatorVisualization…)
+  guards/indicator.guard.ts        - vérifie l'existence d'un indicateur :id
+  interceptors/auth.interceptor.ts - VIDE (stub, aucun token injecté)
+  models/indicator.model.ts        - types partagés (IndicatorDefinition, IndicatorVisualization…)
   services/
-    indicator.service.ts           — client HTTP + caches (préférences viz, visibilité)
-    dashboard-settings.service.ts  — préférences/contexte de l'utilisateur courant
-    role.service.ts                — rôle courant + règles de visibilité (section 8)
+    indicator.service.ts           - client HTTP + caches (préférences viz, visibilité)
+    dashboard-settings.service.ts  - préférences/contexte de l'utilisateur courant
+    role.service.ts                - rôle courant + règles de visibilité (section 8)
     user.service.ts / group.service.ts...
 features/
   dashboard/
-    dashboard.page.ts/html         — shell (sidebar + toolbar + router-outlet)
+    dashboard.page.ts/html         - shell (sidebar + toolbar + router-outlet)
     pages/
-      overview/                    — grille des indicateurs actifs (+ sélecteur de contexte enseignant)
-      indicators/                  — onglet "Indicateurs" : préférences + (admin) gestion
+      overview/                    - grille des indicateurs actifs (+ sélecteur de contexte enseignant)
+      indicators/                  - onglet "Indicateurs" : préférences + (admin) gestion
       widgets/sidebar/ + toolbar/ + teacher-context-selector/
   admin/
-    admin-indicator-manager.component.ts  — table CRUD admin
-    indicator-builder.component.ts        — wizard de création/édition (3 étapes, voir section 6/7)
-    indicator-config.component.ts         — config rapide d'affichage
-  indicator-selector/    — l'utilisateur active/désactive ses indicateurs
-  indicator-detail/      — page détail d'un indicateur (tabs par visualisation)
-  activity-indicator/    — ancien composant legacy
-  courses/                — pages "Cours" copiées/adaptées depuis PLaTon (voir 3.3)
-  resources/              — pages "Ressources" copiées/adaptées depuis PLaTon (voir 3.3)
+    admin-indicator-manager.component.ts  - table CRUD admin
+    indicator-builder.component.ts        - wizard de création/édition (3 étapes, voir section 6/7)
+    indicator-config.component.ts         - config rapide d'affichage
+  indicator-selector/    - l'utilisateur active/désactive ses indicateurs
+  indicator-detail/      - page détail d'un indicateur (tabs par visualisation)
+  activity-indicator/    - ancien composant legacy
+  courses/                - pages "Cours" copiées/adaptées depuis PLaTon (voir 3.3)
+  resources/              - pages "Ressources" copiées/adaptées depuis PLaTon (voir 3.3)
 shared/
   ui/indicator-card/ + statistic-card/ + layout-block/
   pipes/duration.pipe.ts
-  utils/indicator-family-grouping.ts  — regroupement par famille (section 8)
-  styles/                 — SCSS, thèmes Material clair/sombre, ng-zorro
+  utils/indicator-family-grouping.ts  - regroupement par famille (section 8)
+  styles/                 - SCSS, thèmes Material clair/sombre, ng-zorro
 ```
 
 ### 3.3 Stubs PLaTon (`frontend/src/platon-stubs/`)
@@ -201,7 +201,7 @@ Points clés de ces stubs :
   (pas de vraie authentification).
 - `CourseService` / `ResourceService` font de **vrais appels HTTP** vers
   `/api/v1/courses*` et `/api/v1/resources*` (modules `courses`/`resources` du
-  backend) — ce ne sont pas des stubs vides pour la lecture, seules les
+  backend) - ce ne sont pas des stubs vides pour la lecture, seules les
   **opérations d'écriture** (créer/déplacer/etc.) sont des no-ops car la BDD
   PLaTon est en lecture seule.
 - Les composants UI (`UiLayoutTabsComponent`, `UiStatisticCardComponent`,
@@ -214,7 +214,7 @@ Points clés de ces stubs :
 ### 4.1 Base PLaTon (lecture seule)
 
 Toutes les tables du schéma `public` sont accessibles dynamiquement dans le
-builder DSL (plus de whitelist statique) — validées via `information_schema` et
+builder DSL (plus de whitelist statique) - validées via `information_schema` et
 une regex anti-injection dans `PlatonService.queryTable()`.
 
 Tables principales :
@@ -227,11 +227,11 @@ Tables principales :
 | `CourseGroupsMember` (`group_id` varchar, `user_id`) | Appartenance aux groupes |
 
 **Particularités du schéma PLaTon (à connaître pour écrire des requêtes/formules)** :
-- `Courses` n'a **pas** de colonne `isActive` — filtrer uniquement par `owner_id`.
+- `Courses` n'a **pas** de colonne `isActive` - filtrer uniquement par `owner_id`.
 - `Activities` n'a **pas** de colonne `name` : le titre est dans
   `source->'variables'->>'title'`, avec fallback sur `Resources.name` via
   `LEFT JOIN "Resources" r ON r.id = (a.source->>'resource')::uuid`.
-- Aucune contrainte de clé étrangère n'est déclarée dans `information_schema` —
+- Aucune contrainte de clé étrangère n'est déclarée dans `information_schema` -
   les relations entre tables (ex. `SessionData.resource_id` → `Resources.id`) ne
   sont **pas** dérivables automatiquement du schéma.
 
@@ -242,7 +242,7 @@ créées/migrées automatiquement au démarrage). 6 entités, détaillées secti
 
 ---
 
-## 5. Modèle de données — entités `indicators`
+## 5. Modèle de données - entités `indicators`
 
 ### `IndicatorDefinition` (table `indicator_definitions`)
 
@@ -269,8 +269,8 @@ La valeur calculée pour un contexte donné.
 - Pour `course`/`group`/`activity` : `contextId` peut être une **clé composite**
   `courseId:activityId:vizId` (voir `computeView`, section 6).
 - Pour `learner` : `contextId = userId`.
-- `value: float` — toujours présent (0 si le résultat n'est pas un scalaire).
-- `metadata: jsonb` — `{ count?, lastUpdate?, history?, structuredValue?, users?, ... }`
+- `value: float` - toujours présent (0 si le résultat n'est pas un scalaire).
+- `metadata: jsonb` - `{ count?, lastUpdate?, history?, structuredValue?, users?, ... }`
   pour les résultats non scalaires (bar-chart, histogram).
 
 ### `IndicatorFormulaVersion` (table `indicator_formula_versions`)
@@ -287,7 +287,7 @@ Un log par exécution de pipeline : `indicatorId`, `userId` (ou `groupId`),
 
 "Carte épinglée" d'un indicateur `group` pour une activité donnée (panneau
 "Par groupe" de la page activité). Contrainte unique
-`(indicatorId, contextType, contextId, activityId)` — anti-doublon. Champs :
+`(indicatorId, contextType, contextId, activityId)` - anti-doublon. Champs :
 `contextId` (= `groupId`), `activityId`, `title`.
 
 ### `UserIndicatorPreference` (table `user_indicator_preferences`)
@@ -303,7 +303,7 @@ Préférences par utilisateur, contrainte unique `(userId, indicatorId)` :
 
 ---
 
-## 6. Moteur DSL — calcul des indicateurs
+## 6. Moteur DSL - calcul des indicateurs
 
 Cœur du projet : `FormulaInterpreterService`
 (`api/src/modules/features/indicators/interpreter/formula-interpreter.service.ts`).
@@ -360,12 +360,12 @@ utilisé par le débogueur pas-à-pas du builder (`POST /preview-steps`).
 | `aggregate` | Agrège un `number[]`. | `aggregateFn: 'avg'\|'sum'\|'count'\|'min'\|'max'` |
 | `round` | Arrondit un nombre. | `decimals` (défaut 2) |
 | `divide` | Divise par une constante (0 si `divideBy === 0`). | `divideBy` |
-| `js` | Exécute du JS arbitraire ; `input` = sortie de l'étape précédente, doit définir/`return` dans `result`. | `code` — exécuté via `vm.runInContext` avec un timeout de 2s. **Voir section 12 : ce n'est pas un sandbox sécurisé.** |
+| `js` | Exécute du JS arbitraire ; `input` = sortie de l'étape précédente, doit définir/`return` dans `result`. | `code` - exécuté via `vm.runInContext` avec un timeout de 2s. **Voir section 12 : ce n'est pas un sandbox sécurisé.** |
 
 Rétro-compatibilité : les anciens noms de table `sessions`/`activities` sont
 mappés vers `SessionData`/`Activities` (`LEGACY_TABLE_MAP`).
 
-### Exemple — "Tentatives moyennes avant première réussite"
+### Exemple - "Tentatives moyennes avant première réussite"
 
 ```yaml
 pipeline:
@@ -389,7 +389,7 @@ pipeline:
     params: { decimals: 2 }
 ```
 
-### `computeView` (`indicators.service.ts`) — calcul + cache
+### `computeView` (`indicators.service.ts`) - calcul + cache
 
 `POST /indicators/:id/compute-view` appelle `computeView(indicatorId, contextType,
 contextId, activityId?, vizId?, forceRefresh?)` :
@@ -406,10 +406,10 @@ contextId, activityId?, vizId?, forceRefresh?)` :
     faux → retournée directement (pas de recalcul).
 - **Résolution des noms d'utilisateurs** : si le résultat est un tableau avec un
   champ `userIds[]`, ces ids sont résolus en `"Prénom Nom"` via
-  `PlatonService.getUserNameMap()` avant stockage/retour — jamais d'UUID exposé
+  `PlatonService.getUserNameMap()` avant stockage/retour - jamais d'UUID exposé
   côté frontend.
 
-### Snapshots "vivants" — refresh automatique
+### Snapshots "vivants" - refresh automatique
 
 `IngestionService` appelle, en fire-and-forget après chaque événement PLaTon
 ingéré pour une activité, `IndicatorsService.refreshSnapshots(indicatorId,
@@ -444,7 +444,7 @@ résultats, "Afficher tout" si > 5 lignes).
 
 ---
 
-## 7. Modèle "Option B+" — `contextType` + `visualizations[]`
+## 7. Modèle "Option B+" - `contextType` + `visualizations[]`
 
 **1 indicateur = 1 `contextType` unique**, mais peut avoir **N visualisations**
 (`visualizations: IndicatorVisualization[]`), chacune avec :
@@ -464,7 +464,7 @@ interface IndicatorVisualization {
 
 `contextType ∈ { learner, teacher, admin, course, activity, group }`.
 
-### Sélection de la visualisation par l'utilisateur — persistée en BDD
+### Sélection de la visualisation par l'utilisateur - persistée en BDD
 
 Si un indicateur a plusieurs visualisations, l'utilisateur choisit laquelle
 afficher (chips sur la carte, onglets sur la page détail). Le choix est persisté
@@ -473,7 +473,7 @@ dans `user_indicator_preferences.active_viz_id` (pas `localStorage`), via
 /preferences/:indicatorId`). Cohérence carte ↔ détail garantie par ce cache
 partagé.
 
-### Masquage sélectif de visualisations — `enabledVizIds`
+### Masquage sélectif de visualisations - `enabledVizIds`
 
 L'utilisateur peut aussi masquer certaines visualisations d'un indicateur
 (`user_indicator_preferences.enabled_viz_ids`, `null` = toutes visibles). Les
@@ -481,13 +481,13 @@ composants utilisent un getter `visibleVisualizations` (filtre
 `isVizEnabled`, fallback = toutes si le filtre viderait la liste) au lieu
 d'accéder directement à `indicator.visualizations`.
 
-### Wizard admin (`indicator-builder.component.ts`) — flux en 3 étapes
+### Wizard admin (`indicator-builder.component.ts`) - flux en 3 étapes
 
 | Étape | Contenu |
 |---|---|
-| 1. Définition | Nom, description, événements déclencheurs (`requiredEvents`) — pas de contexte ici |
+| 1. Définition | Nom, description, événements déclencheurs (`requiredEvents`) - pas de contexte ici |
 | 2. Vues | Liste plate de "vues" (`FlatView`), chacune avec ses `contextTypes[]`, sa visualisation (type/icône/couleur/unité/seuils) |
-| 3. Formule | Pipeline DSL par vue — sélecteur en boutons-onglets, mode Visuel/Import, "Tester" et "Déboguer pas à pas" |
+| 3. Formule | Pipeline DSL par vue - sélecteur en boutons-onglets, mode Visuel/Import, "Tester" et "Déboguer pas à pas" |
 
 À la soumission, les `FlatView[]` sont reconverties en `visualizations[]` /
 `contextType` pour le format backend (`submit()`), et inversement à l'édition
@@ -495,8 +495,8 @@ d'accéder directement à `indicator.visualizations`.
 `contextTypes`).
 
 `FORMULA_RECIPES` fournit des recettes prêtes à l'emploi (Tentatives avant
-réussite, Note moyenne, Taux de réussite, Notes moyennes par ressource — avec
-`join Resources`, Tentatives par étudiant d'un groupe — avec `join Users`).
+réussite, Note moyenne, Taux de réussite, Notes moyennes par ressource - avec
+`join Resources`, Tentatives par étudiant d'un groupe - avec `join Users`).
 
 ---
 
@@ -519,7 +519,7 @@ famille ; les indicateurs sans famille restent à leur place. Réutilisé dans
 
 ### Visibilité par rôle (`RoleService.canSeeIndicatorContext`)
 
-`frontend/src/app/core/services/role.service.ts` — table
+`frontend/src/app/core/services/role.service.ts` - table
 `INDICATOR_VISIBILITY: Record<IndicatorScope, UserRole[]>` :
 
 | `contextType` | Rôles qui voient cet indicateur |
@@ -535,11 +535,11 @@ famille ; les indicateurs sans famille restent à leur place. Réutilisé dans
 dédiée. `canSeeIndicatorContext()` est appliqué dans `overview.page.ts`,
 `indicator-selector.component.ts` et `activity.page.ts` (filtre les indicateurs
 `activity` ET `group`). **L'admin (`admin-indicator-manager.component.ts`)
-n'applique pas ce filtre** — c'est l'outil de gestion, il doit tout montrer.
+n'applique pas ce filtre** - c'est l'outil de gestion, il doit tout montrer.
 
 ### Comment changer de rôle pour tester
 
-⚠️ `localStorage.setItem('userRole', ...)` **ne fonctionne pas** :
+ `localStorage.setItem('userRole', ...)` **ne fonctionne pas** :
 `SidebarComponent.loadUser()` appelle `userService.getUserById(environment.defaultUserId)`
 puis `roleService.setRole(user.role)` à **chaque chargement de page**, écrasant
 toute valeur manuelle.
@@ -564,25 +564,25 @@ appliquée (voir section 12).
 ### Indicateurs (`/api/indicators`, `indicators.controller.ts`)
 
 ```
-GET  /indicators                       — indicateurs actifs
-GET  /indicators/all                   — tous (admin)
-GET  /indicators/schema                — tables/colonnes PLaTon disponibles (filtrées, voir 12)
-GET  /indicators/teacher/:teacherId/context  — cours + groupes d'un enseignant
-GET  /indicators/course/:courseId/activities — activités d'un cours
-GET  /indicators/course/:courseId/students   — étudiants d'un cours
+GET  /indicators                       - indicateurs actifs
+GET  /indicators/all                   - tous (admin)
+GET  /indicators/schema                - tables/colonnes PLaTon disponibles (filtrées, voir 12)
+GET  /indicators/teacher/:teacherId/context  - cours + groupes d'un enseignant
+GET  /indicators/course/:courseId/activities - activités d'un cours
+GET  /indicators/course/:courseId/students   - étudiants d'un cours
 GET  /indicators/:id
-GET  /indicators/:id/context-configs   — alias de compat : { contextType, visualizations, formula }
+GET  /indicators/:id/context-configs   - alias de compat : { contextType, visualizations, formula }
 GET  /indicators/:id/values?contextType=&contextId=&period=&limit=
 GET  /indicators/:id/usage
 GET  /indicators/:id/formula-history
 GET  /indicators/:id/logs?limit=
 
-POST /indicators                       — créer
-POST /indicators/dashboard             — valeurs batch pour le tableau de bord
-POST /indicators/preview               — { formula, context } → { result } (exécute le DSL — voir 12)
-POST /indicators/preview-steps         — idem mais pas-à-pas (debug)
-POST /indicators/precompute-context    — { contextType, contextId, activityId } → précalcule tous les indicateurs actifs pour ce contexte
-POST /indicators/:id/compute-view      — { contextType, contextId, viewId/vizId?, activityId?, forceRefresh? }
+POST /indicators                       - créer
+POST /indicators/dashboard             - valeurs batch pour le tableau de bord
+POST /indicators/preview               - { formula, context } → { result } (exécute le DSL - voir 12)
+POST /indicators/preview-steps         - idem mais pas-à-pas (debug)
+POST /indicators/precompute-context    - { contextType, contextId, activityId } → précalcule tous les indicateurs actifs pour ce contexte
+POST /indicators/:id/compute-view      - { contextType, contextId, viewId/vizId?, activityId?, forceRefresh? }
 POST /indicators/:id/recalculate
 POST /indicators/:id/rollback/:versionId
 
@@ -591,7 +591,7 @@ PATCH  /indicators/:id/status
 DELETE /indicators/:id
 
 GET    /indicators/:id/snapshots?activityId=
-POST   /indicators/:id/snapshots       — { contextType, contextId, activityId, title } → 409 si doublon
+POST   /indicators/:id/snapshots       - { contextType, contextId, activityId, title } → 409 si doublon
 PATCH  /indicators/:id/snapshots/:snapshotId
 DELETE /indicators/:id/snapshots/:snapshotId
 ```
@@ -606,53 +606,53 @@ DELETE /indicators/:id/snapshots/:snapshotId
 ```
 GET    /preferences?userId=
 GET    /preferences/:indicatorId?userId=
-POST   /preferences/:indicatorId?userId=     — body accepte userRole?
-PATCH  /preferences/:indicatorId?userId=     — body accepte userRole?, activeVizId?, enabledVizIds?
+POST   /preferences/:indicatorId?userId=     - body accepte userRole?
+PATCH  /preferences/:indicatorId?userId=     - body accepte userRole?, activeVizId?, enabledVizIds?
 DELETE /preferences/:indicatorId?userId=
 ```
 
 Si `userRole === 'teacher' | 'admin'`, `calculateAndStoreValue` (calcul learner)
-est skippé — pas de ligne `indicator_value` learner créée pour un enseignant.
+est skippé - pas de ligne `indicator_value` learner créée pour un enseignant.
 
 ### Cours (`/api/v1/courses`, `courses.controller.ts`)
 
 ```
-GET /v1/courses                              — recherche (filtres: search, members, period, offset, limit, order, direction)
-GET /v1/courses/:id                          — détail (+ statistic: studentCount, teacherCount, activityCount)
+GET /v1/courses                              - recherche (filtres: search, members, period, offset, limit, order, direction)
+GET /v1/courses/:id                          - détail (+ statistic: studentCount, teacherCount, activityCount)
 GET /v1/courses/:id/sections
-GET /v1/courses/:id/activities               — filtres sectionId, challenge ; titre + état + progression + exerciseCount calculés
-GET /v1/courses/:id/groups                   — groupes de TP du cours
+GET /v1/courses/:id/activities               - filtres sectionId, challenge ; titre + état + progression + exerciseCount calculés
+GET /v1/courses/:id/groups                   - groupes de TP du cours
 GET /v1/courses/:id/groups/:groupId/members
 GET /v1/courses/:id/members
 GET /v1/courses/:courseId/activities/:activityId
 GET /v1/courses/:courseId/activities/:activityId/results
 GET /v1/courses/:courseId/activities/:activityId/results/date?start=&end=
-GET /v1/courses/:courseId/activities/:activityId/csv   — téléchargement CSV
+GET /v1/courses/:courseId/activities/:activityId/csv   - téléchargement CSV
 ```
 
 > `:courseId` est ignoré pour les routes `activities/:activityId*` (le frontend
-> envoie `_` comme courseId) — seul `:activityId` compte côté NestJS.
+> envoie `_` comme courseId) - seul `:activityId` compte côté NestJS.
 
 ### Ressources (`/api/v1/resources`, `resources.controller.ts`)
 
 ```
-GET /v1/resources                — recherche (filtres multiples)
-GET /v1/resources/tree           — arbre de cercles (type=CIRCLE, personal=false)
-GET /v1/resources/completion     — autocomplete
-GET /v1/resources/owners         — propriétaires distincts
-GET /v1/resources/user-circle?userId=  — cercle personnel d'un user
+GET /v1/resources                - recherche (filtres multiples)
+GET /v1/resources/tree           - arbre de cercles (type=CIRCLE, personal=false)
+GET /v1/resources/completion     - autocomplete
+GET /v1/resources/owners         - propriétaires distincts
+GET /v1/resources/user-circle?userId=  - cercle personnel d'un user
 GET /v1/resources/:id
 ```
 
 ### Autres modules
 
 ```
-GET /api/groups?teacherId=        — groupes de TP d'un enseignant
-GET /api/groups/members?groupId=  — membres d'un groupe
+GET /api/groups?teacherId=        - groupes de TP d'un enseignant
+GET /api/groups/members?groupId=  - membres d'un groupe
 GET /api/users/:id
 
-POST /api/ingest        — un événement PLaTon
-POST /api/ingest/batch  — plusieurs événements
+POST /api/ingest        - un événement PLaTon
+POST /api/ingest/batch  - plusieurs événements
 
 GET  /api/indicators/activity-attempts/value
 GET  /api/indicators/activity-attempts/raw
@@ -661,7 +661,7 @@ GET  /api/indicators/activity-attempts/activities
 GET  /api/indicators/activity-attempts/ranking/:activityId
 POST /api/indicators/activity-attempts/recalc/:activityId
 ```
-(`activity-indicator` — module legacy, à corriger pour utiliser le DSL, voir
+(`activity-indicator` - module legacy, à corriger pour utiliser le DSL, voir
 section 13.)
 
 ---
@@ -673,17 +673,17 @@ section 13.)
 ```
 /                       → redirect /dashboard
 /dashboard
-  /overview             — grille des indicateurs actifs (+ sélecteur de contexte enseignant)
-  /indicators           — onglet "Indicateurs" (préférences + admin)
-  /indicator/:id        — détail d'un indicateur
-  /courses/...          — pages Cours (copiées/adaptées de PLaTon, voir 3.3)
-  /resources/...        — pages Ressources (idem)
+  /overview             - grille des indicateurs actifs (+ sélecteur de contexte enseignant)
+  /indicators           - onglet "Indicateurs" (préférences + admin)
+  /indicator/:id        - détail d'un indicateur
+  /courses/...          - pages Cours (copiées/adaptées de PLaTon, voir 3.3)
+  /resources/...        - pages Ressources (idem)
 ```
 
 ### Sidebar
 
 Liens : Tableau de bord, Indicateurs, Cours, Espace de travail (Ressources). Pas
-d'onglet "Admin" dédié dans la navigation principale — les composants admin
+d'onglet "Admin" dédié dans la navigation principale - les composants admin
 (`admin-indicator-manager`, `indicator-builder`) sont accessibles via l'onglet
 "Indicateurs" pour les rôles habilités (`canManageIndicators` /
 `canCreateIndicators`).
@@ -723,8 +723,8 @@ lecture seule "Cours > Activité > Scope" avec lien "Modifier le filtre".
 ### Page activité (`/dashboard/courses/:id/activities/:activityId`)
 
 Deux sections d'indicateurs :
-1. **"Indicateurs"** — `contextType: 'activity'`, cards statiques
-2. **"Par groupe"** — `GroupSnapshotsPanelComponent` (`contextType: 'group'`),
+1. **"Indicateurs"** - `contextType: 'activity'`, cards statiques
+2. **"Par groupe"** - `GroupSnapshotsPanelComponent` (`contextType: 'group'`),
    un bloc par indicateur avec une carte par `IndicatorSnapshot` ; ajout via
    dropdown filtré (groupes déjà ajoutés masqués) → `POST .../snapshots` (409 si
    doublon, géré côté UI) ; édition de titre inline, suppression avec
@@ -758,9 +758,9 @@ Deux sections d'indicateurs :
 
 ---
 
-## 12. Sécurité — état actuel
+## 12. Sécurité - état actuel
 
-⚠️ Ce projet est en développement actif et **n'est pas prêt pour un déploiement
+ Ce projet est en développement actif et **n'est pas prêt pour un déploiement
 exposé** sans corriger les points suivants.
 
 ### Failles critiques non corrigées
@@ -785,27 +785,27 @@ remplacer `vm` par `isolated-vm`.
 
 ### Corrections déjà appliquées
 
-1. **Fuite de colonnes sensibles via `fetch`/`join`** (`platon.service.ts`) —
+1. **Fuite de colonnes sensibles via `fetch`/`join`** (`platon.service.ts`) -
    `queryTable`/`queryTableForGroup` faisaient `SELECT *` sur n'importe quelle
    table (`Users.password`, `email`, `discord_id`, ...). Fix : constante
    `SENSITIVE_COLUMN_PATTERN` (regex sur le nom de colonne :
    `password|passwd|secret|token|api[_-]?key|hash|salt|credential|email|phone|discord|ip_address`),
    méthode `getSafeColumns(table)` (via `information_schema.columns`, mise en
    cache) + `buildSafeSelect(table)`. Appliqué aussi à `getAvailableTables()`
-   (schéma exposé au builder) — les colonnes sensibles ne sont même plus
+   (schéma exposé au builder) - les colonnes sensibles ne sont même plus
    sélectionnables dans l'UI.
-2. **`executeFilter` — opérateur inconnu** : avant, un opérateur invalide
+2. **`executeFilter` - opérateur inconnu** : avant, un opérateur invalide
    laissait passer **toutes** les lignes (`default: return true`). Maintenant
    lève une erreur explicite (pipeline → 0, erreur visible dans les logs/le
    débogueur).
-3. **`executeJs` — fuite d'erreurs internes** : la stack complète n'est loggée
+3. **`executeJs` - fuite d'erreurs internes** : la stack complète n'est loggée
    que côté serveur ; le message renvoyé au client masque les chemins
    (`/...` → `[chemin masqué]`) et les références `evalmachine.<anonymous>:N:M`
    (→ `le code`).
 
 ### Autres points
 
-- `authInterceptor` (frontend) est vide — aucun token envoyé.
+- `authInterceptor` (frontend) est vide - aucun token envoyé.
 - `DashboardSettingsService` / `TeacherContextSelectorComponent` utilisent
   `environment.defaultUserId` en dur (pas de session réelle).
 
@@ -817,7 +817,7 @@ remplacer `vm` par `isolated-vm`.
   point RCE ci-dessus).
 - Remplacer `vm` par `isolated-vm` pour l'étape `js`.
 - **Détection dynamique de compatibilité de jointure** dans l'étape `join` du
-  builder — pas encore implémentée. La BDD PLaTon n'a aucune contrainte FK
+  builder - pas encore implémentée. La BDD PLaTon n'a aucune contrainte FK
   déclarée (`information_schema.table_constraints` ne contient aucune
   `FOREIGN KEY`), donc pas de carte de relations dérivable du schéma. Pistes
   envisagées : (1) comparaison des `data_type` des deux colonnes (gratuit, déjà
@@ -825,7 +825,7 @@ remplacer `vm` par `isolated-vm`.
   backend exécutant un `COUNT(DISTINCT ...)` croisant un échantillon des deux
   colonnes pour estimer le nombre de correspondances.
 - `TeacherContextSelectorComponent` utilise `environment.defaultUserId` comme
-  `teacherId` — à remplacer par l'utilisateur connecté une fois l'auth en place.
+  `teacherId` - à remplacer par l'utilisateur connecté une fois l'auth en place.
 - `ActivityIndicatorService` (module legacy `activity-attempts`) doit être migré
   pour utiliser le moteur DSL au lieu de sa logique hardcodée.
 - Filtres de date sur la page des logs d'exécution.

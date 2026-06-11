@@ -98,7 +98,7 @@
             <mat-icon
               *ngFor="let viz of indicator.visualizations"
               [class.viz-icon-disabled]="!isVizEnabled(indicator.id, viz.id)"
-              [matTooltip]="(viz.label || getVizLabel(viz.type)) + (isVizEnabled(indicator.id, viz.id) ? ' — visible (cliquer pour masquer)' : ' — masquée (cliquer pour afficher)')"
+              [matTooltip]="(viz.label || getVizLabel(viz.type)) + (isVizEnabled(indicator.id, viz.id) ? ' - visible (cliquer pour masquer)' : ' - masquée (cliquer pour afficher)')"
               class="viz-icon viz-icon-toggle"
               (click)="toggleViz(indicator, viz, $event)">
               {{ getVizIcon(viz.type) }}

@@ -1,4 +1,4 @@
-# Indicateurs — API (NestJS)
+# Indicateurs - API (NestJS)
 
 Documentation complète du projet (architecture, modèle de données, moteur DSL,
 routes, sécurité) : voir [`../readme.md`](../readme.md).

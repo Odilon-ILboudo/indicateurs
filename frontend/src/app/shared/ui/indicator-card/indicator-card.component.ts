@@ -147,7 +147,7 @@ export class IndicatorCardComponent implements OnInit, OnChanges {
   }
 
   getFormattedValue(): string {
-    if (!this.value) return '—';
+    if (!this.value) return '-';
     if (this.isChartVisualization()) return '···';
     const val = this.value.value;
     if (Math.abs(val) >= 1000) {
