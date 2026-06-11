@@ -5,6 +5,13 @@ données, moteur de calcul DSL, routes API, frontend, sécurité et limites conn
 L'objectif est qu'une lecture complète de ce fichier suffise à comprendre le
 fonctionnement global du projet sans avoir à parcourir tout le code source.
 
+> Documents complémentaires :
+> - [`guide.md`](guide.md) — guide pas-à-pas pour créer et tester chaque type
+>   d'indicateur (les 6 `contextType`, toutes les fonctionnalités du DSL).
+> - [`parcours-donnees.md`](parcours-donnees.md) — pour chaque route listée en
+>   §9, trace fichier par fichier et ligne par ligne le chemin complet
+>   composant frontend → service → contrôleur → service backend → accès BDD.
+
 ## Sommaire
 
 1. [Vue d'ensemble](#1-vue-densemble)
