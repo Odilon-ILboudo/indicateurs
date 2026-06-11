@@ -1,0 +1,24 @@
+{
+  "pipeline": [
+    {
+      "type": "fetch",
+      "params": {
+        "table": "SessionData",
+        "contextFields": ["user_id", "activity_id"]
+      }
+    },
+    {
+      "label": "Calcul du taux de réussite",
+      "type": "tauxReussite",
+      "params": {
+        "code": "// input = tableau de sessions (SessionData) du contexte courant\nif (!Array.isArray(input) || input.length === 0) return 0;\nconst reussites = input.filter(r => r.grade >= 100).length;\nreturn (reussites / input.length) * 100;"
+      }
+    },
+    {
+      "type": "round",
+      "params": {
+        "decimals": 1
+      }
+    }
+  ]
+}

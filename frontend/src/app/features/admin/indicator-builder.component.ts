@@ -36,6 +36,7 @@ interface PipelineStep {
   table?: string; contextFields?: string[]; useGroupContext?: boolean;
   // join
   joinTable?: string; joinContextFields?: string[]; joinLeftKey?: string; joinRightKey?: string;
+  joinType?: 'left' | 'inner' | 'right' | 'full';
   // filter
   filterField?: string; filterOperator?: string; filterValue?: string | number;
   // groupBy
@@ -85,7 +86,7 @@ export const CONTEXT_LABELS: Record<IndicatorScope, string> = {
 
 const STEP_CATALOG: { type: StepType; label: string; icon: string; color: string; desc: string }[] = [
   { type: 'fetch',     label: 'Récupérer données', icon: 'database',     color: '#1890ff', desc: 'Charge les données depuis PLaTon selon le contexte' },
-  { type: 'join',      label: 'Jointure',           icon: 'merge-cells',  color: '#0958d9', desc: 'Joint les données courantes avec une seconde table PLaTon (LEFT JOIN sur une clé commune)' },
+  { type: 'join',      label: 'Jointure',           icon: 'merge-cells',  color: '#0958d9', desc: 'Joint les données courantes avec une seconde table PLaTon sur une clé commune (left, inner, right ou full)' },
   { type: 'filter',    label: 'Filtrer',            icon: 'filter',       color: '#52c41a', desc: 'Filtre les lignes selon une condition sur un champ' },
   { type: 'groupBy',   label: 'Grouper par',        icon: 'apartment',    color: '#fa8c16', desc: 'Regroupe les données par valeur d\'un champ' },
   { type: 'findFirst', label: 'Premier résultat',   icon: 'aim',          color: '#722ed1', desc: 'Prend le premier élément de chaque groupe' },
@@ -127,6 +128,46 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
       { type: 'filter',    label: 'Note = 100',       filterField: 'grade', filterOperator: '==', filterValue: 100 },
       { type: 'extract',   label: 'Identifiants',     extractField: 'resource_id' },
       { type: 'aggregate', label: 'Compter',          aggregateFn: 'count' },
+    ],
+  },
+  {
+    name: 'Notes moyennes par ressource',
+    desc: 'Moyenne des notes par exercice, avec noms lisibles (bar-chart)',
+    pipeline: [
+      { type: 'fetch', label: 'Charger sessions',          table: 'SessionData', contextFields: ['user_id', 'activity_id'] },
+      { type: 'join',  label: 'Joindre noms de ressources', joinTable: 'Resources', joinLeftKey: 'resource_id', joinRightKey: 'id' },
+      { type: 'js',    label: 'Moyenne par ressource', jsCode:
+`const sums = {};
+const counts = {};
+for (const row of input) {
+  const grade = parseFloat(row.grade);
+  if (isNaN(grade)) continue;
+  const label = row.name || row.resource_id;
+  sums[label] = (sums[label] || 0) + grade;
+  counts[label] = (counts[label] || 0) + 1;
+}
+const result = {};
+for (const label of Object.keys(sums)) {
+  result[label] = Math.round((sums[label] / counts[label]) * 10) / 10;
+}
+return result;` },
+    ],
+  },
+  {
+    name: 'Tentatives par étudiant (groupe)',
+    desc: 'Total des tentatives par étudiant d\'un groupe de TP, avec noms lisibles (bar-chart)',
+    pipeline: [
+      { type: 'fetch', label: 'Charger sessions du groupe', table: 'SessionData', contextFields: ['group_id', 'activity_id'], useGroupContext: true },
+      { type: 'join',  label: 'Joindre noms des étudiants', joinTable: 'Users', joinLeftKey: 'user_id', joinRightKey: 'id' },
+      { type: 'js',    label: 'Total par étudiant', jsCode:
+`const totals = {};
+for (const row of input) {
+  const attempts = parseFloat(row.attempts);
+  if (isNaN(attempts)) continue;
+  const label = (row.first_name && row.last_name) ? row.first_name + ' ' + row.last_name : row.user_id;
+  totals[label] = (totals[label] || 0) + attempts;
+}
+return totals;` },
     ],
   },
 ];
@@ -328,10 +369,10 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
               <div class="import-mode-toggle">
                 <button nz-button nzSize="small"
                   [nzType]="importMode === 'yaml' ? 'primary' : 'default'"
-                  (click)="setImportMode('yaml')">YAML</button>
+                  (click)="setImportMode('yaml', v)">YAML</button>
                 <button nz-button nzSize="small"
                   [nzType]="importMode === 'json' ? 'primary' : 'default'"
-                  (click)="setImportMode('json')">JSON</button>
+                  (click)="setImportMode('json', v)">JSON</button>
                 <button nz-button nzSize="small" nzType="default"
                   (click)="importDocsOpen = !importDocsOpen">
                   <span nz-icon nzType="info-circle"></span>
@@ -415,6 +456,15 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
                         <nz-select [(ngModel)]="s.joinTable" nzPlaceHolder="Choisir une table"
                           [nzLoading]="schemaLoading" (ngModelChange)="s.joinRightKey = undefined">
                           <nz-option *ngFor="let t of platonSchema" [nzValue]="t.name" [nzLabel]="t.name"></nz-option>
+                        </nz-select>
+                      </div>
+                      <div class="param-row">
+                        <label>Type de jointure <mat-icon class="info-icon" nz-tooltip="Détermine quelles lignes sont conservées : 'gauche' garde toutes les lignes courantes, 'interne' ne garde que les correspondances, 'droite' garde toutes les lignes de la table jointe, 'complète' garde tout." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                        <nz-select [(ngModel)]="s.joinType" style="width:260px" nzPlaceHolder="Gauche (par défaut)">
+                          <nz-option nzValue="left"  nzLabel="Gauche — garder toutes les lignes courantes"></nz-option>
+                          <nz-option nzValue="inner" nzLabel="Interne — seulement les correspondances"></nz-option>
+                          <nz-option nzValue="right" nzLabel="Droite — garder toutes les lignes jointes"></nz-option>
+                          <nz-option nzValue="full"  nzLabel="Complète — garder toutes les lignes des deux côtés"></nz-option>
                         </nz-select>
                       </div>
                       <div class="param-row">
@@ -982,18 +1032,25 @@ ${this.importMode === 'yaml' ? `│
 │    Users             → utilisateurs (id, first_name, last_name)
 
 ┌─ join ──────────────────────────────────────────────────────────
-│  Fusionne les données courantes avec une 2ème table (LEFT JOIN).
+│  Fusionne les données courantes avec une 2ème table.
+│  joinType (optionnel, défaut "left") :
+│    left  → garde toutes les lignes courantes
+│    inner → garde uniquement les correspondances
+│    right → garde toutes les lignes de la table jointe
+│    full  → garde toutes les lignes des deux côtés
 ${this.importMode === 'yaml' ? `│
 │  params:
 │    table: Activities           # table à joindre
 │    contextFields: []           # filtres contexte sur cette table (optionnel)
 │    leftKey: activity_id        # colonne dans les données courantes
-│    rightKey: id                # colonne correspondante dans la 2ème table` : `│
+│    rightKey: id                # colonne correspondante dans la 2ème table
+│    joinType: left              # left | inner | right | full (optionnel)` : `│
 │  "params": {
 │    "table": "Activities",
 │    "contextFields": [],
 │    "leftKey": "activity_id",
-│    "rightKey": "id"
+│    "rightKey": "id",
+│    "joinType": "left"
 │  }`}
 
 ┌─ filter ────────────────────────────────────────────────────────
@@ -1071,6 +1128,30 @@ ${this.importMode === 'yaml' ? `│
 │  "params": {
 │    "code": "return Array.isArray(input) ? input.length : 0;"
 │  }`}
+
+══════════════════════════════════════════════════════════════════
+  ÉTAPES PERSONNALISÉES (type non listé ci-dessus)
+══════════════════════════════════════════════════════════════════
+
+Si "type" est absent ou ne correspond à aucun type ci-dessus, MAIS que
+"params.code" contient du JavaScript, l'étape est automatiquement
+importée comme une étape "Code JS" (votre code est repris tel quel).
+Un avertissement liste les étapes converties après l'import — vérifiez-
+les dans l'éditeur visuel.
+
+${this.importMode === 'yaml' ? `  - label: "Mon étape personnalisée"
+    type: monTypeMaison       # non reconnu → converti en "js"
+    params:
+      code: |
+        return input.filter(r => r.grade >= 100).length;` : `  {
+    "label": "Mon étape personnalisée",
+    "type": "monTypeMaison",
+    "params": { "code": "return input.filter(r => r.grade >= 100).length;" }
+  }`}
+
+Si "params.code" est absent, l'import est refusé avec un message
+listant les types valides (pour ne pas confondre un type custom
+volontaire avec une simple faute de frappe sur un type connu).
 
 ══════════════════════════════════════════════════════════════════
   EXEMPLE COMPLET — Note moyenne d'un apprenant
@@ -1369,23 +1450,47 @@ ${this.importMode === 'yaml' ? `pipeline:
   }
 
   enterImportMode(v: FlatViz): void {
-    this.importText = '';
+    this.importText = this.pipelineToText(v.pipeline, this.importMode);
     this.importError = '';
     this.activeImportVizId = v.id;
   }
 
-  setImportMode(mode: 'yaml' | 'json'): void {
+  setImportMode(mode: 'yaml' | 'json', v: FlatViz): void {
     this.importMode = mode;
     this.importError = '';
+    // Re-sérialise dans le nouveau format à partir du pipeline courant — un éventuel texte
+    // collé/édité manuellement est régénéré, mais reste cohérent avec l'état affiché.
+    this.importText = this.pipelineToText(v.pipeline, mode);
+  }
+
+  /** Sérialise le pipeline courant (visuel ou importé) en YAML/JSON pour ré-édition. */
+  private pipelineToText(pipeline: PipelineStep[], mode: 'yaml' | 'json'): string {
+    if (!pipeline.length) return '';
+    const raw = {
+      pipeline: pipeline.map(s => ({
+        type: s.type,
+        label: s.label,
+        params: this.extractParams(s),
+      })),
+    };
+    return mode === 'yaml' ? yaml.dump(raw, { lineWidth: -1 }) : JSON.stringify(raw, null, 2);
   }
 
   applyImport(v: FlatViz): void {
     this.importError = '';
     try {
-      const pipelines = this.parseStep3Text(this.importText, this.importMode);
-      v.pipeline = pipelines[0];
+      const { pipeline, convertedSteps } = this.parseStep3Text(this.importText, this.importMode);
+      v.pipeline = pipeline;
       this.activeImportVizId = null;
-      this.messageSvc.success(`Pipeline importé dans "${v.label}"`);
+      if (convertedSteps.length) {
+        this.messageSvc.warning(
+          `Pipeline importé dans "${v.label}" — étape(s) n°${convertedSteps.join(', ')} : type non reconnu, ` +
+          `converties en "Code JS" à partir de "params.code". Vérifiez-les dans l'éditeur visuel.`,
+          { nzDuration: 8000 },
+        );
+      } else {
+        this.messageSvc.success(`Pipeline importé dans "${v.label}"`);
+      }
       this.cdr.detectChanges();
     } catch (e: any) {
       this.importError = e.message;
@@ -1429,7 +1534,7 @@ ${this.importMode === 'yaml' ? `pipeline:
     reader.readAsText(file);
   }
 
-  private parseStep3Text(text: string, mode: 'yaml' | 'json'): PipelineStep[][] {
+  private parseStep3Text(text: string, mode: 'yaml' | 'json'): { pipeline: PipelineStep[]; convertedSteps: number[] } {
     if (!text.trim()) throw new Error('Le champ est vide. Collez votre pipeline ci-dessus avant d\'appliquer.');
     let raw: any;
     try {
@@ -1447,10 +1552,12 @@ ${this.importMode === 'yaml' ? `pipeline:
     if (!Array.isArray(raw.pipeline)) {
       throw new Error('Clé "pipeline" introuvable ou invalide. Elle doit contenir une liste d\'étapes.');
     }
-    return [raw.pipeline.map((s: any, j: number) => this.validateAndDehydrate(s, j + 1))];
+    const convertedSteps: number[] = [];
+    const pipeline = raw.pipeline.map((s: any, j: number) => this.validateAndDehydrate(s, j + 1, convertedSteps));
+    return { pipeline, convertedSteps };
   }
 
-  private validateAndDehydrate(raw: any, stepNum: number): PipelineStep {
+  private validateAndDehydrate(raw: any, stepNum: number, convertedSteps: number[]): PipelineStep {
     const VALID_TYPES: StepType[] = ['fetch', 'join', 'filter', 'groupBy', 'findFirst', 'extract', 'aggregate', 'round', 'divide', 'js'];
     const TYPE_LABELS: Record<string, string> = {
       fetch: 'Récupérer données', join: 'Jointure', filter: 'Filtrer',
@@ -1460,11 +1567,23 @@ ${this.importMode === 'yaml' ? `pipeline:
     if (!raw || typeof raw !== 'object') {
       throw new Error(`Étape ${stepNum} : doit être un objet avec les clés "type", "label" et "params".`);
     }
-    if (!raw.type) {
-      throw new Error(`Étape ${stepNum} : la clé "type" est manquante. Types disponibles : ${VALID_TYPES.join(', ')}.`);
-    }
-    if (!VALID_TYPES.includes(raw.type)) {
-      throw new Error(`Étape ${stepNum} : type "${raw.type}" inconnu. Types valides : ${VALID_TYPES.map(t => `${t} (${TYPE_LABELS[t]})`).join(', ')}.`);
+    if (!raw.type || !VALID_TYPES.includes(raw.type)) {
+      // Type non standard (custom) : si l'admin fournit son propre code JS via "params.code",
+      // l'étape est matérialisée comme "Code JS" (escape hatch) au lieu de bloquer tout l'import.
+      const code = raw.params?.code;
+      if (typeof code === 'string' && code.trim()) {
+        convertedSteps.push(stepNum);
+        return this.dehydrateStep({
+          id: crypto.randomUUID(),
+          type: 'js',
+          label: raw.label || (raw.type ? `${raw.type} (converti en JS)` : 'Étape personnalisée (JS)'),
+          params: { code },
+        });
+      }
+      if (!raw.type) {
+        throw new Error(`Étape ${stepNum} : la clé "type" est manquante. Types disponibles : ${VALID_TYPES.join(', ')}. Pour une étape personnalisée, utilisez "type: js" avec "params.code", ou fournissez directement "params.code".`);
+      }
+      throw new Error(`Étape ${stepNum} : type "${raw.type}" inconnu. Types valides : ${VALID_TYPES.map(t => `${t} (${TYPE_LABELS[t]})`).join(', ')}. Pour une étape personnalisée non standard, ajoutez "params.code" avec votre logique JS — elle sera importée comme étape "Code JS".`);
     }
     // label facultatif : on le génère depuis le catalogue si absent
     if (!raw.label) raw.label = TYPE_LABELS[raw.type] ?? raw.type;
@@ -1473,11 +1592,16 @@ ${this.importMode === 'yaml' ? `pipeline:
       case 'fetch':
         if (!p.table) throw new Error(`Étape ${stepNum} (Récupérer données) : "params.table" est requis — indiquez le nom de la table PLaTon, ex: SessionData.`);
         break;
-      case 'join':
+      case 'join': {
         if (!p.table) throw new Error(`Étape ${stepNum} (Jointure) : "params.table" est requis — nom de la table à joindre.`);
         if (!p.leftKey) throw new Error(`Étape ${stepNum} (Jointure) : "params.leftKey" est requis — colonne dans les données courantes servant de clé.`);
         if (!p.rightKey) throw new Error(`Étape ${stepNum} (Jointure) : "params.rightKey" est requis — colonne correspondante dans la table à joindre.`);
+        const validJoinTypes = ['left', 'inner', 'right', 'full'];
+        if (p.joinType !== undefined && !validJoinTypes.includes(p.joinType)) {
+          throw new Error(`Étape ${stepNum} (Jointure) : "params.joinType" invalide ("${p.joinType}"). Valeurs possibles : ${validJoinTypes.join(', ')} (par défaut : left).`);
+        }
         break;
+      }
       case 'filter':
         if (!p.field) throw new Error(`Étape ${stepNum} (Filtrer) : "params.field" est requis — nom de la colonne à tester.`);
         if (!p.operator) throw new Error(`Étape ${stepNum} (Filtrer) : "params.operator" est requis. Opérateurs disponibles : == != > < >= <=`);
@@ -1582,7 +1706,7 @@ ${this.importMode === 'yaml' ? `pipeline:
         if (s.useGroupContext) fields.unshift('group_id');
         return { table: s.table, contextFields: fields };
       }
-      case 'join':      return { table: s.joinTable, contextFields: s.joinContextFields ?? [], leftKey: s.joinLeftKey, rightKey: s.joinRightKey };
+      case 'join':      return { table: s.joinTable, contextFields: s.joinContextFields ?? [], leftKey: s.joinLeftKey, rightKey: s.joinRightKey, joinType: s.joinType ?? 'left' };
       case 'filter':    return { field: s.filterField, operator: s.filterOperator, value: s.filterValue };
       case 'groupBy':   return { groupField: s.groupField };
       case 'findFirst': return { whereField: s.whereField, whereValue: s.whereValue, sortField: s.sortField };
@@ -1609,6 +1733,7 @@ ${this.importMode === 'yaml' ? `pipeline:
       joinContextFields:  s.type === 'join' ? s.params?.contextFields : undefined,
       joinLeftKey:        s.type === 'join' ? s.params?.leftKey : undefined,
       joinRightKey:       s.type === 'join' ? s.params?.rightKey : undefined,
+      joinType:           s.type === 'join' ? (s.params?.joinType ?? 'left') : undefined,
       filterField:     s.params?.field,
       filterOperator:  s.params?.operator,
       filterValue:     s.params?.value,

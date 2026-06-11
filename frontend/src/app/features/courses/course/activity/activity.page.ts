@@ -2,7 +2,7 @@ import { CommonModule, Location } from '@angular/common'
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core'
 import { FormsModule } from '@angular/forms'
 import { RouterModule } from '@angular/router'
-import { firstValueFrom, Subscription } from 'rxjs'
+import { combineLatest, firstValueFrom, Subscription } from 'rxjs'
 
 import { MatIconModule } from '@angular/material/icon'
 import { MatCardModule } from '@angular/material/card'
@@ -33,6 +33,7 @@ import { PeerTreeComponent } from '@platon/feature/peer/browser'
 
 import { IndicatorService } from '../../../../core/services/indicator.service'
 import { RoleService } from '../../../../core/services/role.service'
+import { DashboardSettingsService } from '../../../../core/services/dashboard-settings.service'
 import { DashboardContext, IndicatorDefinition } from '../../../../core/models/indicator.model'
 import { IndicatorCardComponent } from '../../../../shared/ui/indicator-card/indicator-card.component'
 import { GroupSnapshotsPanelComponent } from './group-snapshots-panel.component'
@@ -86,6 +87,7 @@ export class CourseActivityPage implements OnInit, OnDestroy {
   private readonly resultService = inject(ResultService)
   private readonly indicatorService = inject(IndicatorService)
   private readonly roleService = inject(RoleService)
+  private readonly settingsService = inject(DashboardSettingsService)
   private readonly subscriptions: Subscription[] = []
   private readonly today = new Date()
 
@@ -165,19 +167,26 @@ export class CourseActivityPage implements OnInit, OnDestroy {
 
   private loadActivityIndicators(): void {
     this.indicatorsLoading = true
-    this.indicatorService.loadIndicators().subscribe({
-      next: (indicators) => {
-        const visible = indicators.filter(ind => this.roleService.canSeeIndicatorContext(ind.contextType))
-        this.activityIndicators = visible.filter(ind => ind.contextType === 'activity')
-        this.groupIndicators = visible.filter(ind => ind.contextType === 'group')
-        this.indicatorsLoading = false
-        this.changeDetectorRef.markForCheck()
-      },
-      error: () => {
-        this.indicatorsLoading = false
-        this.changeDetectorRef.markForCheck()
-      },
-    })
+    this.subscriptions.push(
+      combineLatest([
+        this.indicatorService.loadIndicators(),
+        this.settingsService.getSettings(),
+      ]).subscribe({
+        next: ([indicators, settings]) => {
+          const visible = indicators.filter(ind =>
+            this.roleService.canSeeIndicatorContext(ind.contextType) &&
+            settings.activeIndicators.includes(ind.id))
+          this.activityIndicators = visible.filter(ind => ind.contextType === 'activity')
+          this.groupIndicators = visible.filter(ind => ind.contextType === 'group')
+          this.indicatorsLoading = false
+          this.changeDetectorRef.markForCheck()
+        },
+        error: () => {
+          this.indicatorsLoading = false
+          this.changeDetectorRef.markForCheck()
+        },
+      }),
+    )
   }
 
   protected async onDateChange(dates: Date[]): Promise<void> {

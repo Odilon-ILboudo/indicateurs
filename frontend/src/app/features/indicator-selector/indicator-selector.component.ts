@@ -95,7 +95,7 @@ const CTX_LABELS: Record<string, string> = {
   course:   'Cours',
   activity: 'Activité',
   teacher:  'Enseignant',
-  global:   'Global',
+  admin:    'Admin',
 };
 
 const CTX_ICONS: Record<string, string> = {
@@ -104,7 +104,7 @@ const CTX_ICONS: Record<string, string> = {
   course:   'school',
   activity: 'assignment',
   teacher:  'co_present',
-  global:   'public',
+  admin:    'admin_panel_settings',
 };
 
 // ── Modal de détail d'un indicateur ──────────────────────────────────────────
@@ -680,11 +680,11 @@ export class IndicatorSelectorComponent implements OnInit {
 
     if (active) {
       this.settingsService.addActiveIndicator(indicatorId);
-      this.messageService.success(`Indicateur ajouté à votre tableau de bord`);
+      this.messageService.success(`Indicateur ajouté avec succès`);
       if (indicator) indicator.usageCount = oldUsageCount + 1;
     } else {
       this.settingsService.removeActiveIndicator(indicatorId);
-      this.messageService.info(`Indicateur retiré de votre tableau de bord`);
+      this.messageService.info(`Indicateur retiré avec succès`);
       if (indicator && oldUsageCount > 0) indicator.usageCount = oldUsageCount - 1;
     }
 

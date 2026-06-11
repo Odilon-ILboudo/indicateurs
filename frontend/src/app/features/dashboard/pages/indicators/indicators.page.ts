@@ -69,7 +69,7 @@ export class IndicatorsPage implements OnInit, OnDestroy {
   }
   
   protected onIndicatorsChanged(): void {
-    this.messageService.success('Vos indicateurs ont été mis à jour');
+    //this.messageService.success('Vos indicateurs ont été mis à jour');
     this.loadIndicators(); // Recharger pour mettre à jour les compteurs
     this.changeDetectorRef.markForCheck();
   }

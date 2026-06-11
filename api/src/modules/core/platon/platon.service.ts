@@ -6,6 +6,17 @@ import { DataSource } from 'typeorm';
 export class PlatonService {
   private readonly logger = new Logger(PlatonService.name);
 
+  /**
+   * Colonnes jamais exposées au DSL (mots de passe, jetons, identifiants tiers, contacts...),
+   * détectées par motif de nom plutôt que par une liste de tables codée en dur :
+   * s'applique automatiquement à toute table du schéma `public`.
+   */
+  private static readonly SENSITIVE_COLUMN_PATTERN =
+    /password|passwd|secret|token|api[_-]?key|hash|salt|credential|email|phone|discord|ip_address/i;
+
+  /** Cache des colonnes "sûres" par table (évite une requête information_schema à chaque fetch/join). */
+  private readonly safeColumnsCache = new Map<string, string[]>();
+
   constructor(
     @Inject('PLATON_DATA_SOURCE')
     private dataSource: DataSource,
@@ -260,6 +271,8 @@ export class PlatonService {
       throw new Error(`Nom de table invalide : '${table}'`);
     }
 
+    const select = await this.buildSafeSelect(table);
+
     const conditions: string[] = [
       `"activity_id" = $1`,
       `"user_id" IN (
@@ -280,7 +293,7 @@ export class PlatonService {
     }
 
     return this.dataSource.query(
-      `SELECT * FROM "${table}" WHERE ${conditions.join(' AND ')} LIMIT ${limit}`,
+      `SELECT ${select} FROM "${table}" WHERE ${conditions.join(' AND ')} LIMIT ${limit}`,
       params,
     );
   }
@@ -342,11 +355,47 @@ export class PlatonService {
 
     const map = new Map<string, { name: string; type: string }[]>();
     for (const row of rows) {
+      if (PlatonService.SENSITIVE_COLUMN_PATTERN.test(row.column_name)) continue;
       if (!map.has(row.table_name)) map.set(row.table_name, []);
       map.get(row.table_name)!.push({ name: row.column_name, type: row.data_type });
     }
 
     return Array.from(map.entries()).map(([name, columns]) => ({ name, columns }));
+  }
+
+  /**
+   * Liste des colonnes de `table` autorisées dans le DSL : toutes les colonnes réelles de la
+   * table, à l'exception de celles correspondant à `SENSITIVE_COLUMN_PATTERN` (mots de passe,
+   * jetons, e-mails...). Détection dynamique via information_schema, pas de liste par table
+   * codée en dur. Résultat mis en cache par nom de table.
+   */
+  private async getSafeColumns(table: string): Promise<string[]> {
+    const cached = this.safeColumnsCache.get(table);
+    if (cached) return cached;
+
+    const rows: { column_name: string }[] = await this.dataSource.query(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = $1
+       ORDER BY ordinal_position`,
+      [table],
+    );
+
+    const columns = rows
+      .map(r => r.column_name)
+      .filter(col => !PlatonService.SENSITIVE_COLUMN_PATTERN.test(col));
+
+    if (!columns.length) {
+      throw new Error(`Aucune colonne accessible pour la table '${table}'`);
+    }
+
+    this.safeColumnsCache.set(table, columns);
+    return columns;
+  }
+
+  /** Clause SELECT explicite (colonnes sûres uniquement) pour remplacer `SELECT *`. */
+  private async buildSafeSelect(table: string): Promise<string> {
+    const columns = await this.getSafeColumns(table);
+    return columns.map(c => `"${c}"`).join(', ');
   }
 
   async queryTable(
@@ -357,6 +406,8 @@ export class PlatonService {
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(table)) {
       throw new Error(`Nom de table invalide : '${table}'`);
     }
+
+    const select = await this.buildSafeSelect(table);
 
     const conditions: string[] = [];
     const params: any[] = [];
@@ -371,7 +422,7 @@ export class PlatonService {
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     return this.dataSource.query(
-      `SELECT * FROM "${table}" ${where} LIMIT ${limit}`,
+      `SELECT ${select} FROM "${table}" ${where} LIMIT ${limit}`,
       params,
     );
   }

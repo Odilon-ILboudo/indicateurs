@@ -179,20 +179,27 @@ export class FormulaInterpreterService {
   }
 
   /**
-   * LEFT JOIN entre les lignes en entrée (table gauche) et une seconde table PLaTon (table droite).
-   * Params : table, contextFields (optionnel), leftKey, rightKey
-   * Logique : pour chaque ligne gauche, cherche les lignes droites où rightKey = leftRow[leftKey].
-   *   - Match trouvé → fusionne (champs droits ajoutés, champs gauches prioritaires en cas de conflit)
-   *   - Pas de match  → conserve la ligne gauche telle quelle (LEFT JOIN)
+   * Joint les lignes en entrée (table gauche) avec une seconde table PLaTon (table droite).
+   * Params : table, contextFields (optionnel), leftKey, rightKey, joinType (optionnel, défaut 'left')
+   *   - 'left'  : toutes les lignes gauches, fusionnées si correspondance trouvée
+   *   - 'inner' : uniquement les lignes gauches avec une correspondance
+   *   - 'right' : toutes les lignes droites, fusionnées si correspondance trouvée
+   *   - 'full'  : union de 'left' et 'right'
+   * En cas de fusion, les champs gauches sont prioritaires (écrasent les champs droits en cas de conflit de nom).
    */
   private async executeJoin(params: Record<string, any>, input: any, context: FormulaContext): Promise<any[]> {
-    if (!Array.isArray(input) || !input.length) return [];
+    const joinType: 'left' | 'inner' | 'right' | 'full' = params['joinType'] ?? 'left';
+    const includesRight = joinType === 'right' || joinType === 'full';
+    const includesUnmatchedLeft = joinType === 'left' || joinType === 'full';
+
+    const leftRows: any[] = Array.isArray(input) ? input : [];
+    if (!leftRows.length && !includesRight) return [];
 
     const { leftKey, rightKey } = params;
     const rawTable: string = params['table'] ?? '';
     if (!rawTable || !leftKey || !rightKey) {
       this.logger.warn('[join] paramètres incomplets (table / leftKey / rightKey requis)');
-      return input;
+      return leftRows;
     }
 
     const table = FormulaInterpreterService.LEGACY_TABLE_MAP[rawTable] ?? rawTable;
@@ -215,17 +222,29 @@ export class FormulaInterpreterService {
       rightIndex.get(key)!.push(row);
     }
 
+    // Clés droites ayant matché au moins une ligne gauche (pour 'right'/'full')
+    const matchedRightKeys = new Set<string>();
+
     const result: any[] = [];
-    for (const leftRow of input) {
+    for (const leftRow of leftRows) {
       const key = String(leftRow[leftKey] ?? '__null__');
       const matches = rightIndex.get(key);
       if (matches?.length) {
+        matchedRightKeys.add(key);
         for (const rightRow of matches) {
-          // Champs gauches prioritaires (écrasent les champs droits en cas de conflit de nom)
           result.push({ ...rightRow, ...leftRow });
         }
-      } else {
+      } else if (includesUnmatchedLeft) {
         result.push({ ...leftRow });
+      }
+    }
+
+    if (includesRight) {
+      for (const rightRow of rightRows) {
+        const key = String(rightRow[rightKey] ?? '__null__');
+        if (!matchedRightKeys.has(key)) {
+          result.push({ ...rightRow });
+        }
       }
     }
 
@@ -246,7 +265,8 @@ export class FormulaInterpreterService {
         case '<':  return rowVal < cmpVal;
         case '>=': return rowVal >= cmpVal;
         case '<=': return rowVal <= cmpVal;
-        default:   return true;
+        default:
+          throw new Error(`Opérateur de filtre inconnu : "${operator}". Opérateurs valides : ==, !=, >, <, >=, <=`);
       }
     });
   }
@@ -352,7 +372,14 @@ export class FormulaInterpreterService {
       script.runInContext(ctx, { timeout: 2000 });
       return sandbox.result;
     } catch (err) {
-      throw new Error(`Sandbox JS : ${(err as Error).message}`);
+      const error = err as Error;
+      // Détail complet (stack, chemins, infos internes du sandbox) uniquement dans les logs serveur.
+      this.logger.error(`Erreur dans l'étape Code JS : ${error.stack ?? error.message}`);
+      // Message renvoyé au client : type + message d'erreur JS, sans chemins ni références internes au sandbox.
+      const safeMessage = (error.message || 'erreur inconnue')
+        .replace(/evalmachine\.<anonymous>:\d+(:\d+)?/gi, 'le code')
+        .replace(/\/[^\s:]+/g, '[chemin masqué]');
+      throw new Error(`Erreur dans le code JS : ${safeMessage}`);
     }
   }
 
