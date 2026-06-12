@@ -4,7 +4,7 @@ import Fuse from 'fuse.js'
 import { CommonModule } from '@angular/common'
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core'
 import { RouterModule } from '@angular/router'
-import { Subscription, of } from 'rxjs'
+import { Subscription, combineLatest, of } from 'rxjs'
 
 import { NzButtonModule } from 'ng-zorro-antd/button'
 import { NzCollapseModule } from 'ng-zorro-antd/collapse'
@@ -12,6 +12,7 @@ import { NzEmptyModule } from 'ng-zorro-antd/empty'
 import { NzGridModule } from 'ng-zorro-antd/grid'
 import { NzIconModule } from 'ng-zorro-antd/icon'
 import { NzSegmentedModule } from 'ng-zorro-antd/segmented'
+import { NzSpinModule } from 'ng-zorro-antd/spin'
 import { NzTypographyModule } from 'ng-zorro-antd/typography'
 
 import {
@@ -24,14 +25,18 @@ import { CourseSectionActionsComponent } from './section-actions/section-actions
 import { CourseManagementTutorialService } from '@platon/feature/tuto/browser'
 
 import {
-  DurationPipe,
   SearchBar,
   UiSearchBarComponent,
-  UiStatisticCardComponent,
   UiViewModeComponent,
 } from '@platon/shared/ui'
 import { NzTooltipModule } from 'ng-zorro-antd/tooltip'
 import { CoursePresenter } from '../course.presenter'
+
+import { IndicatorService } from '../../../../core/services/indicator.service'
+import { RoleService } from '../../../../core/services/role.service'
+import { DashboardSettingsService } from '../../../../core/services/dashboard-settings.service'
+import { DashboardContext, IndicatorDefinition } from '../../../../core/models/indicator.model'
+import { IndicatorCardComponent } from '../../../../shared/ui/indicator-card/indicator-card.component'
 
 @Component({
   standalone: true,
@@ -50,6 +55,7 @@ import { CoursePresenter } from '../course.presenter'
     NzTooltipModule,
     NzCollapseModule,
     NzSegmentedModule,
+    NzSpinModule,
     NzTypographyModule,
 
     CourseActivityGridComponent,
@@ -57,18 +63,27 @@ import { CoursePresenter } from '../course.presenter'
     CourseSectionActionsComponent,
     CsvDownloadButtonComponent,
 
-    DurationPipe,
     UiViewModeComponent,
     UiSearchBarComponent,
-    UiStatisticCardComponent,
+
+    IndicatorCardComponent,
   ],
 })
 export class CourseDashboardPage implements OnInit, OnDestroy {
   private readonly presenter = inject(CoursePresenter)
   private readonly changeDetectorRef = inject(ChangeDetectorRef)
+  private readonly indicatorService = inject(IndicatorService)
+  private readonly roleService = inject(RoleService)
+  private readonly settingsService = inject(DashboardSettingsService)
   private readonly subscriptions: Subscription[] = []
 
   protected context = this.presenter.defaultContext()
+
+  // Indicateurs de contexte 'course'
+  protected courseIndicators: IndicatorDefinition[] = []
+  protected indicatorsLoading = true
+  protected courseContext: DashboardContext | null = null
+  protected indicatorQueryParams: Record<string, string> = {}
   protected viewModes = [
     {
       icon: 'appstore',
@@ -113,11 +128,22 @@ export class CourseDashboardPage implements OnInit, OnDestroy {
   constructor(private readonly courseManagementTutorialService: CourseManagementTutorialService) {}
 
   ngOnInit(): void {
+    this.loadCourseIndicators()
+
     this.subscriptions.push(
       this.presenter.contextChange.subscribe(async (context) => {
         this.context = context
         await this.refresh()
         this.checkForCourseTutorial()
+
+        if (context.course) {
+          const courseId = context.course.id
+          const courseName = context.course.name
+
+          this.courseContext = { scope: 'course', scopeId: courseId, userId: '' }
+          this.indicatorQueryParams = { from: 'course', courseId, courseName }
+          this.changeDetectorRef.markForCheck()
+        }
       }),
       this.presenter.onDeletedActivity.subscribe((activity) => {
         this.onDeleteActivity(activity)
@@ -127,6 +153,29 @@ export class CourseDashboardPage implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.subscriptions.forEach((s) => s.unsubscribe())
+  }
+
+  private loadCourseIndicators(): void {
+    this.indicatorsLoading = true
+    this.subscriptions.push(
+      combineLatest([
+        this.indicatorService.loadIndicators(),
+        this.settingsService.getSettings(),
+      ]).subscribe({
+        next: ([indicators, settings]) => {
+          this.courseIndicators = indicators.filter(ind =>
+            ind.contextType === 'course' &&
+            this.roleService.canSeeIndicatorContext(ind.contextType) &&
+            settings.activeIndicators.includes(ind.id))
+          this.indicatorsLoading = false
+          this.changeDetectorRef.markForCheck()
+        },
+        error: () => {
+          this.indicatorsLoading = false
+          this.changeDetectorRef.markForCheck()
+        },
+      }),
+    )
   }
 
   private checkForCourseTutorial(): void {

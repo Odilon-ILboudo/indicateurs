@@ -9,7 +9,6 @@ import { NzSkeletonModule } from 'ng-zorro-antd/skeleton';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { IndicatorCardComponent } from '../../../../shared/ui/indicator-card/indicator-card.component';
-import { TeacherContextSelectorComponent } from '../widgets/teacher-context-selector/teacher-context-selector.component';
 import { IndicatorService } from '../../../../core/services/indicator.service';
 import { DashboardSettingsService } from '../../../../core/services/dashboard-settings.service';
 import { RoleService } from '../../../../core/services/role.service';
@@ -27,7 +26,6 @@ import { environment } from '../../../../../environments/environment';
     MatIconModule, MatCardModule,
     NzGridModule, NzSkeletonModule,
     IndicatorCardComponent,
-    TeacherContextSelectorComponent,
   ],
 })
 export class OverviewPage implements OnInit, OnDestroy {
@@ -38,7 +36,6 @@ export class OverviewPage implements OnInit, OnDestroy {
   protected readonly roleService = inject(RoleService);
 
   protected indicators: IndicatorDefinition[] = [];
-  private allIndicators: IndicatorDefinition[] = [];
   protected activeIndicatorIds: string[] = [];
   protected loading = true;
 
@@ -55,25 +52,13 @@ export class OverviewPage implements OnInit, OnDestroy {
     };
   }
 
-  async ngOnInit(): Promise<void> {
-    // Restaurer le contexte teacher si une sélection précédente existe
-    const saved = this.settingsService.getTeacherState();
-    if (saved.context) {
-      this.context = saved.context;
-    }
+  ngOnInit(): void {
     this.loadActiveIndicators();
     this.loadIndicators();
   }
 
   ngOnDestroy(): void {
     this.subscriptions.forEach(s => s.unsubscribe());
-  }
-
-  protected onTeacherContextChange(ctx: DashboardContext): void {
-    this.context = ctx;
-    this.indicators = this.allIndicators.filter(ind =>
-      ind.contextType === this.context.scope && this.roleService.canSeeIndicatorContext(ind.contextType));
-    this.changeDetectorRef.markForCheck();
   }
 
   private loadActiveIndicators(): void {
@@ -89,7 +74,6 @@ export class OverviewPage implements OnInit, OnDestroy {
     this.loading = true;
     this.subscriptions.push(
       this.indicatorService.loadIndicators().subscribe(indicators => {
-        this.allIndicators = indicators;
         this.indicators = indicators.filter(ind =>
           ind.contextType === this.context.scope && this.roleService.canSeeIndicatorContext(ind.contextType));
         this.loading = false;

@@ -124,45 +124,31 @@
     </nz-col>
     <nz-col nzXs="24" nzSm="24" nzMd="6" nzLg="6" nzXl="6">
       <aside id="tuto-course-statistics">
-        <nz-row [nzGutter]="[24, 24]">
-          <nz-col nzSpan="24">
-            <ui-statistic-card
-              nzIcon="line-chart"
-              ribbonColor="#f39c12"
-              description="Avancement sur les activités"
-              valueSuffix="%"
-              [value]="course.statistic?.progression ?? 0"
-              id="tuto-course-stat-progression"
-            />
-          </nz-col>
-          <nz-col nzSpan="24">
-            <ui-statistic-card
-              nzIcon="clock-circle"
-              ribbonColor="#349d55"
-              description="Temps passé sur les activités"
-              [value]="course.statistic?.timeSpent ?? 0 | duration"
-              id="tuto-course-stat-time"
-            />
-          </nz-col>
-          <nz-col nzSpan="24">
-            <ui-statistic-card
-              nzIcon="team"
-              ribbonColor="#8e44ad"
-              description="Enseignants"
-              [value]="course.statistic?.teacherCount ?? 0"
-              id="tuto-course-stat-teachers"
-            />
-          </nz-col>
-          <nz-col nzSpan="24">
-            <ui-statistic-card
-              nzIcon="team"
-              ribbonColor="#7f8c8d"
-              description="Élèves"
-              [value]="course.statistic?.studentCount ?? 0"
-              id="tuto-course-stat-students"
-            />
-          </nz-col>
-        </nz-row>
+        <h4 class="section-title">Indicateurs du cours</h4>
+        <ng-container *ngIf="indicatorsLoading">
+          <nz-spin nzSimple></nz-spin>
+        </ng-container>
+
+        <ng-container *ngIf="!indicatorsLoading">
+          <ng-container *ngIf="courseIndicators.length > 0 && courseContext; else noCourseIndicators">
+            <nz-row [nzGutter]="[24, 24]">
+              <nz-col *ngFor="let ind of courseIndicators" nzSpan="24">
+                <ui-indicator-card
+                  [indicator]="ind"
+                  [context]="courseContext"
+                  [clickable]="true"
+                  [queryParams]="indicatorQueryParams"
+                />
+              </nz-col>
+            </nz-row>
+          </ng-container>
+          <ng-template #noCourseIndicators>
+            <nz-empty
+              nzNotFoundContent="Aucun indicateur de contexte 'cours' n'a été activé."
+              style="margin: 16px 0 24px">
+            </nz-empty>
+          </ng-template>
+        </ng-container>
       </aside>
     </nz-col>
   </nz-row>

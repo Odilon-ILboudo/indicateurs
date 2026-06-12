@@ -328,6 +328,34 @@
         width: 100%;
       }
     }
+
+    .history-period-selector {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+
+      .period-btn {
+        border: 1px solid #d9d9d9;
+        background: #fff;
+        border-radius: 20px;
+        padding: 4px 14px;
+        font-size: 13px;
+        color: #666;
+        cursor: pointer;
+        transition: all 0.2s ease;
+
+        &:hover {
+          border-color: #1890ff;
+          color: #1890ff;
+        }
+
+        &.active {
+          background: #1890ff;
+          border-color: #1890ff;
+          color: #fff;
+        }
+      }
+    }
     
     .gauge-viz {
       .gauge {

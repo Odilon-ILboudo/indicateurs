@@ -110,13 +110,18 @@
       background-color: rgba(245, 34, 45, 0.1);
       color: #f5222d;
     }
-    
+
+    &.trend-stable {
+      background-color: rgba(0, 0, 0, 0.05);
+      color: #8c8c8c;
+    }
+
     .trend-icon {
       font-size: 14px;
       width: 14px;
       height: 14px;
     }
-    
+
     .trend-text {
       font-size: 11px;
     }

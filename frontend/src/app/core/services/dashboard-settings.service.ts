@@ -3,18 +3,8 @@ import { Injectable, inject } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { IndicatorService } from './indicator.service';
 import { RoleService } from './role.service';
-import { DashboardContext, UserDashboardSettings } from '../models/indicator.model';
+import { UserDashboardSettings } from '../models/indicator.model';
 import { environment } from '../../../environments/environment';
-
-export interface TeacherSelectionState {
-  courseId: string | null;
-  activityId: string | null;
-  scopeType: string;
-  context: DashboardContext | null;
-  courseName?: string;
-  activityName?: string;
-  scopeName?: string;
-}
 
 @Injectable({ providedIn: 'root' })
 export class DashboardSettingsService {
@@ -28,14 +18,6 @@ export class DashboardSettingsService {
     favoriteIndicators: [],
     layout: { columns: 3 },
   });
-
-  // Persiste la sélection teacher entre les navigations
-  private _teacherState: TeacherSelectionState = {
-    courseId: null, activityId: null, scopeType: 'course', context: null,
-  };
-
-  saveTeacherState(state: TeacherSelectionState): void { this._teacherState = state; }
-  getTeacherState(): TeacherSelectionState { return this._teacherState; }
 
   constructor() {
     this.loadSettings();

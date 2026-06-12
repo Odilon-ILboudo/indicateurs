@@ -163,22 +163,6 @@ export class IndicatorsController {
     return this.indicatorsService.previewSteps(body.formula, body.context);
   }
 
-  /**
-   * Pré-calcule toutes les vues de tous les indicateurs actifs pour un contexte donné.
-   * Appelé dès qu'un enseignant sélectionne un cours + une activité.
-   * POST /api/indicators/precompute-context
-   * Body: { contextType: 'course'|'group', contextId: string, activityId: string }
-   */
-  @Post('precompute-context')
-  async precomputeContext(
-    @Body() body: { contextType: string; contextId: string; activityId: string },
-  ) {
-    if (!body.contextType || !body.contextId || !body.activityId) {
-      throw new BadRequestException('contextType, contextId et activityId sont requis');
-    }
-    return this.indicatorsService.precomputeForContext(body.contextType, body.contextId, body.activityId);
-  }
-
   @Post(':id/recalculate')
   async recalculate(@Param('id') id: string) {
     return this.indicatorsService.recalculate(id);

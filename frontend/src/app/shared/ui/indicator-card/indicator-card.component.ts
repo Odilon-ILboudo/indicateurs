@@ -80,7 +80,7 @@ export class IndicatorCardComponent implements OnInit, OnChanges {
     const scope = this.context.scope;
 
     if (scope === 'course' || scope === 'group' || scope === 'activity') {
-      if ((scope === 'course' || scope === 'group') && !this.context.activityId) {
+      if (scope === 'group' && !this.context.activityId) {
         this.isLoading = false;
         this.cdr.detectChanges();
         return;
@@ -161,6 +161,14 @@ export class IndicatorCardComponent implements OnInit, OnChanges {
       case 'up': return 'trending_up';
       case 'down': return 'trending_down';
       default: return 'trending_flat';
+    }
+  }
+
+  getTrendLabel(trend: string): string {
+    switch (trend) {
+      case 'up': return 'En hausse par rapport aux dernières valeurs';
+      case 'down': return 'En baisse par rapport aux dernières valeurs';
+      default: return 'Stable par rapport aux dernières valeurs';
     }
   }
 

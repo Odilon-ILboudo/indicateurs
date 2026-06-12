@@ -37,3 +37,10 @@ ui-search-bar {
 .add-activity {
   margin-right: 1rem;
 }
+
+h4.section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--brand-background-sidebar, #3C2964);
+  margin-bottom: 16px;
+}

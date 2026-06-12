@@ -14,7 +14,6 @@ import { NgxEchartsModule, NGX_ECHARTS_CONFIG } from 'ngx-echarts';
 import type { EChartsOption } from 'echarts';
 
 import { IndicatorService } from '../../core/services/indicator.service';
-import { DashboardSettingsService } from '../../core/services/dashboard-settings.service';
 import { RoleService } from '../../core/services/role.service';
 import { IndicatorDefinition, IndicatorVisualization, ViewResult } from '../../core/models/indicator.model';
 import { environment } from '../../../environments/environment';
@@ -41,7 +40,6 @@ import { environment } from '../../../environments/environment';
 export class IndicatorDetailComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly indicatorService = inject(IndicatorService);
-  private readonly settingsService = inject(DashboardSettingsService);
   private readonly roleService = inject(RoleService);
   private readonly messageService = inject(NzMessageService);
   private readonly cdr = inject(ChangeDetectorRef);
@@ -52,10 +50,8 @@ export class IndicatorDetailComponent implements OnInit {
   activeContextId: string = environment.defaultUserId;
   activeActivityId: string | undefined = undefined;
 
-  teacherCourseName = '';
-  teacherActivityName = '';
-  teacherScopeName = '';
-  hasTeacherContext = false;
+  courseContextCourseName = '';
+  hasCourseContext = false;
 
   activityCourseName = '';
   activityName = '';
@@ -75,19 +71,22 @@ export class IndicatorDetailComponent implements OnInit {
   loading: Record<string, boolean> = {};
   chartOptions: Record<string, EChartsOption> = {};
 
+  /** Période affichée pour les graphiques en courbe (jours), par vizId. 7 jours par défaut. */
+  historyPeriodDays: Record<string, number> = {};
+
+  readonly historyPeriodOptions: { label: string; value: number }[] = [
+    { label: '7 jours', value: 7 },
+    { label: '30 jours', value: 30 },
+    { label: '90 jours', value: 90 },
+    { label: 'Tout', value: 0 },
+  ];
+
   isLoading = true;
 
   /** Visualisation active (choisie par l'utilisateur, persistée en BDD). */
   activeVizId: string | null = null;
 
   get isTeacher(): boolean { return this.roleService.isTeacher(); }
-
-  get canCompute(): boolean {
-    return this.hasGroupSnapshotContext
-      || this.hasActivityContext
-      || !this.isTeacher
-      || (this.isTeacher && this.hasTeacherContext);
-  }
 
   get visualizations(): IndicatorVisualization[] {
     const all = this.indicator?.visualizations ?? [];
@@ -134,17 +133,11 @@ export class IndicatorDetailComponent implements OnInit {
       this.activityName = q['activityName'] ?? 'Activité';
       this.activityCourseName = q['courseName'] ?? 'Cours';
       this.hasActivityContext = true;
-    } else if (this.isTeacher) {
-      const state = this.settingsService.getTeacherState();
-      if (state.context) {
-        this.activeContextType = state.context.scope;
-        this.activeContextId = state.context.scopeId;
-        this.activeActivityId = state.context.activityId ?? undefined;
-        this.teacherCourseName = state.courseName ?? '';
-        this.teacherActivityName = state.activityName ?? '';
-        this.teacherScopeName = state.scopeName ?? '';
-        this.hasTeacherContext = true;
-      }
+    } else if (q['from'] === 'course' && q['courseId']) {
+      this.activeContextType = 'course';
+      this.activeContextId = q['courseId'];
+      this.courseContextCourseName = q['courseName'] ?? 'Cours';
+      this.hasCourseContext = true;
     }
 
     this.loadIndicator(id);
@@ -161,6 +154,12 @@ export class IndicatorDetailComponent implements OnInit {
           return;
         }
 
+        // Pas de contexte spécifique (clic depuis le tableau de bord) :
+        // résout le contexte sur celui de l'indicateur (learner/teacher/admin = userId)
+        if (!this.hasGroupSnapshotContext && !this.hasActivityContext && !this.hasCourseContext) {
+          this.activeContextType = this.indicator.contextType;
+        }
+
         // Restaure la préférence viz depuis le cache BDD
         const saved = this.indicatorService.getVizPreference(id);
         const valid = this.visualizations.find(v => v.id === saved);
@@ -168,7 +167,7 @@ export class IndicatorDetailComponent implements OnInit {
 
         this.cdr.markForCheck();
         // Calcule uniquement la viz active (pas toutes)
-        if (this.canCompute && this.activeViz) this.computeViz(this.activeViz);
+        if (this.activeViz) this.computeViz(this.activeViz);
       },
       error: () => {
         this.isLoading = false;
@@ -237,7 +236,8 @@ export class IndicatorDetailComponent implements OnInit {
         }],
       };
     } else if (viz.type === 'line-chart') {
-      const history = result.metadata?.['history'] ?? [];
+      const fullHistory = result.metadata?.['history'] ?? [];
+      const history = this.filterHistoryByPeriod(fullHistory, this.historyPeriodDays[viz.id] ?? 7);
       this.chartOptions[viz.id] = {
         tooltip: { trigger: 'axis' },
         xAxis: { type: 'category', data: history.map((h: any) => new Date(h.timestamp).toLocaleDateString()) },
@@ -276,6 +276,21 @@ export class IndicatorDetailComponent implements OnInit {
         grid: { containLabel: true },
       };
     }
+  }
+
+  /** Change la période affichée pour la courbe d'un viz et reconstruit le graphique. */
+  onHistoryPeriodChange(viz: IndicatorVisualization, days: number): void {
+    this.historyPeriodDays[viz.id] = days;
+    const result = this.results[viz.id];
+    if (result) this.buildChartOptions(viz, result);
+    this.cdr.markForCheck();
+  }
+
+  /** Filtre l'historique sur les `days` derniers jours. `days === 0` = tout l'historique. */
+  private filterHistoryByPeriod(history: { value: number; timestamp: Date }[], days: number): { value: number; timestamp: Date }[] {
+    if (!days) return history;
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    return history.filter(h => new Date(h.timestamp).getTime() >= cutoff);
   }
 
   // ── Helpers template ──────────────────────────────────────────────────────

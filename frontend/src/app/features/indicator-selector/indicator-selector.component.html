@@ -24,16 +24,12 @@
       <nz-option nzValue="unpopular" nzLabel="Moins utilisés" />
     </nz-select>
 
-    <nz-select
-      nzPlaceHolder="Familles / indicateurs uniques"
-      [(ngModel)]="filters.grouping"
-      (ngModelChange)="applyFilters()"
-      style="width: 240px">
-      <nz-option nzValue="all" nzLabel="Familles + indicateurs uniques" />
-      <nz-option nzValue="families" nzLabel="Familles uniquement" />
-      <nz-option nzValue="standalone" nzLabel="Indicateurs uniques" />
-    </nz-select>
   </div>
+
+  <nz-tabs [nzSelectedIndex]="filters.grouping === 'standalone' ? 0 : 1" (nzSelectedIndexChange)="onGroupingTabChange($event)">
+    <nz-tab nzTitle="Indicateurs uniques"></nz-tab>
+    <nz-tab nzTitle="Familles"></nz-tab>
+  </nz-tabs>
 
   <!-- État de chargement -->
   <div *ngIf="isLoading" class="loading-state">
@@ -71,19 +67,24 @@
         </tr>
 
         <!-- Indicateur autonome ou membre d'une famille dépliée : même rendu qu'un indicateur unique -->
-        <ng-container *ngSwitchCase="'standalone'" [ngTemplateOutlet]="indicatorRow" [ngTemplateOutletContext]="{ $implicit: row.indicator }" />
-        <ng-container *ngSwitchCase="'member'" [ngTemplateOutlet]="indicatorRow" [ngTemplateOutletContext]="{ $implicit: row.indicator }" />
+        <ng-container *ngSwitchCase="'standalone'" [ngTemplateOutlet]="indicatorRow" [ngTemplateOutletContext]="{ $implicit: row.indicator, isMember: false }" />
+        <ng-container *ngSwitchCase="'member'" [ngTemplateOutlet]="indicatorRow" [ngTemplateOutletContext]="{ $implicit: row.indicator, isMember: true }" />
 
       </ng-container>
     </tbody>
   </nz-table>
 
-  <ng-template #indicatorRow let-indicator>
-    <tr>
+  <ng-template #indicatorRow let-indicator let-isMember="isMember">
+    <tr [class.member-row]="isMember">
       <td>
-        <strong>{{ indicator.name }}</strong>
-        <br>
-        <small class="description">{{ indicator.description }}</small>
+        <div style="display:flex;align-items:flex-start;gap:6px">
+          <mat-icon *ngIf="isMember" class="member-icon">subdirectory_arrow_right</mat-icon>
+          <div>
+            <strong>{{ indicator.name }}</strong>
+            <br>
+            <small class="description">{{ indicator.description }}</small>
+          </div>
+        </div>
       </td>
       <td>
         <nz-tag *ngFor="let ctx of getSupportedContexts(indicator)" style="margin-bottom:2px">

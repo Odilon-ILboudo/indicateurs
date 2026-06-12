@@ -7,6 +7,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { NzTableModule } from 'ng-zorro-antd/table';
 import { NzSwitchModule } from 'ng-zorro-antd/switch';
 import { NzSelectModule } from 'ng-zorro-antd/select';
+import { NzTabsModule } from 'ng-zorro-antd/tabs';
 import { NzTagModule } from 'ng-zorro-antd/tag';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzModalModule, NzModalService, NZ_MODAL_DATA } from 'ng-zorro-antd/modal';
@@ -586,7 +587,7 @@ export class IndicatorViewModalComponent {
   imports: [
     CommonModule, FormsModule, MatIconModule, MatTooltipModule,
     NzTableModule, NzSwitchModule, NzSelectModule, NzInputModule,
-    NzModalModule, NzTagModule, NzSpinModule,
+    NzModalModule, NzTagModule, NzSpinModule, NzTabsModule,
   ],
   templateUrl: './indicator-selector.component.html',
   styleUrls: ['./indicator-selector.component.scss']
@@ -609,7 +610,7 @@ export class IndicatorSelectorComponent implements OnInit {
   filters = {
     scope: 'all' as 'all' | IndicatorScope,
     sortBy: 'popular' as 'popular' | 'unpopular' | 'name',
-    grouping: 'all' as 'all' | 'families' | 'standalone',
+    grouping: 'standalone' as 'standalone' | 'families',
   };
 
   ngOnInit(): void {
@@ -643,11 +644,9 @@ export class IndicatorSelectorComponent implements OnInit {
       filtered = filtered.filter(ind => ind.contextType === this.filters.scope);
     }
 
-    if (this.filters.grouping === 'families') {
-      filtered = filtered.filter(ind => !!ind.familyName);
-    } else if (this.filters.grouping === 'standalone') {
-      filtered = filtered.filter(ind => !ind.familyName);
-    }
+    filtered = this.filters.grouping === 'families'
+      ? filtered.filter(ind => !!ind.familyName)
+      : filtered.filter(ind => !ind.familyName);
 
     if (this.filters.sortBy === 'popular') {
       filtered.sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0));
@@ -658,6 +657,12 @@ export class IndicatorSelectorComponent implements OnInit {
     }
 
     this.displayRows = buildIndicatorDisplayRows(filtered, this.expandedFamilies);
+  }
+
+  /** Bascule entre l'onglet "Indicateurs uniques" (0) et "Familles" (1). */
+  onGroupingTabChange(index: number): void {
+    this.filters.grouping = index === 0 ? 'standalone' : 'families';
+    this.applyFilters();
   }
 
   toggleFamily(familyName: string): void {

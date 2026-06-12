@@ -45,3 +45,16 @@ export class IndicatorValue {
   @UpdateDateColumn()
   updatedAt: Date;
 }
+
+/**
+ * Construit les métadonnées d'une valeur en ajoutant la nouvelle valeur à
+ * l'historique existant. Utilisé par `calculateTrend` pour déterminer la tendance.
+ */
+export function buildValueMetadata(
+  previous: IndicatorValue['metadata'] | null | undefined,
+  value: number,
+  extra: Record<string, any> = {},
+): IndicatorValue['metadata'] {
+  const history = [...(previous?.history ?? []), { value, timestamp: new Date() }];
+  return { ...extra, lastUpdate: new Date(), history };
+}

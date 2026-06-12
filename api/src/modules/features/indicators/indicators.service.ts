@@ -3,7 +3,7 @@ import { Injectable, NotFoundException, BadRequestException, ConflictException, 
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { IndicatorDefinition } from './entities/indicator-definition.entity';
-import { IndicatorValue } from './entities/indicator-value.entity';
+import { IndicatorValue, buildValueMetadata } from './entities/indicator-value.entity';
 import { IndicatorFormulaVersion } from './entities/indicator-formula-version.entity';
 import { IndicatorExecutionLog } from './entities/indicator-execution-log.entity';
 import { IndicatorSnapshot } from './entities/indicator-snapshot.entity';
@@ -204,13 +204,19 @@ export class IndicatorsService {
             indicatorId: indicator.id,
           });
           const isScalar = typeof value === 'number';
+          const scalarValue = isScalar ? value : 0;
+          const existing = await this.indicatorValueModel.findOne({
+            where: { indicatorId: indicator.id, contextType: 'learner', contextId: userId },
+          });
           await this.indicatorValueModel.upsert(
             {
               indicatorId: indicator.id,
               contextType: 'learner',
               contextId: userId,
-              value: isScalar ? value : 0,
-              metadata: { lastUpdate: new Date(), structuredValue: isScalar ? undefined : value, history: [] } as any,
+              value: scalarValue,
+              metadata: buildValueMetadata(existing?.metadata, scalarValue, {
+                structuredValue: isScalar ? undefined : value,
+              }),
             },
             { conflictPaths: ['indicatorId', 'contextType', 'contextId'] },
           );
@@ -236,31 +242,6 @@ export class IndicatorsService {
 
   async getCourseStudents(courseId: string) {
     return this.platonService.getStudentsByCourse(courseId);
-  }
-
-  /**
-   * Pré-calcule tous les indicateurs actifs dont le contextType correspond
-   * au contexte fourni (course, group, activity).
-   */
-  async precomputeForContext(
-    contextType: string,
-    contextId: string,
-    activityId: string,
-  ): Promise<{ computed: number }> {
-    const indicators = await this.findAllActive();
-    let computed = 0;
-
-    for (const indicator of indicators) {
-      if (indicator.contextType !== contextType) continue;
-      try {
-        await this.computeView(indicator.id, contextType, contextId, activityId);
-        computed++;
-      } catch {
-        // erreur sur un indicateur individuel → on continue
-      }
-    }
-
-    return { computed };
   }
 
   /**
@@ -305,17 +286,16 @@ export class IndicatorsService {
       : contextId;
     const cacheContextId = viz?.id ? `${baseContextId}:${viz.id}` : baseContextId;
 
-    if (!forceRefresh) {
-      const cached = await this.indicatorValueModel.findOne({
-        where: { indicatorId, contextType, contextId: cacheContextId },
-      });
-      if (cached) {
-        return {
-          value: cached.value,
-          structuredValue: (cached.metadata as any)?.structuredValue,
-          metadata: cached.metadata as any,
-        };
-      }
+    const existing = await this.indicatorValueModel.findOne({
+      where: { indicatorId, contextType, contextId: cacheContextId },
+    });
+
+    if (!forceRefresh && existing) {
+      return {
+        value: existing.value,
+        structuredValue: (existing.metadata as any)?.structuredValue,
+        metadata: existing.metadata as any,
+      };
     }
 
     const formulaContext: any = { indicatorId };
@@ -347,7 +327,7 @@ export class IndicatorsService {
         contextType,
         contextId: cacheContextId,
         value: scalarValue,
-        metadata: { lastUpdate: new Date(), structuredValue, history: [] } as any,
+        metadata: buildValueMetadata(existing?.metadata, scalarValue, { structuredValue }),
       },
       { conflictPaths: ['indicatorId', 'contextType', 'contextId'] },
     );
@@ -494,10 +474,9 @@ export class IndicatorsService {
 
   private calculateTrend(history: any[]): 'up' | 'down' | 'stable' {
     if (!history || history.length < 2) return 'stable';
-    const recent = history.slice(-5);
-    const values = recent.map(h => h.value);
-    const avg = values.reduce((a, b) => a + b, 0) / values.length;
-    const last = values[values.length - 1];
+    const last = history[history.length - 1].value;
+    const previous = history.slice(-6, -1).map(h => h.value);
+    const avg = previous.reduce((a, b) => a + b, 0) / previous.length;
     if (last > avg * 1.05) return 'up';
     if (last < avg * 0.95) return 'down';
     return 'stable';

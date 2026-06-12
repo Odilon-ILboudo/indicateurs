@@ -24,6 +24,15 @@
             <span class="unit" *ngIf="activeViz?.unit">
               {{ activeViz!.unit }}
             </span>
+            <span
+              class="trend-badge"
+              *ngIf="value?.trend"
+              [class.trend-up]="value!.trend === 'up'"
+              [class.trend-down]="value!.trend === 'down'"
+              [class.trend-stable]="value!.trend === 'stable'"
+              [matTooltip]="getTrendLabel(value!.trend!)">
+              <mat-icon class="trend-icon">{{ getTrendIcon(value!.trend!) }}</mat-icon>
+            </span>
           </ng-container>
           <ng-container *ngIf="isChartVisualization()">
             <mat-icon class="chart-placeholder-icon">bar_chart</mat-icon>

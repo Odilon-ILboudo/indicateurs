@@ -3,7 +3,7 @@ import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { IndicatorDefinition } from '../indicators/entities/indicator-definition.entity';
-import { IndicatorValue } from '../indicators/entities/indicator-value.entity';
+import { IndicatorValue, buildValueMetadata } from '../indicators/entities/indicator-value.entity';
 import { UserIndicatorPreference } from './entities/user-indicator-preference.entity';
 import { FormulaInterpreterService } from '../indicators/interpreter/formula-interpreter.service';
 
@@ -171,13 +171,16 @@ export class UserPreferencesService {
       this.logger.warn(`Calcul échoué pour indicator=${indicator.id} user=${userId}: ${(err as Error).message}`);
     }
 
+    const existing = await this.indicatorValueRepository.findOne({
+      where: { indicatorId: indicator.id, contextType: indicator.contextType, contextId: userId },
+    });
     await this.indicatorValueRepository.upsert(
       {
         indicatorId: indicator.id,
         contextType: indicator.contextType,
         contextId: userId,
         value,
-        metadata: { lastUpdate: new Date(), history: [] } as any,
+        metadata: buildValueMetadata(existing?.metadata, value),
       },
       { conflictPaths: ['indicatorId', 'contextType', 'contextId'] },
     );

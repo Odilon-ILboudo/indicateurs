@@ -192,12 +192,6 @@ export class IndicatorService {
     );
   }
 
-  precomputeContext(contextType: string, contextId: string, activityId: string): Observable<{ computed: number }> {
-    return this.http.post<{ computed: number }>(`${this.apiUrl}/precompute-context`, {
-      contextType, contextId, activityId,
-    });
-  }
-
   // ── Snapshots ─────────────────────────────────────────────────────────────
 
   getSnapshots(indicatorId: string, activityId: string): Observable<IndicatorSnapshot[]> {

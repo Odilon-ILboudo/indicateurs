@@ -6,12 +6,6 @@
     <p>Visualisez vos indicateurs.</p>
   </div>
 
-  <!-- Sélecteur de contexte enseignant -->
-  <app-teacher-context-selector
-    *ngIf="roleService.isTeacher()"
-    (contextChange)="onTeacherContextChange($event)">
-  </app-teacher-context-selector>
-
   <!-- Chargement -->
   <div *ngIf="loading" class="loading-container">
     <nz-skeleton [nzActive]="true" [nzParagraph]="{ rows: 4 }"></nz-skeleton>
@@ -22,11 +16,7 @@
     <div class="indicators-section">
       <div class="section-header">
         <h3>Vos indicateurs</h3>
-        <p *ngIf="!roleService.isTeacher()">Suivi de votre progression personnelle.</p>
-        <p *ngIf="roleService.isTeacher()">
-          {{ context.scope === 'course' ? 'Vue cours entier' : 'Vue groupe de TP' }}
-          <ng-container *ngIf="context.activityId"> · Activité sélectionnée</ng-container>
-        </p>
+        <p>Suivi de vos indicateurs.</p>
       </div>
 
       <div nz-row [nzGutter]="[16, 16]">

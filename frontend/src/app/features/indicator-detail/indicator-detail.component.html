@@ -58,45 +58,26 @@
       </a>
     </div>
 
-    <!-- Bannière teacher -->
-    <div class="context-banner"
-      *ngIf="!hasGroupSnapshotContext && !hasActivityContext && isTeacher && hasTeacherContext">
+    <!-- Bannière cours -->
+    <div class="context-banner" *ngIf="!hasGroupSnapshotContext && !hasActivityContext && hasCourseContext">
       <div class="ctx-chips">
-        <span class="ctx-chip" *ngIf="teacherCourseName">
-          <mat-icon>school</mat-icon>{{ teacherCourseName }}
-        </span>
-        <mat-icon class="ctx-sep">chevron_right</mat-icon>
-        <span class="ctx-chip" *ngIf="teacherActivityName">
-          <mat-icon>assignment</mat-icon>{{ teacherActivityName }}
-        </span>
-        <mat-icon class="ctx-sep">chevron_right</mat-icon>
-        <span class="ctx-chip scope"><mat-icon>layers</mat-icon>{{ teacherScopeName }}</span>
+        <span class="ctx-chip"><mat-icon>local_library</mat-icon>{{ courseContextCourseName }}</span>
       </div>
-      <a routerLink="/dashboard/overview" class="ctx-back-link">
-        <mat-icon>arrow_back</mat-icon> Modifier le filtre
+      <a [routerLink]="['/dashboard/courses', activeContextId]" class="ctx-back-link">
+        <mat-icon>arrow_back</mat-icon> Retour au cours
       </a>
     </div>
 
-    <!-- Teacher sans contexte -->
-    <nz-empty
-      *ngIf="!hasGroupSnapshotContext && !hasActivityContext && isTeacher && !hasTeacherContext"
-      nzNotFoundContent="Aucun cours ou activité sélectionné."
-      style="margin: 40px 0">
-      <ng-template #nzNotFoundFooter>
-        <a routerLink="/dashboard/overview"><mat-icon>arrow_back</mat-icon> Retour au tableau de bord</a>
-      </ng-template>
-    </nz-empty>
-
     <!-- Aucune visualisation configurée -->
     <nz-empty
-      *ngIf="canCompute && visualizations.length === 0"
+      *ngIf="visualizations.length === 0"
       nzNotFoundContent="Aucune visualisation configurée pour cet indicateur."
       style="margin: 40px 0">
     </nz-empty>
 
     <!-- Onglets par visualisation - calcul à la demande, persistance BDD -->
     <nz-tabs
-      *ngIf="canCompute && visualizations.length > 0"
+      *ngIf="visualizations.length > 0"
       [nzSelectedIndex]="activeVizIndex"
       (nzSelectedIndexChange)="onVizTabChange($event)">
       <nz-tab *ngFor="let viz of visualizations" [nzTitle]="viz.label">
@@ -127,6 +108,16 @@
           <!-- GAUGE / LINE-CHART / BAR-CHART / HISTOGRAM -->
           <div class="view-chart"
             *ngIf="viz.type !== 'card' && chartOptions[viz.id]">
+            <div class="history-period-selector" *ngIf="viz.type === 'line-chart'">
+              <button
+                *ngFor="let opt of historyPeriodOptions"
+                type="button"
+                class="period-btn"
+                [class.active]="(historyPeriodDays[viz.id] ?? 7) === opt.value"
+                (click)="onHistoryPeriodChange(viz, opt.value)">
+                {{ opt.label }}
+              </button>
+            </div>
             <div echarts [options]="chartOptions[viz.id]"
               [style.height]="viz.type === 'bar-chart' ? '400px' : '300px'">
             </div>

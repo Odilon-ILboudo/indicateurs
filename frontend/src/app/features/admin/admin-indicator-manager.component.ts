@@ -18,6 +18,7 @@ import { NzSpinModule } from 'ng-zorro-antd/spin';
 import { NzFormModule } from 'ng-zorro-antd/form';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzSelectModule } from 'ng-zorro-antd/select';
+import { NzTabsModule } from 'ng-zorro-antd/tabs';
 import { IndicatorService } from '../../core/services/indicator.service';
 import { IndicatorDefinition, IndicatorScope } from '../../core/models/indicator.model';
 import { IndicatorConfigComponent } from './indicator-config.component';
@@ -227,7 +228,7 @@ export class IndicatorFamilyStartModalComponent {
     NzTableModule, NzButtonModule, NzModalModule,
     NzSwitchModule, NzTagModule, NzTooltipModule,
     NzPopconfirmModule, NzBadgeModule, NzDividerModule,
-    NzEmptyModule, NzSpinModule, NzSelectModule,
+    NzEmptyModule, NzSpinModule, NzTabsModule,
   ],
   template: `
     <div class="admin-manager">
@@ -241,11 +242,6 @@ export class IndicatorFamilyStartModalComponent {
           </p>
         </div>
         <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
-          <nz-select [(ngModel)]="groupingFilter" (ngModelChange)="applyGroupingFilter()" style="width:240px">
-            <nz-option nzValue="all" nzLabel="Familles + indicateurs uniques"></nz-option>
-            <nz-option nzValue="families" nzLabel="Familles uniquement"></nz-option>
-            <nz-option nzValue="standalone" nzLabel="Indicateurs uniques"></nz-option>
-          </nz-select>
           <button nz-button (click)="openFamilyWizard()">
             <mat-icon style="font-size:18px;line-height:1.4">folder_special</mat-icon>
             Créer une famille
@@ -256,6 +252,11 @@ export class IndicatorFamilyStartModalComponent {
           </button>
         </div>
       </div>
+
+      <nz-tabs [nzSelectedIndex]="groupingFilter === 'standalone' ? 0 : 1" (nzSelectedIndexChange)="onTabChange($event)">
+        <nz-tab nzTitle="Indicateurs uniques"></nz-tab>
+        <nz-tab nzTitle="Familles"></nz-tab>
+      </nz-tabs>
 
       <nz-spin [nzSpinning]="loading">
         <nz-table
@@ -289,8 +290,8 @@ export class IndicatorFamilyStartModalComponent {
               </tr>
 
               <!-- Indicateur autonome ou membre d'une famille dépliée : même rendu et fonctionnalités qu'un indicateur unique -->
-              <ng-container *ngSwitchCase="'standalone'" [ngTemplateOutlet]="indicatorRow" [ngTemplateOutletContext]="{ $implicit: row.indicator }" />
-              <ng-container *ngSwitchCase="'member'" [ngTemplateOutlet]="indicatorRow" [ngTemplateOutletContext]="{ $implicit: row.indicator }" />
+              <ng-container *ngSwitchCase="'standalone'" [ngTemplateOutlet]="indicatorRow" [ngTemplateOutletContext]="{ $implicit: row.indicator, isMember: false }" />
+              <ng-container *ngSwitchCase="'member'" [ngTemplateOutlet]="indicatorRow" [ngTemplateOutletContext]="{ $implicit: row.indicator, isMember: true }" />
 
             </ng-container>
           </tbody>
@@ -302,13 +303,18 @@ export class IndicatorFamilyStartModalComponent {
         </nz-empty>
       </nz-spin>
 
-      <ng-template #indicatorRow let-ind>
-        <tr>
+      <ng-template #indicatorRow let-ind let-isMember="isMember">
+        <tr [class.member-row]="isMember">
           <!-- Nom + description -->
           <td>
-            <div style="font-weight:500">{{ ind.name }}</div>
-            <div style="font-size:11px;color:#999;margin-top:2px">
-              {{ ind.description | slice:0:80 }}{{ (ind.description?.length ?? 0) > 80 ? '…' : '' }}
+            <div style="display:flex;align-items:flex-start;gap:6px">
+              <mat-icon *ngIf="isMember" style="font-size:16px;color:#bbb;margin-top:2px">subdirectory_arrow_right</mat-icon>
+              <div>
+                <div style="font-weight:500">{{ ind.name }}</div>
+                <div style="font-size:11px;color:#999;margin-top:2px">
+                  {{ ind.description | slice:0:80 }}{{ (ind.description?.length ?? 0) > 80 ? '…' : '' }}
+                </div>
+              </div>
             </div>
           </td>
 
@@ -412,6 +418,8 @@ export class IndicatorFamilyStartModalComponent {
     .family-row { cursor: pointer; background: #f9f0ff; }
     .family-row:hover { background: #efdbff; }
     .family-row td { display: flex; align-items: center; gap: 6px; }
+    .member-row { background: #fafafa; }
+    .member-row td:first-child { padding-left: 28px; }
   `],
 })
 export class AdminIndicatorManagerComponent implements OnInit {
@@ -422,7 +430,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
   indicators: IndicatorDefinition[] = [];
   displayRows: IndicatorDisplayRow[] = [];
   expandedFamilies = new Set<string>();
-  groupingFilter: 'all' | 'families' | 'standalone' = 'all';
+  groupingFilter: 'families' | 'standalone' = 'standalone';
   loading = false;
   recalculating = new Set<string>();
   historyLoading = new Set<string>();
@@ -440,14 +448,17 @@ export class AdminIndicatorManagerComponent implements OnInit {
     });
   }
 
-  /** Reconstruit `displayRows` (familles repliables + indicateurs uniques) selon le filtre courant. */
+  /** Bascule entre l'onglet "Indicateurs uniques" (0) et "Familles" (1). */
+  onTabChange(index: number): void {
+    this.groupingFilter = index === 0 ? 'standalone' : 'families';
+    this.applyGroupingFilter();
+  }
+
+  /** Reconstruit `displayRows` (familles repliables ou indicateurs uniques) selon l'onglet courant. */
   applyGroupingFilter(): void {
-    let filtered = this.indicators;
-    if (this.groupingFilter === 'families') {
-      filtered = filtered.filter(ind => !!ind.familyName);
-    } else if (this.groupingFilter === 'standalone') {
-      filtered = filtered.filter(ind => !ind.familyName);
-    }
+    const filtered = this.groupingFilter === 'families'
+      ? this.indicators.filter(ind => !!ind.familyName)
+      : this.indicators.filter(ind => !ind.familyName);
     this.displayRows = buildIndicatorDisplayRows(filtered, this.expandedFamilies);
   }
 
