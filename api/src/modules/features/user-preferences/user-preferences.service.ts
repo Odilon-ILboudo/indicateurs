@@ -6,6 +6,7 @@ import { IndicatorDefinition } from '../indicators/entities/indicator-definition
 import { IndicatorValue, buildValueMetadata } from '../indicators/entities/indicator-value.entity';
 import { UserIndicatorPreference } from './entities/user-indicator-preference.entity';
 import { FormulaInterpreterService } from '../indicators/interpreter/formula-interpreter.service';
+import { resolveFormula } from '../indicators/formula-resolution.util';
 
 @Injectable()
 export class UserPreferencesService {
@@ -156,7 +157,7 @@ export class UserPreferencesService {
   private async calculateAndStoreValue(userId: string, indicator: IndicatorDefinition): Promise<void> {
     if (!['learner', 'teacher', 'admin'].includes(indicator.contextType)) return;
 
-    const formulaToUse = indicator.formula;
+    const formulaToUse = resolveFormula(indicator);
 
     if (!formulaToUse?.pipeline?.length) return;
 

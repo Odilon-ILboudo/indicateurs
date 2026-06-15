@@ -74,7 +74,6 @@ pages. `apiUrl = ${environment.apiUrl}/indicators` (L11),
 | `getTeacherContext(teacherId)` L179-181 | `GET {apiUrl}/teacher/:teacherId/context` | A.2, E.2 |
 | `getCourseActivities(courseId)` L183-185 | `GET {apiUrl}/course/:courseId/activities` | A.2, E.2 |
 | `getCourseStudents(courseId)` L187-193 | `GET {apiUrl}/course/:courseId/students` | E.2 |
-| `precomputeContext(contextType, contextId, activityId)` L195-199 | `POST {apiUrl}/precompute-context` | A.2 |
 | `getSnapshots(id, activityId)` L203-207 | `GET {apiUrl}/:id/snapshots?activityId=` | F |
 | `createSnapshot(id, body)` L209-214 | `POST {apiUrl}/:id/snapshots` | F |
 | `updateSnapshotTitle(id, snapshotId, title)` L216-221 | `PATCH {apiUrl}/:id/snapshots/:snapshotId` | F |
@@ -133,19 +132,10 @@ pages. `apiUrl = ${environment.apiUrl}/indicators` (L11),
    L50, L70) → `emitContext()` L206-233 :
    - construit un `DashboardContext` et l'émet via `@Output() contextChange`
      → `overview.page.ts` `onTeacherContextChange()` L72-77.
-   - **Fire-and-forget** L231-232 :
-     `indicatorService.precomputeContext(scope, scopeId, selectedActivityId)`
-     (`indicator.service.ts:195-199`) → **`POST /api/indicators/precompute-context`**
-     → `indicators.controller.ts:172-180` `precomputeContext` →
-     `indicators.service.ts:245-264` `precomputeForContext` :
-     - L250 `findAllActive()` → tous les indicateurs actifs
-     - L253-261 boucle : skip si `indicator.contextType !== contextType`
-       (L254), sinon `this.computeView(indicator.id, contextType, contextId, activityId)`
-       - **cascade complète décrite en B.2** (sans `vizId`, donc
-       `visualizations[0]`)
-     - try/catch par indicateur (L258-260), retourne `{ computed: n }`
-     - **But** : pré-remplir `indicator_values` avant que l'utilisateur
-       n'ouvre une carte ou le détail.
+   - la sélection met à jour le contexte global du dashboard : il n'existe pas
+     de route `/api/indicators/precompute-context` dans le backend actuel.
+     Les cartes et la page détail calculent les valeurs `course`/`group`/
+     `activity` à la demande via `computeView()` lorsque l'utilisateur les affiche.
 
 ---
 
@@ -1024,13 +1014,10 @@ vers le moteur DSL.
 
 ### J.2 Services frontend orphelins ou peu utilisés
 
-- **`core/services/group.service.ts`** : `getGroupsForTeacher(teacherId)`
-  (L18-20 → `GET /api/groups?teacherId=`) et `getGroupMembers(groupId)`
-  (L22-24 → `GET /api/groups/members?groupId=`). **Aucun composant n'injecte
-  `GroupService`** - service défini mais jamais utilisé. Backend
-  correspondant : `groups.controller.ts:13-16`/`24-27` → `groups.service.ts:8-14`
-  → `PlatonService.getGroupsForTeacher` (`platon.service.ts:240-255`,
-  `SELECT cg.id, cg.name, cg.course_id, c.name FROM "CourseGroups" cg JOIN
+- **`core/services/group.service.ts`** : service inutilisé et supprimé.
+  Le backend correspondant `/api/groups?teacherId=` et
+  `/api/groups/members?groupId=` a également été retiré.
+
   "Courses" c ON c.id = cg.course_id WHERE c.owner_id = $1`) et
   `PlatonService.getUserIdsByGroup` (`platon.service.ts:226-235`,
   `SELECT cgm.user_id FROM "CourseGroupsMember" cgm JOIN "CourseGroups" cg ON

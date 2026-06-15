@@ -10,6 +10,7 @@ import { IndicatorSnapshot } from './entities/indicator-snapshot.entity';
 import { UserIndicatorPreference } from '../user-preferences/entities/user-indicator-preference.entity';
 import { FormulaInterpreterService } from './interpreter/formula-interpreter.service';
 import { PlatonService } from '../../core/platon/platon.service';
+import { resolveFormula } from './formula-resolution.util';
 
 @Injectable()
 export class IndicatorsService {
@@ -168,9 +169,7 @@ export class IndicatorsService {
     const indicator = await this.findById(id);
 
     // Résolution de la formule : visualizations[n].formula en priorité, puis indicator.formula (legacy)
-    const vizList = indicator.visualizations ?? [];
-    const formula = vizList.find(v => v.formula?.pipeline?.length)?.formula
-      ?? indicator.formula;
+    const formula = resolveFormula(indicator);
 
     if (!formula?.pipeline?.length) {
       throw new BadRequestException(`L'indicateur "${indicator.name}" n'a pas de formule DSL`);
@@ -268,7 +267,7 @@ export class IndicatorsService {
       : vizList[0];
 
     // La formule à utiliser : propre à la viz, sinon formule partagée
-    const formula = viz?.formula?.pipeline?.length ? viz.formula : indicator.formula;
+    const formula = resolveFormula(indicator, vizId);
 
     if (!formula?.pipeline?.length) {
       throw new BadRequestException(
@@ -455,6 +454,60 @@ export class IndicatorsService {
         } catch (err) {
           this.logger.warn(
             `Snapshot refresh échoué - indicatorId=${snapshot.indicatorId} contextId=${snapshot.contextId} viz=${viz.id}: ${(err as Error).message}`,
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Rafraîchit (force-recalcul) toutes les vues course/group/activity déjà mises en cache dans
+   * indicator_values pour une activité donnée (au-delà des seuls snapshots épinglés).
+   * Une vue course/group/activity est mise en cache dès qu'un utilisateur la consulte
+   * (computeView), même sans snapshot explicite ; sans ce rafraîchissement ce cache restait figé
+   * à sa valeur de première consultation. Le contextId composite (`${contextId}:${activityId}`
+   * pour course/group, `${activityId}` pour activity, suffixé de `:${viz.id}` selon la vue) est
+   * celui produit par computeView — voir sa construction de `cacheContextId`.
+   */
+  async refreshActivityViews(indicatorId: string, activityId: string): Promise<void> {
+    const indicator = await this.indicatorModel.findOne({ where: { id: indicatorId } });
+    if (!indicator) return;
+
+    const rows = await this.indicatorValueModel
+      .createQueryBuilder('iv')
+      .where('iv.indicatorId = :indicatorId', { indicatorId })
+      .andWhere('iv.contextType IN (:...types)', { types: ['course', 'group', 'activity'] })
+      .andWhere(
+        '(iv.contextId = :activityId OR iv.contextId LIKE :prefix OR iv.contextId LIKE :suffix OR iv.contextId LIKE :middle)',
+        {
+          activityId,
+          prefix: `${activityId}:%`,
+          suffix: `%:${activityId}`,
+          middle: `%:${activityId}:%`,
+        },
+      )
+      .getMany();
+
+    if (!rows.length) return;
+
+    // Déduit les couples (contextType, contextId d'origine) uniques à partir des contextId
+    // composites : pour 'activity' le contextId d'origine est l'activityId lui-même, pour
+    // 'course'/'group' c'est le premier segment (avant `:${activityId}`).
+    const targets = new Map<string, { contextType: string; contextId: string }>();
+    for (const row of rows) {
+      const contextId = row.contextId.split(':')[0];
+      targets.set(`${row.contextType}:${contextId}`, { contextType: row.contextType, contextId });
+    }
+
+    const vizList = indicator.visualizations ?? [];
+
+    for (const { contextType, contextId } of targets.values()) {
+      for (const vizId of (vizList.length ? vizList.map(v => v.id) : [undefined])) {
+        try {
+          await this.computeView(indicatorId, contextType, contextId, activityId, vizId, true);
+        } catch (err) {
+          this.logger.warn(
+            `Refresh vue échoué - indicatorId=${indicatorId} contextType=${contextType} contextId=${contextId} viz=${vizId}: ${(err as Error).message}`,
           );
         }
       }

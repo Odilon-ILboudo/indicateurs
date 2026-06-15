@@ -5,4 +5,3 @@ export { IndicatorSelectorComponent } from '../../features/indicator-selector/in
 
 export { AdminIndicatorManagerComponent } from '../../features/admin/admin-indicator-manager.component';
 export { IndicatorConfigComponent } from '../../features/admin/indicator-config.component';
-export { ActivityIndicatorComponent } from '../../features/activity-indicator/activity-indicator.component';

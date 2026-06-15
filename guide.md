@@ -206,10 +206,10 @@ Tester chaque onglet (Tester + Déboguer). Cliquer **"Créer"** → enchaîne su
 1. Passer `defaultUserId` sur l'**Enseignant**, F5.
 2. `/dashboard/overview` → utiliser le **sélecteur de contexte enseignant**
    (`TeacherContextSelectorComponent`) : Cours → Activité → "Voir par : cours
-   entier" ou activité. Cette sélection déclenche en arrière-plan
-   `POST /indicators/precompute-context` (`precomputeContext()`,
-   fire-and-forget) qui pré-calcule toutes les valeurs `course`/`group`/
-   `activity` pour ce contexte avant même qu'on clique sur une carte.
+   entier" ou activité. Cette sélection met à jour le contexte affiché ;
+   les valeurs `course`/`group`/`activity` sont ensuite calculées au moment de
+   l'affichage, via `computeView()`, lorsqu'une carte ou la page détail est
+   consultée.
 3. Aller sur `/dashboard/courses/:id/activities/:activityId` → section
    **"Indicateurs"** → carte "Tentatives avant réussite - Activité".
 4. **Sélection de vue active** (`activeVizId`) : cliquer sur les **chips**
@@ -218,6 +218,11 @@ Tester chaque onglet (Tester + Déboguer). Cliquer **"Créer"** → enchaîne su
    (`user_indicator_preferences.active_viz_id` via `setVizPreference`) -
    recharger la page : le choix est conservé, et identique entre la carte et
    la page détail (`/dashboard/indicator/:id`).
+
+> Note : il n'existe pas de route d'API `/indicators/precompute-context` dans
+> le backend actuel. Le sélecteur de contexte enseignant met à jour l'état
+> affiché, et les cartes ou détails calculent les valeurs `course`/`group`/
+> `activity` à la demande via `computeView()`.
 
 ####  Masquage de visualisation (`enabledVizIds`)
 
@@ -722,9 +727,10 @@ Toujours dans `/dashboard/indicators` (rôle **Admin**), table de gestion :
   chaque fois que vous avez ouvert un sélecteur "Table" ou "Colonnes de
   filtre" dans le builder - c'est ce endpoint qui peuple ces listes
   (`platonSchema`, avec mise en cache `_colsCache`).
-- **Précalcul de contexte** (`POST /indicators/precompute-context`) : déjà
-  exercé en A.2 via le sélecteur de contexte enseignant - aucun appel manuel
-  nécessaire.
+- Les sélections de contexte enseignant ne déclenchent pas de route de
+  pré-calcul dédiée : elles sont stockées dans `DashboardSettingsService` et
+  les valeurs `course`/`group`/`activity` sont calculées par `computeView()`
+  lorsque les cartes ou la page détail sont affichées.
 
 ### À propos de `joinContextFields`
 

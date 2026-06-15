@@ -110,6 +110,69 @@ export class FormulaInterpreterService {
     return result;
   }
 
+  /**
+   * Détecte si une formule a la forme "agrégat simple sur SessionData" éligible au calcul
+   * incrémental (delta) : fetch(SessionData, contextFields incluant user_id) → extract(field)
+   * → exactement un aggregate (avg/sum/count/min/max), suivi optionnellement de round/divide.
+   * Retourne null si la formule a une autre forme (filter/join/groupBy/js, etc.) — ces
+   * pipelines restent recalculés intégralement à chaque événement.
+   */
+  getIncrementalShape(formula: FormulaDefinition): { extractField: string; postSteps: FormulaStep[] } | null {
+    const pipeline = formula?.pipeline ?? [];
+    if (pipeline.length < 3) return null;
+
+    const [fetchStep, extractStep, ...rest] = pipeline;
+
+    if (fetchStep.type !== 'fetch') return null;
+    const table = FormulaInterpreterService.LEGACY_TABLE_MAP[fetchStep.params?.table] ?? fetchStep.params?.table;
+    if (table !== 'SessionData') return null;
+    if (!(fetchStep.params?.contextFields ?? []).includes('user_id')) return null;
+
+    if (extractStep.type !== 'extract' || !extractStep.params?.extractField) return null;
+
+    if (!rest.every(s => ['aggregate', 'round', 'divide'].includes(s.type))) return null;
+    const aggregateSteps = rest.filter(s => s.type === 'aggregate');
+    if (aggregateSteps.length !== 1) return null;
+    if (!['avg', 'sum', 'count', 'min', 'max'].includes(aggregateSteps[0].params?.aggregateFn)) return null;
+
+    return { extractField: extractStep.params.extractField, postSteps: rest };
+  }
+
+  /** Applique la chaîne aggregate/round/divide sur un tableau de valeurs numériques déjà extraites. */
+  applyPostSteps(values: number[], postSteps: FormulaStep[]): number {
+    let current: any = values;
+    for (const step of postSteps) {
+      switch (step.type) {
+        case 'aggregate': current = this.executeAggregate(step.params, current); break;
+        case 'round':     current = this.executeRound(step.params, current); break;
+        case 'divide':    current = this.executeDivide(step.params, current); break;
+      }
+    }
+    return typeof current === 'number' ? current : 0;
+  }
+
+  /**
+   * Calcul complet pour une formule "agrégat simple" (cf. getIncrementalShape) : exécute le
+   * fetch, construit la map `sessionId → valeur extraite` (état initial pour le calcul
+   * incrémental) et applique la chaîne aggregate/round/divide. Utilisé au premier événement
+   * pour un (indicateur, utilisateur) et lors d'un recalcul complet.
+   */
+  async computeWithRowMap(
+    formula: FormulaDefinition,
+    context: FormulaContext,
+    shape: { extractField: string; postSteps: FormulaStep[] },
+  ): Promise<{ result: number; rowValues: Record<string, number> }> {
+    const rows = await this.executeFetch(formula.pipeline[0].params, context);
+
+    const rowValues: Record<string, number> = {};
+    for (const row of rows) {
+      const v = parseFloat(row[shape.extractField]);
+      if (!isNaN(v) && row.id != null) rowValues[String(row.id)] = v;
+    }
+
+    return { result: this.applyPostSteps(Object.values(rowValues), shape.postSteps), rowValues };
+  }
+
   private async executeStep(step: FormulaStep, input: any, context: FormulaContext): Promise<any> {
     switch (step.type) {
       case 'fetch':     return this.executeFetch(step.params, context);

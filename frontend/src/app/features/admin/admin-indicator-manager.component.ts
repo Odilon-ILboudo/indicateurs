@@ -472,7 +472,8 @@ export class AdminIndicatorManagerComponent implements OnInit {
   }
 
   hasFormula(ind: IndicatorDefinition): boolean {
-    return !!(ind as any).formula?.pipeline?.length;
+    if ((ind as any).formula?.pipeline?.length) return true;
+    return (ind.visualizations ?? []).some(v => v.formula?.pipeline?.length);
   }
 
   // ── Modales ───────────────────────────────────────────────────────────────

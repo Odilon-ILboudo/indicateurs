@@ -23,8 +23,7 @@
     "migration:generate": "typeorm migration:generate -d dist/typeorm.config.js",
     "migration:run": "typeorm migration:run -d dist/typeorm.config.js",
     "migration:revert": "typeorm migration:revert -d dist/typeorm.config.js",
-    "schema:sync": "typeorm schema:sync",
-    "seed:indicators": "ts-node src/scripts/seeds/activity-attempts-indicator.ts"
+    "schema:sync": "typeorm schema:sync"
   },
   "dependencies": {
     "@casl/ability": "^6.5.0",

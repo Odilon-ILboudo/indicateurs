@@ -4,9 +4,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { IndicatorDefinition } from '../indicators/entities/indicator-definition.entity';
-import { IndicatorValue } from '../indicators/entities/indicator-value.entity';
+import { IndicatorValue, buildValueMetadata } from '../indicators/entities/indicator-value.entity';
 import { FormulaInterpreterService } from '../indicators/interpreter/formula-interpreter.service';
 import { IndicatorsService } from '../indicators/indicators.service';
+import { resolveFormula } from '../indicators/formula-resolution.util';
 
 export interface RawEvent {
   type: string;
@@ -61,10 +62,13 @@ export class IngestionService implements OnModuleInit {
       for (const indicator of affectedIndicators) {
         await this.processIndicatorUpdate(indicator, event);
 
-        // Rafraîchit les snapshots liés à cette activité dès que les données changent
+        // Rafraîchit les snapshots et les vues course/group/activity en cache liés à cette
+        // activité dès que les données changent
         if (event.activityId) {
           this.indicatorsService.refreshSnapshots(indicator.id, event.activityId)
             .catch(err => this.logger.warn(`refreshSnapshots échoué pour indicator=${indicator.id}: ${err.message}`));
+          this.indicatorsService.refreshActivityViews(indicator.id, event.activityId)
+            .catch(err => this.logger.warn(`refreshActivityViews échoué pour indicator=${indicator.id}: ${err.message}`));
         }
       }
 
@@ -126,29 +130,60 @@ export class IngestionService implements OnModuleInit {
       return;
     }
 
-    let newValue = 0;
-    const hasDslFormula = (indicator.formula?.pipeline?.length ?? 0) > 0;
-
-    if (hasDslFormula) {
-      newValue = await this.formulaInterpreter.interpret(indicator.formula as any, {
-        userId: event.userId,
-        activityId: event.activityId,
-        courseId: event.courseId,
-        indicatorId: indicator.id,
-      });
-    }
+    const formula = resolveFormula(indicator);
+    const hasDslFormula = (formula?.pipeline?.length ?? 0) > 0;
 
     let record = await this.indicatorValueModel.findOne({
       where: { indicatorId: indicator.id, contextType, contextId },
     });
 
+    let newValue = 0;
+    let rowValues: Record<string, number> | undefined;
+
+    if (hasDslFormula) {
+      const formulaContext = {
+        userId: event.userId,
+        activityId: event.activityId,
+        courseId: event.courseId,
+        indicatorId: indicator.id,
+      };
+
+      // Calcul incrémental (delta) : pour les formules "agrégat simple sur SessionData", on
+      // évite de tout re-fetch/recalculer à chaque événement. L'état précédent
+      // (sessionId → valeur) est mis à jour avec la nouvelle valeur de cette session
+      // (insertion si nouvelle session, remplacement si une session existante est re-notée),
+      // puis l'agrégat est recalculé sur ce petit ensemble en mémoire.
+      const shape = this.formulaInterpreter.getIncrementalShape(formula as any);
+      const existingRowValues = (record?.metadata as any)?.incremental?.rowValues as Record<string, number> | undefined;
+
+      if (shape && existingRowValues && event.sessionId) {
+        const rawVal = event.payload?.[shape.extractField];
+        const newRowVal = typeof rawVal === 'number' ? rawVal : parseFloat(rawVal);
+        if (!isNaN(newRowVal)) {
+          rowValues = { ...existingRowValues, [event.sessionId]: newRowVal };
+          newValue = this.formulaInterpreter.applyPostSteps(Object.values(rowValues), shape.postSteps);
+        }
+      }
+
+      // Premier événement pour ce (indicateur, utilisateur), ou événement sans sessionId/valeur
+      // exploitable : calcul complet, qui initialise au passage l'état incrémental.
+      if (rowValues === undefined) {
+        if (shape) {
+          const computed = await this.formulaInterpreter.computeWithRowMap(formula as any, formulaContext, shape);
+          newValue = computed.result;
+          rowValues = computed.rowValues;
+        } else {
+          newValue = await this.formulaInterpreter.interpret(formula as any, formulaContext);
+        }
+      }
+    }
+
+    const extraMetadata = rowValues ? { incremental: { rowValues } } : {};
+
     if (record) {
       if (hasDslFormula) {
         record.value = newValue;
-        record.metadata = {
-          ...record.metadata,
-          lastUpdate: event.timestamp,
-        };
+        record.metadata = buildValueMetadata(record.metadata, newValue, extraMetadata);
         await this.indicatorValueModel.save(record);
       }
     } else {
@@ -157,11 +192,7 @@ export class IngestionService implements OnModuleInit {
         contextType,
         contextId,
         value: newValue,
-        metadata: {
-          createdAt: event.timestamp,
-          lastUpdate: event.timestamp,
-          history: [],
-        },
+        metadata: buildValueMetadata(null, newValue, extraMetadata),
       });
       await this.indicatorValueModel.save(record);
     }

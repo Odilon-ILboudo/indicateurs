@@ -581,8 +581,7 @@ POST /indicators                       - créer
 POST /indicators/dashboard             - valeurs batch pour le tableau de bord
 POST /indicators/preview               - { formula, context } → { result } (exécute le DSL - voir 12)
 POST /indicators/preview-steps         - idem mais pas-à-pas (debug)
-POST /indicators/precompute-context    - { contextType, contextId, activityId } → précalcule tous les indicateurs actifs pour ce contexte
-POST /indicators/:id/compute-view      - { contextType, contextId, viewId/vizId?, activityId?, forceRefresh? }
+POST /indicators/:id/compute-view      - { contextType, contextId, vizId?, activityId? }
 POST /indicators/:id/recalculate
 POST /indicators/:id/rollback/:versionId
 
@@ -598,8 +597,8 @@ DELETE /indicators/:id/snapshots/:snapshotId
 
 > Important : dans le contrôleur, les routes littérales (`schema`, `all`,
 > `teacher/:id/context`, `course/:id/activities`, `course/:id/students`,
-> `precompute-context`, `preview`, `preview-steps`, `dashboard`) sont déclarées
-> **avant** `:id` pour éviter les conflits de routing Express.
+> `preview`, `preview-steps`, `dashboard`) sont déclarées **avant** `:id`
+> pour éviter les conflits de routing Express.
 
 ### Préférences utilisateur (`/api/preferences`, `user-preferences.controller.ts`)
 
@@ -647,8 +646,6 @@ GET /v1/resources/:id
 ### Autres modules
 
 ```
-GET /api/groups?teacherId=        - groupes de TP d'un enseignant
-GET /api/groups/members?groupId=  - membres d'un groupe
 GET /api/users/:id
 
 POST /api/ingest        - un événement PLaTon
@@ -704,11 +701,12 @@ interface DashboardContext {
 
 `TeacherContextSelectorComponent` (Cours → Activité → "Voir par" : cours entier
 ou groupe de TP) sauvegarde l'état dans `DashboardSettingsService`
-(`TeacherSelectionState`, avec noms lisibles pour affichage). À chaque
-sélection cours+activité, `precomputeContext()` est appelé en fire-and-forget
-(crée les `IndicatorValue` avant que l'utilisateur clique sur une carte).
-`IndicatorDetailComponent` lit ce contexte sauvegardé pour afficher une bannière
-lecture seule "Cours > Activité > Scope" avec lien "Modifier le filtre".
+(`TeacherSelectionState`, avec noms lisibles pour affichage). La sélection
+cours+activité met à jour le contexte du tableau de bord ; les cartes et la
+page détail calculent les valeurs `course`/`group`/`activity` au moment de
+l'affichage via `computeView()`. `IndicatorDetailComponent` lit ce contexte
+sauvegardé pour afficher une bannière lecture seule "Cours > Activité > Scope"
+avec lien "Modifier le filtre".
 
 ### `IndicatorCardComponent`
 

@@ -4,7 +4,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { IndicatorsController } from './indicators.controller';
 import { IndicatorsService } from './indicators.service';
-import { AttemptsCalculatorService } from './calculators/attempts-calculator.service';
 import { FormulaInterpreterService } from './interpreter/formula-interpreter.service';
 import { IndicatorDefinition } from './entities/indicator-definition.entity';
 import { IndicatorValue } from './entities/indicator-value.entity';
@@ -24,12 +23,10 @@ import { UserIndicatorPreference } from '../user-preferences/entities/user-indic
   controllers: [IndicatorsController],
   providers: [
     IndicatorsService,
-    AttemptsCalculatorService,
     FormulaInterpreterService,
   ],
   exports: [
     IndicatorsService,
-    AttemptsCalculatorService,
     FormulaInterpreterService,
   ],
 })
