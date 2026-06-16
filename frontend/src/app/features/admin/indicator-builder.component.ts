@@ -1,6 +1,6 @@
 // frontend/src/app/features/admin/indicator-builder.component.ts
 import { CommonModule } from '@angular/common';
-import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, TemplateRef, ViewChild, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { CdkDragDrop, CdkDrag, CdkDropList, CdkDragHandle, moveItemInArray } from '@angular/cdk/drag-drop';
@@ -19,7 +19,7 @@ import { NzIconModule } from 'ng-zorro-antd/icon';
 import { NzSpinModule } from 'ng-zorro-antd/spin';
 import { NzSwitchModule } from 'ng-zorro-antd/switch';
 import { NzTabsModule } from 'ng-zorro-antd/tabs';
-import { NzModalRef, NZ_MODAL_DATA } from 'ng-zorro-antd/modal';
+import { NzModalRef, NzModalService, NZ_MODAL_DATA } from 'ng-zorro-antd/modal';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import * as yaml from 'js-yaml';
 import { IndicatorService } from '../../core/services/indicator.service';
@@ -97,10 +97,15 @@ const STEP_CATALOG: { type: StepType; label: string; icon: string; color: string
   { type: 'js',        label: 'Code JS',            icon: 'code',         color: '#595959', desc: 'Exécute une fonction JavaScript sur les données' },
 ];
 
-const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep, 'id'>[] }[] = [
+const FORMULA_RECIPES: { name: string; desc: string; detail: { objectif: string; utilisation: string; adapter: string }; pipeline: Omit<PipelineStep, 'id'>[] }[] = [
   {
     name: 'Tentatives avant réussite',
     desc: 'Nb moyen de tentatives avant la 1ère note de 100',
+    detail: {
+      objectif: `Mesure la persévérance d'un apprenant sur une activité. Indique combien de fois en moyenne il a fallu tenter un exercice avant d'obtenir 100/100. Utile pour détecter les exercices difficiles ou mal calibrés.`,
+      utilisation: `Idéal pour une visualisation card ou gauge. Fonctionne en contexte learner (valeur propre à l'apprenant) ou activity (vue agrégée sur tous les apprenants). Résultat : un nombre décimal, ex: 3.25.`,
+      adapter: `Changer whereValue: 100 pour un autre seuil de réussite (ex: 80). Passer aggregateFn de "avg" à "max" pour voir la pire performance. Ajouter un step filter avant groupBy pour cibler une ressource spécifique.`,
+    },
     pipeline: [
       { type: 'fetch',     label: 'Charger sessions',     table: 'SessionData', contextFields: ['user_id', 'activity_id'] },
       { type: 'groupBy',   label: 'Grouper par exercice', groupField: 'resource_id' },
@@ -113,6 +118,11 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
   {
     name: 'Note moyenne',
     desc: 'Moyenne des notes sur une activité',
+    detail: {
+      objectif: `Indicateur de base mesurant la performance générale d'un apprenant sur toutes ses sessions d'une activité. Simple, lisible d'un coup d'œil, et bon point de départ pour tout tableau de bord.`,
+      utilisation: `Parfait pour une card ou une gauge (avec des seuils colorés). Contexte learner ou activity. Résultat : un nombre décimal, ex: 72.4.`,
+      adapter: `Ajouter un step filter avant extract pour ne cibler que certaines sessions (ex: récentes, d'un type précis). Changer decimals: 1 pour plus ou moins de précision. Remplacer le champ grade par attempts pour mesurer le volume de travail plutôt que la performance.`,
+    },
     pipeline: [
       { type: 'fetch',     label: 'Charger sessions', table: 'SessionData', contextFields: ['user_id', 'activity_id'] },
       { type: 'extract',   label: 'Notes',            extractField: 'grade' },
@@ -123,6 +133,11 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
   {
     name: 'Exercices réussis',
     desc: 'Nombre d\'exercices avec une note de 100',
+    detail: {
+      objectif: `Compte le nombre d'exercices distincts pour lesquels l'apprenant a obtenu 100/100 au moins une fois. Mesure la progression dans l'activité et peut être rapporté au total d'exercices pour obtenir un taux de complétion.`,
+      utilisation: `card ou gauge. Contexte learner. Résultat : un entier, ex: 5. Peut être combiné avec un second indicateur "total d'exercices" pour afficher un ratio.`,
+      adapter: `Changer filterValue: 100 pour un autre seuil (ex: 80 pour "exercices quasi-réussis"). Ajouter un join sur Resources puis un groupBy pour ventiler par catégorie d'exercice. Remplacer count par countUnique si des doublons de sessions peuvent fausser le comptage.`,
+    },
     pipeline: [
       { type: 'fetch',     label: 'Charger sessions', table: 'SessionData', contextFields: ['user_id', 'activity_id'] },
       { type: 'filter',    label: 'Note = 100',       filterField: 'grade', filterOperator: '==', filterValue: 100 },
@@ -133,6 +148,11 @@ const FORMULA_RECIPES: { name: string; desc: string; pipeline: Omit<PipelineStep
   {
     name: 'Notes moyennes par ressource',
     desc: 'Moyenne des notes par exercice, avec noms lisibles (bar-chart)',
+    detail: {
+      objectif: `Vue détaillée de la performance d'un apprenant exercice par exercice. Chaque barre représente un exercice (avec son nom lisible) et sa hauteur indique la note moyenne obtenue. Permet de repérer les exercices où l'apprenant est en difficulté.`,
+      utilisation: `Conçu pour un bar-chart. Contexte learner ou activity. Le step js produit un objet clé→valeur, ex: { "Exercice A": 85.2, "Exercice B": 62.0 }. Le join est indispensable pour remplacer les IDs par les noms.`,
+      adapter: `Remplacer grade par attempts dans le step js pour afficher les tentatives par ressource. Ajouter un filter avant le join pour exclure les exercices non tentés. Si la table Resources utilise title plutôt que name, changer row.name en row.title dans le code js.`,
+    },
     pipeline: [
       { type: 'fetch', label: 'Charger sessions',          table: 'SessionData', contextFields: ['user_id', 'activity_id'] },
       { type: 'join',  label: 'Joindre noms de ressources', joinTable: 'Resources', joinLeftKey: 'resource_id', joinRightKey: 'id' },
@@ -156,6 +176,11 @@ return result;` },
   {
     name: 'Tentatives par étudiant (groupe)',
     desc: 'Total des tentatives par étudiant d\'un groupe de TP, avec noms lisibles (bar-chart)',
+    detail: {
+      objectif: `Vue enseignant sur l'activité d'un groupe de TP. Chaque barre représente un étudiant du groupe et sa hauteur le total de ses tentatives. Permet de repérer les étudiants très actifs, absents, ou en difficulté d'un seul regard.`,
+      utilisation: `Conçu pour un bar-chart. Nécessite le contexte group avec useGroupContext: true dans le step fetch. Le join sur Users permet d'afficher les prénoms/noms à la place des IDs. Résultat : { "Jean Dupont": 12, "Marie Martin": 7, ... }.`,
+      adapter: `Remplacer attempts par grade dans le step js et calculer une moyenne pour obtenir la note moyenne par étudiant du groupe. Ajouter un filter pour ne compter que les sessions réussies. Changer le label en row.email si on préfère les adresses email aux noms complets.`,
+    },
     pipeline: [
       { type: 'fetch', label: 'Charger sessions du groupe', table: 'SessionData', contextFields: ['group_id', 'activity_id'], useGroupContext: true },
       { type: 'join',  label: 'Joindre noms des étudiants', joinTable: 'Users', joinLeftKey: 'user_id', joinRightKey: 'id' },
@@ -345,11 +370,17 @@ return totals;` },
 
           <!-- Recettes -->
           <div class="recipes">
-            <button *ngFor="let r of recipes" nz-button nzType="dashed"
-              class="recipe-btn" (click)="applyRecipe(r, v)">
-              <strong>{{ r.name }}</strong>
-              <span>{{ r.desc }}</span>
-            </button>
+            <div *ngFor="let r of recipes" class="recipe-wrapper">
+              <button nz-button nzType="dashed"
+                class="recipe-btn" (click)="applyRecipe(r, v)">
+                <strong>{{ r.name }}</strong>
+                <span>{{ r.desc }}</span>
+              </button>
+              <button nz-button nzType="text" class="recipe-eye-btn"
+                (click)="openRecipeModal(r); $event.stopPropagation()">
+                <span nz-icon nzType="eye" style="font-size:18px"></span>
+              </button>
+            </div>
           </div>
 
           <!-- Toggle Visuel / Import -->
@@ -446,10 +477,10 @@ return totals;` },
                           nzCheckedChildren="Groupe" nzUnCheckedChildren="Non"></nz-switch>
                       </div>
                       <div class="param-row">
-                        <label>Filtrer par contexte <mat-icon class="info-icon" nz-tooltip="Colonnes sur lesquelles appliquer automatiquement les filtres du contexte courant. Ex : 'user_id' filtre sur l'utilisateur actuel, 'activity_id' sur l'activité sélectionnée." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                        <label>Filtrer par contexte <mat-icon class="info-icon" nz-tooltip="Colonnes filtrées automatiquement selon le contexte courant. Seules user_id, activity_id et course_id sont supportées (valeurs connues à l'exécution). Pour filtrer sur d'autres colonnes, utilisez un step filter." nzTooltipPlacement="right">info_outline</mat-icon></label>
                         <nz-select [(ngModel)]="s.contextFields" nzMode="multiple" style="width:300px"
                           nzPlaceHolder="Colonnes de filtre" [nzDisabled]="!s.table">
-                          <nz-option *ngFor="let f of columnsForTable(s.table)" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
+                          <nz-option *ngFor="let f of contextFilterCols" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
                         </nz-select>
                       </div>
                     </ng-container>
@@ -462,30 +493,30 @@ return totals;` },
                         </nz-select>
                       </div>
                       <div class="param-row">
-                        <label>Type de jointure <mat-icon class="info-icon" nz-tooltip="Détermine quelles lignes sont conservées : 'gauche' garde toutes les lignes courantes, 'interne' ne garde que les correspondances, 'droite' garde toutes les lignes de la table jointe, 'complète' garde tout." nzTooltipPlacement="right">info_outline</mat-icon></label>
-                        <nz-select [(ngModel)]="s.joinType" style="width:260px" nzPlaceHolder="Gauche (par défaut)">
-                          <nz-option nzValue="left"  nzLabel="Gauche - garder toutes les lignes courantes"></nz-option>
-                          <nz-option nzValue="inner" nzLabel="Interne - seulement les correspondances"></nz-option>
-                          <nz-option nzValue="right" nzLabel="Droite - garder toutes les lignes jointes"></nz-option>
-                          <nz-option nzValue="full"  nzLabel="Complète - garder toutes les lignes des deux côtés"></nz-option>
+                        <label>Type de jointure <mat-icon class="info-icon" nz-tooltip="Détermine quelles lignes sont conservées : LEFT garde toutes les lignes courantes, INNER ne garde que les correspondances, RIGHT garde toutes les lignes de la table jointe, FULL garde tout." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                        <nz-select [(ngModel)]="s.joinType" style="width:260px" nzPlaceHolder="LEFT (par défaut)">
+                          <nz-option nzValue="left"  nzLabel="LEFT — garder toutes les lignes courantes"></nz-option>
+                          <nz-option nzValue="inner" nzLabel="INNER — seulement les correspondances"></nz-option>
+                          <nz-option nzValue="right" nzLabel="RIGHT — garder toutes les lignes jointes"></nz-option>
+                          <nz-option nzValue="full"  nzLabel="FULL — garder toutes les lignes des deux côtés"></nz-option>
                         </nz-select>
                       </div>
                       <div class="param-row">
-                        <label>Filtrer par contexte <mat-icon class="info-icon" nz-tooltip="Colonnes de la table à joindre sur lesquelles appliquer les filtres du contexte courant (ex : activity_id). Optionnel." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                        <label>Filtrer par contexte <mat-icon class="info-icon" nz-tooltip="Colonnes de la table jointe filtrées selon le contexte courant. Seules user_id, activity_id et course_id sont supportées." nzTooltipPlacement="right">info_outline</mat-icon></label>
                         <nz-select [(ngModel)]="s.joinContextFields" nzMode="multiple"
                           nzPlaceHolder="Colonnes de filtre (optionnel)" [nzDisabled]="!s.joinTable">
-                          <nz-option *ngFor="let f of columnsForTable(s.joinTable)" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
+                          <nz-option *ngFor="let f of contextFilterCols" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
                         </nz-select>
                       </div>
                       <div class="param-row">
-                        <label>Clé gauche <mat-icon class="info-icon" nz-tooltip="Colonne de la table courante (résultat du fetch précédent) servant de clé de jointure. Ex : 'activity_id'." nzTooltipPlacement="right">info_outline</mat-icon></label>
-                        <nz-select [(ngModel)]="s.joinLeftKey" nzPlaceHolder="Champ de la table gauche" nzAllowClear>
+                        <label>Clé left <mat-icon class="info-icon" nz-tooltip="Colonne de la table courante (résultat du fetch précédent) servant de clé de jointure. Ex : 'activity_id'." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                        <nz-select [(ngModel)]="s.joinLeftKey" nzPlaceHolder="Champ de la table left" nzAllowClear>
                           <nz-option *ngFor="let f of activeColumnsForViz(v)" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
                         </nz-select>
                       </div>
                       <div class="param-row">
-                        <label>Clé droite <mat-icon class="info-icon" nz-tooltip="Colonne de la table à joindre correspondant à la clé gauche. Ex : 'id' pour joindre sur l'identifiant." nzTooltipPlacement="right">info_outline</mat-icon></label>
-                        <nz-select [(ngModel)]="s.joinRightKey" nzPlaceHolder="Champ de la table à joindre"
+                        <label>Clé right <mat-icon class="info-icon" nz-tooltip="Colonne de la table à joindre correspondant à la clé left. Ex : 'id' pour joindre sur l'identifiant." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                        <nz-select [(ngModel)]="s.joinRightKey" nzPlaceHolder="Champ de la table right"
                           nzAllowClear [nzDisabled]="!s.joinTable">
                           <nz-option *ngFor="let f of columnsForTable(s.joinTable)" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
                         </nz-select>
@@ -755,6 +786,43 @@ return totals;` },
   </div>
 
 </div>
+
+<ng-template #recipeDetailTpl>
+  <div style="padding:8px 4px;font-size:13px;line-height:1.7">
+
+    <div style="margin-bottom:18px">
+      <div style="font-weight:600;color:#1890ff;margin-bottom:6px;font-size:11px;text-transform:uppercase;letter-spacing:.6px">Objectif</div>
+      <p style="margin:0;color:#333">{{ activeRecipeDetail?.detail?.objectif }}</p>
+    </div>
+
+    <div style="margin-bottom:18px">
+      <div style="font-weight:600;color:#52c41a;margin-bottom:6px;font-size:11px;text-transform:uppercase;letter-spacing:.6px">Utilisation</div>
+      <p style="margin:0;color:#333">{{ activeRecipeDetail?.detail?.utilisation }}</p>
+    </div>
+
+    <div style="margin-bottom:20px">
+      <div style="font-weight:600;color:#fa8c16;margin-bottom:6px;font-size:11px;text-transform:uppercase;letter-spacing:.6px">Comment adapter</div>
+      <p style="margin:0;color:#333">{{ activeRecipeDetail?.detail?.adapter }}</p>
+    </div>
+
+    <div style="border-top:1px solid #f0f0f0;padding-top:16px">
+      <div style="font-weight:600;color:#595959;margin-bottom:10px;font-size:11px;text-transform:uppercase;letter-spacing:.6px">Pipeline — {{ activeRecipeDetail?.pipeline?.length }} étapes</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <tbody>
+          <tr *ngFor="let s of activeRecipeDetail?.pipeline; let i = index">
+            <td style="padding:6px 10px;border-bottom:1px solid #f0f0f0;color:#bbb;width:24px">{{ i + 1 }}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid #f0f0f0;width:100px">
+              <span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;color:#fff"
+                [style.background]="stepTypeColor(s.type)">{{ s.type }}</span>
+            </td>
+            <td style="padding:6px 10px;border-bottom:1px solid #f0f0f0;color:#444">{{ s.label }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</ng-template>
   `,
   styles: [`
     .builder { padding: 4px 0; }
@@ -982,9 +1050,12 @@ return totals;` },
     }
 
     .recipes { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
-    .recipe-btn { display: flex; flex-direction: column; align-items: flex-start; height: auto; padding: 6px 12px; }
+    .recipe-wrapper { display: flex; align-items: stretch; }
+    .recipe-btn { display: flex; flex-direction: column; align-items: flex-start; height: auto; padding: 6px 12px; border-right: none; border-radius: 6px 0 0 6px; }
     .recipe-btn strong { font-size: 13px; }
     .recipe-btn span   { font-size: 11px; color: #888; }
+    .recipe-eye-btn { border-left: 1px dashed #d9d9d9; border-radius: 0 6px 6px 0; padding: 0 12px; color: #999; min-width: 42px; }
+    .recipe-eye-btn:hover { color: #1890ff; background: #e6f7ff; }
 
     .mode-toggle { display: flex; gap: 4px; margin-bottom: 10px; justify-content: flex-end; }
 
@@ -1096,6 +1167,8 @@ return totals;` },
 })
 export class IndicatorBuilderComponent implements OnInit {
   private readonly modalRef     = inject(NzModalRef);
+  private readonly modalSvc     = inject(NzModalService);
+  @ViewChild('recipeDetailTpl') private recipeDetailTplRef!: TemplateRef<any>;
   private readonly modalData    = inject(NZ_MODAL_DATA, { optional: true }) as {
     indicator?: IndicatorDefinition;
     familyPreset?: IndicatorFamilyPreset;
@@ -1367,6 +1440,12 @@ ${this.importMode === 'yaml' ? `pipeline:
 
   readonly stepCatalog = STEP_CATALOG;
   readonly recipes     = FORMULA_RECIPES;
+  activeRecipeDetail: (typeof FORMULA_RECIPES)[number] | null = null;
+  readonly contextFilterCols = [
+    { value: 'user_id',     label: 'user_id — apprenant courant' },
+    { value: 'activity_id', label: 'activity_id — activité sélectionnée' },
+    { value: 'course_id',   label: 'course_id — cours sélectionné' },
+  ];
   readonly availableIcons = [
     'trending_up', 'trending_down', 'star', 'repeat', 'check_circle',
     'access_time', 'analytics', 'speed', 'emoji_events', 'school',
@@ -1508,6 +1587,17 @@ ${this.importMode === 'yaml' ? `pipeline:
 
   applyRecipe(r: (typeof FORMULA_RECIPES)[0], v: FlatViz): void {
     v.pipeline = r.pipeline.map(s => ({ ...s, id: crypto.randomUUID() })) as PipelineStep[];
+  }
+
+  openRecipeModal(r: (typeof FORMULA_RECIPES)[0]): void {
+    this.activeRecipeDetail = r;
+    this.modalSvc.create({
+      nzTitle: r.name,
+      nzContent: this.recipeDetailTplRef,
+      nzWidth: 580,
+      nzCentered: true,
+      nzFooter: null,
+    });
   }
 
   drop(event: CdkDragDrop<PipelineStep[]>, v: FlatViz): void {

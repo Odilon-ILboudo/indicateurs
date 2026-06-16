@@ -68,6 +68,21 @@
     color: var(--brand-text-secondary, #999);
   }
 
+  .family-edit-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    color: #bbb;
+    margin-left: 8px;
+    cursor: pointer;
+    vertical-align: middle;
+    transition: color 0.2s;
+
+    &:hover {
+      color: #722ed1;
+    }
+  }
+
   .family-row {
     cursor: pointer;
     background: #f9f0ff;

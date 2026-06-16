@@ -288,11 +288,34 @@ avec/sans ce filtre.
   |---|---|---|
   | 1 | `fetch` | table `SessionData`, contextFields = `user_id`, `activity_id` |
   | 2 | `join` | table `Resources`, **type Gauche (left)** *(par défaut, ne pas modifier)*, clé gauche `resource_id`, clé droite `id` |
-  | 3 | `js` | calcule la moyenne des notes par ressource (objet `{ "Nom de la ressource": moyenne }`) |
+  | 3 | `js` | voir code ci-dessous |
 
-  Cette dernière étape illustre une **jointure gauche** suivie d'un **code
-  JS** qui transforme un tableau de lignes en **objet** `{clé: valeur}`,
-  format attendu par la visualisation **barres horizontales**.
+  Code à coller dans l'étape `js` :
+
+  ```javascript
+  const groups = {};
+  for (const row of input) {
+    const key = row.name || 'Inconnu';
+    if (!groups[key]) groups[key] = [];
+    const g = parseFloat(row.grade);
+    if (!isNaN(g)) groups[key].push(g);
+  }
+  const out = {};
+  for (const [key, vals] of Object.entries(groups)) {
+    out[key] = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10;
+  }
+  return out;
+  ```
+
+  Après le `join`, chaque ligne de `input` contient à la fois les champs de
+  `SessionData` (`grade`, `resource_id`…) et ceux de `Resources` (`name`,
+  `type`…). Le code groupe les lignes par `name` (nom lisible de la ressource),
+  calcule la moyenne des `grade` de chaque groupe, et retourne un **objet**
+  `{ "Nom de la ressource": note_moyenne }` — format attendu par la
+  visualisation **barres horizontales** (une barre par clé).
+
+  Cette étape illustre une **jointure gauche** suivie d'un **code JS** qui
+  transforme un tableau de lignes en objet `{clé: valeur}`.
 
 Tester chaque onglet (Tester + Déboguer). Cliquer **"Créer"** → enchaîne sur
 "Groupe de TP".
@@ -353,7 +376,25 @@ Ajouter un second tag : `exercise.viewed` (en plus de `exercise.answered`).
   |---|---|---|
   | 1 | `fetch` | table `SessionData`, contextFields = `group_id`, `activity_id`, **"Requête groupe de TP" = ON** (`useGroupContext`) |
   | 2 | `join` | table `Users`, **type Gauche (left)** *(défaut)*, clé gauche `user_id`, clé droite `id` |
-  | 3 | `js` | additionne `attempts` par étudiant → objet `{ "Prénom Nom": total }` |
+  | 3 | `js` | voir code ci-dessous |
+
+  Code à coller dans l'étape `js` :
+
+  ```javascript
+  const groups = {};
+  for (const row of input) {
+    const name = ((row.first_name || '') + ' ' + (row.last_name || '')).trim()
+                 || row.user_id || 'Inconnu';
+    if (!groups[name]) groups[name] = 0;
+    groups[name] += parseInt(row.attempts) || 0;
+  }
+  return groups;
+  ```
+
+  Après le `join`, chaque ligne a `attempts` (de `SessionData`) + `first_name`
+  et `last_name` (de `Users`). Le code additionne toutes les tentatives par
+  étudiant et retourne un objet `{ "Prénom Nom": total }` — une barre par
+  étudiant dans la visualisation **barres horizontales**.
 
   Le switch **"Requête groupe de TP"** (`useGroupContext`) déclenche côté
   backend une jointure automatique `CourseGroupsMember`/`CourseGroups` :

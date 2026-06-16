@@ -1,6 +1,6 @@
 // frontend/src/app/features/admin/admin-indicator-manager.component.ts
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, TemplateRef, ViewChild, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { NzTableModule } from 'ng-zorro-antd/table';
@@ -242,12 +242,12 @@ export class IndicatorFamilyStartModalComponent {
           </p>
         </div>
         <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
-          <button nz-button (click)="openFamilyWizard()">
-            <mat-icon style="font-size:18px;line-height:1.4">folder_special</mat-icon>
+          <button nz-button (click)="openFamilyWizard()" class="icon-btn">
+            <mat-icon>folder_special</mat-icon>
             Créer une famille
           </button>
-          <button nz-button nzType="primary" (click)="openBuilder()">
-            <mat-icon style="font-size:18px;line-height:1.4">add</mat-icon>
+          <button nz-button nzType="primary" (click)="openBuilder()" class="icon-btn">
+            <mat-icon>add</mat-icon>
             Nouvel indicateur
           </button>
         </div>
@@ -286,6 +286,7 @@ export class IndicatorFamilyStartModalComponent {
                   <mat-icon style="font-size:16px;vertical-align:text-bottom;color:#722ed1">folder_special</mat-icon>
                   <strong>{{ row.familyName }}</strong>
                   <nz-tag nzColor="purple">{{ row.members.length }} indicateur{{ row.members.length > 1 ? 's' : '' }}</nz-tag>
+                  <mat-icon class="family-edit-icon" (click)="renameFamily(row); $event.stopPropagation()" nz-tooltip="Renommer la famille">edit</mat-icon>
                 </td>
               </tr>
 
@@ -407,6 +408,10 @@ export class IndicatorFamilyStartModalComponent {
 
 
     </div>
+
+  <ng-template #renameFamilyTpl>
+    <input nz-input [(ngModel)]="renameFamilyInput" placeholder="Nouveau nom de la famille" style="width:100%;margin-top:4px" />
+  </ng-template>
   `,
   styles: [`
     .admin-manager { padding: 16px; }
@@ -414,18 +419,52 @@ export class IndicatorFamilyStartModalComponent {
       display: flex; justify-content: space-between; align-items: flex-start;
       margin-bottom: 20px; gap: 16px; flex-wrap: wrap;
     }
-    .header button mat-icon { vertical-align: middle; }
+    .icon-btn { display: inline-flex !important; align-items: center; gap: 6px; }
+    .icon-btn mat-icon { font-size: 18px; width: 18px; height: 18px; }
     .family-row { cursor: pointer; background: #f9f0ff; }
     .family-row:hover { background: #efdbff; }
     .family-row td { display: flex; align-items: center; gap: 6px; }
     .member-row { background: #fafafa; }
     .member-row td:first-child { padding-left: 28px; }
+    .family-edit-icon { font-size:16px; width:16px; height:16px; color:#bbb; cursor:pointer; }
+    .family-edit-icon:hover { color:#722ed1; }
   `],
 })
 export class AdminIndicatorManagerComponent implements OnInit {
   private readonly indicatorSvc = inject(IndicatorService);
   private readonly modalSvc     = inject(NzModalService);
   private readonly messageSvc   = inject(NzMessageService);
+  @ViewChild('renameFamilyTpl') private renameFamilyTplRef!: TemplateRef<any>;
+  renameFamilyInput = '';
+
+  renameFamily(row: { familyName: string; members: IndicatorDefinition[] }): void {
+    this.renameFamilyInput = row.familyName;
+    this.modalSvc.create({
+      nzTitle: 'Renommer la famille',
+      nzContent: this.renameFamilyTplRef,
+      nzWidth: 420,
+      nzCentered: true,
+      nzOkText: 'Renommer',
+      nzCancelText: 'Annuler',
+      nzOnOk: () => {
+        const newName = this.renameFamilyInput.trim();
+        if (!newName || newName === row.familyName) return Promise.resolve();
+        return Promise.all(row.members.map(m =>
+          this.indicatorSvc.updateIndicator(m.id, { familyName: newName }).toPromise()
+        )).then(() => {
+          this.indicators = this.indicators.map(i =>
+            i.familyName === row.familyName ? { ...i, familyName: newName } : i
+          );
+          if (this.expandedFamilies.has(row.familyName)) {
+            this.expandedFamilies.delete(row.familyName);
+            this.expandedFamilies.add(newName);
+          }
+          this.applyGroupingFilter();
+          this.messageSvc.success(`Famille renommée en « ${newName} »`);
+        }).catch(() => this.messageSvc.error('Erreur lors du renommage'));
+      },
+    });
+  }
 
   indicators: IndicatorDefinition[] = [];
   displayRows: IndicatorDisplayRow[] = [];
