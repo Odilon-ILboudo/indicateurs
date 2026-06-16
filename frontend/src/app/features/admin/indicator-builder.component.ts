@@ -266,60 +266,63 @@ return totals;` },
         </div>
 
         <div class="viz-fields">
-          <nz-form-item style="margin:0;flex:2">
-            <nz-form-label>Type <mat-icon class="info-icon" nz-tooltip="Forme d'affichage. Carte = valeur scalaire. Barres = résultat {clé:valeur}. Histogramme = distribution [{bucket, count}]. Jauge = valeur avec plafond. Ligne = historique temporel." nzTooltipPlacement="top">info_outline</mat-icon></nz-form-label>
-            <nz-form-control>
-              <nz-select [(ngModel)]="v.type" style="width:100%" (ngModelChange)="onVizTypeChange(v)">
-                <nz-option nzValue="card"       nzLabel="Carte (valeur scalaire)"></nz-option>
-                <nz-option nzValue="gauge"      nzLabel="Jauge"></nz-option>
-                <nz-option nzValue="bar-chart"  nzLabel="Barres horizontales"></nz-option>
-                <nz-option nzValue="histogram"  nzLabel="Histogramme"></nz-option>
-                <nz-option nzValue="line-chart" nzLabel="Graphique ligne"></nz-option>
-              </nz-select>
-            </nz-form-control>
-          </nz-form-item>
-          <nz-form-item style="margin:0;flex:1">
-            <nz-form-label>Icône <mat-icon class="info-icon" nz-tooltip="Icône Material affichée dans la card indicateur." nzTooltipPlacement="top">info_outline</mat-icon></nz-form-label>
-            <nz-form-control>
-              <nz-select [(ngModel)]="v.icon" style="width:100%">
-                <nz-option *ngFor="let ic of availableIcons" [nzValue]="ic" [nzLabel]="ic"></nz-option>
-              </nz-select>
-            </nz-form-control>
-          </nz-form-item>
-          <nz-form-item style="margin:0">
-            <nz-form-label>Couleur <mat-icon class="info-icon" nz-tooltip="Couleur principale de la visualisation (barres, jauge, courbe)." nzTooltipPlacement="top">info_outline</mat-icon></nz-form-label>
-            <nz-form-control>
-              <nz-color-picker [(ngModel)]="v.color" [nzFormat]="'hex'"></nz-color-picker>
-            </nz-form-control>
-          </nz-form-item>
-          <nz-form-item style="margin:0;flex:1">
-            <nz-form-label>Unité <mat-icon class="info-icon" nz-tooltip="Suffixe affiché à côté de la valeur. Ex : 'tentatives', '%', 'min'. Laissez vide si pas d'unité." nzTooltipPlacement="top">info_outline</mat-icon></nz-form-label>
-            <nz-form-control>
-              <input nz-input [(ngModel)]="v.unit" placeholder="tentatives, %, …" />
-            </nz-form-control>
-          </nz-form-item>
+          <div class="viz-field viz-field-type">
+            <label>Type <mat-icon class="info-icon" nz-tooltip="Forme d'affichage. Carte = valeur scalaire. Barres = résultat {clé:valeur}. Histogramme = distribution [{bucket, count}]. Jauge = valeur avec plafond. Ligne = historique temporel." nzTooltipPlacement="top">info_outline</mat-icon></label>
+            <nz-select [(ngModel)]="v.type" style="width:100%" (ngModelChange)="onVizTypeChange(v)">
+              <nz-option nzValue="card"       nzLabel="Carte (valeur scalaire)"></nz-option>
+              <nz-option nzValue="gauge"      nzLabel="Jauge"></nz-option>
+              <nz-option nzValue="bar-chart"  nzLabel="Barres horizontales"></nz-option>
+              <nz-option nzValue="histogram"  nzLabel="Histogramme"></nz-option>
+              <nz-option nzValue="line-chart" nzLabel="Graphique ligne"></nz-option>
+            </nz-select>
+          </div>
+          <div class="viz-field viz-field-icon">
+            <label>Icône <mat-icon class="info-icon" nz-tooltip="Icône Material affichée dans la card indicateur." nzTooltipPlacement="top">info_outline</mat-icon></label>
+            <div class="icon-picker">
+              <div class="icon-grid">
+                <button *ngFor="let ic of availableIcons"
+                  (click)="v.icon = ic"
+                  [class.selected]="v.icon === ic"
+                  class="icon-button"
+                  type="button"
+                  nz-tooltip="{{ic}}"
+                  nzTooltipPlacement="top">
+                  <mat-icon>{{ ic }}</mat-icon>
+                </button>
+              </div>
+              <div *ngIf="v.icon" class="icon-selected">
+                <strong>Sélectionné :</strong>
+                <mat-icon>{{ v.icon }}</mat-icon>
+                <span>{{ v.icon }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="viz-field viz-field-color">
+            <label>Couleur <mat-icon class="info-icon" nz-tooltip="Couleur principale de la visualisation (barres, jauge, courbe)." nzTooltipPlacement="top">info_outline</mat-icon></label>
+            <nz-color-picker [(ngModel)]="v.color" [nzFormat]="'hex'"></nz-color-picker>
+          </div>
+          <div class="viz-field viz-field-unit">
+            <label>Unité <mat-icon class="info-icon" nz-tooltip="Suffixe affiché à côté de la valeur. Ex : 'tentatives', '%', 'min'. Laissez vide si pas d'unité." nzTooltipPlacement="top">info_outline</mat-icon></label>
+            <input nz-input [(ngModel)]="v.unit" placeholder="tentatives, %, …" />
+          </div>
         </div>
 
         <div class="threshold-row" *ngIf="v.type === 'card' || v.type === 'gauge'">
-          <small>Seuils :</small>
-          <nz-form-item style="margin:0">
-            <nz-form-label><span class="dot dot-green"></span> Bon ≤ <mat-icon class="info-icon" nz-tooltip="Valeur en dessous de laquelle le résultat est affiché en vert. Ex : pour 'tentatives', bon ≤ 3." nzTooltipPlacement="top">info_outline</mat-icon></nz-form-label>
-            <nz-form-control>
-              <nz-input-number [(ngModel)]="v.thresholds.good" [nzMin]="0" nzSize="small" style="width:80px"></nz-input-number>
-            </nz-form-control>
-          </nz-form-item>
-          <nz-form-item style="margin:0">
-            <nz-form-label><span class="dot dot-orange"></span> Moyen ≤ <mat-icon class="info-icon" nz-tooltip="Valeur en dessous de laquelle le résultat est affiché en orange (entre 'Bon' et 'Critique')." nzTooltipPlacement="top">info_outline</mat-icon></nz-form-label>
-            <nz-form-control>
-              <nz-input-number [(ngModel)]="v.thresholds.warning" [nzMin]="0" nzSize="small" style="width:80px"></nz-input-number>
-            </nz-form-control>
-          </nz-form-item>
-          <nz-form-item style="margin:0">
-            <nz-form-label><span class="dot dot-red"></span> Critique > <mat-icon class="info-icon" nz-tooltip="Valeur au-delà de laquelle le résultat est affiché en rouge." nzTooltipPlacement="top">info_outline</mat-icon></nz-form-label>
-            <nz-form-control>
-              <nz-input-number [(ngModel)]="v.thresholds.danger" [nzMin]="0" nzSize="small" style="width:80px"></nz-input-number>
-            </nz-form-control>
-          </nz-form-item>
+          <div class="threshold-item">
+            <label><span class="dot dot-green"></span> Bon ≤</label>
+            <nz-input-number [(ngModel)]="v.thresholds.good" [nzMin]="0" nzSize="small"></nz-input-number>
+            <mat-icon class="info-icon" nz-tooltip="Valeur en dessous de laquelle le résultat est affiché en vert. Ex : pour 'tentatives', bon ≤ 3." nzTooltipPlacement="top">info_outline</mat-icon>
+          </div>
+          <div class="threshold-item">
+            <label><span class="dot dot-orange"></span> Moyen ≤</label>
+            <nz-input-number [(ngModel)]="v.thresholds.warning" [nzMin]="0" nzSize="small"></nz-input-number>
+            <mat-icon class="info-icon" nz-tooltip="Valeur en dessous de laquelle le résultat est affiché en orange (entre 'Bon' et 'Critique')." nzTooltipPlacement="top">info_outline</mat-icon>
+          </div>
+          <div class="threshold-item">
+            <label><span class="dot dot-red"></span> Critique ></label>
+            <nz-input-number [(ngModel)]="v.thresholds.danger" [nzMin]="0" nzSize="small"></nz-input-number>
+            <mat-icon class="info-icon" nz-tooltip="Valeur au-delà de laquelle le résultat est affiché en rouge." nzTooltipPlacement="top">info_outline</mat-icon>
+          </div>
         </div>
       </div>
 
@@ -782,36 +785,201 @@ return totals;` },
       max-width: none !important;
     }
 
-    .viz-list { display: flex; flex-direction: column; gap: 12px; }
-    .viz-row-card { border: 1px solid #e8e8e8; border-radius: 8px; padding: 12px 16px; background: #fafafa; }
-    .viz-row-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .viz-list { display: flex; flex-direction: column; gap: 16px; padding: 8px 0; }
+    .viz-row-card {
+      border: 1px solid #e8e8e8;
+      border-radius: 8px;
+      padding: 16px;
+      background: #fafafa;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .viz-row-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #e8e8e8;
+    }
     .viz-index {
       width: 24px; height: 24px; border-radius: 50%; background: #1890ff; color: white;
       display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;
     }
     .viz-label-input { flex: 1; }
-    .viz-fields { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
-    /* Layout vertical pour les petits items de viz-fields (label au-dessus du champ) */
-    .viz-fields ::ng-deep .ant-form-item {
-      flex-direction: column !important;
-      flex-wrap: wrap !important;
+    .viz-fields {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px 12px;
+      margin-bottom: 12px;
+      padding: 12px 0;
+      align-items: start;
     }
-    .viz-fields ::ng-deep .ant-form-item-label {
-      flex: none !important;
-      width: auto !important;
-      max-width: none !important;
-      padding-bottom: 4px;
+    @media (min-width: 1200px) {
+      .viz-fields {
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+      }
+      .viz-field-type { grid-column: 1 / 2 !important; }
+      .viz-field-icon { grid-column: 2 / 3 !important; }
+      .viz-field-color { grid-column: 3 / 4 !important; }
+      .viz-field-unit { grid-column: 4 / 5 !important; }
     }
-    .viz-fields ::ng-deep .ant-form-item-control {
-      max-width: 100% !important;
+    /* Layout vertical pour les items de viz-fields (label au-dessus du champ) */
+    .viz-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      align-items: flex-start;
+      align-self: start;
     }
 
-    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
+    .viz-field label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #262626;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .viz-field nz-select,
+    .viz-field nz-color-picker,
+    .viz-field input[nz-input] {
+      width: 100%;
+    }
+
+    .viz-field-icon { position: relative; }
+
+    .icon-picker {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 6px;
+      background: #fff;
+      border: 1px solid #d9d9d9;
+      border-radius: 4px;
+    }
+
+    .icon-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+      gap: 4px;
+    }
+
+    .icon-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border: 2px solid #d9d9d9;
+      border-radius: 3px;
+      background: #fff;
+      cursor: pointer;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .icon-button:hover {
+      border-color: #1890ff;
+      background: #f0f5ff;
+    }
+    .icon-button.selected {
+      border-color: #1890ff;
+      background: #e6f7ff;
+      font-weight: bold;
+    }
+    .icon-button mat-icon {
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
+      color: #595959;
+    }
+    .icon-button.selected mat-icon {
+      color: #1890ff;
+    }
+
+    .icon-selected {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      background: #e6f7ff;
+      border: 1px solid #91d5ff;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+    .icon-selected mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      color: #1890ff;
+    }
+    .icon-selected strong {
+      flex-shrink: 0;
+      font-size: 11px;
+      color: #666;
+    }
+
+    .dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 4px;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
     .dot-green  { background: #52c41a; }
     .dot-orange { background: #fa8c16; }
     .dot-red    { background: #ff4d4f; }
-    .threshold-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-    .threshold-row small { color: #666; }
+
+    .threshold-row {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      padding: 12px 12px;
+      margin-top: 8px;
+      border-top: 1px solid #f0f0f0;
+      flex-wrap: wrap;
+      overflow: visible;
+    }
+
+    .threshold-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 1 auto;
+      min-width: fit-content;
+      white-space: nowrap;
+      overflow: visible;
+    }
+    .threshold-item label {
+      font-size: 12px;
+      color: #666;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .threshold-item nz-input-number {
+      width: 75px;
+      flex-shrink: 0;
+    }
+    .threshold-item nz-input-number ::ng-deep input {
+      font-size: 12px;
+      padding: 2px 6px !important;
+    }
+    .threshold-item .info-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+      margin-left: 2px;
+      flex-shrink: 0;
+      overflow: visible;
+    }
 
     .recipes { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
     .recipe-btn { display: flex; flex-direction: column; align-items: flex-start; height: auto; padding: 6px 12px; }
@@ -1203,6 +1371,11 @@ ${this.importMode === 'yaml' ? `pipeline:
     'trending_up', 'trending_down', 'star', 'repeat', 'check_circle',
     'access_time', 'analytics', 'speed', 'emoji_events', 'school',
     'quiz', 'assignment', 'bar_chart', 'show_chart', 'timeline', 'groups', 'leaderboard',
+    'pie_chart', 'scatter_plot', 'equalizer', 'moving', 'percent',
+    'target', 'favorite', 'grade', 'done', 'warning',
+    'info', 'help', 'description', 'document_scanner', 'receipt_long',
+    'paid', 'money', 'trending_flat', 'swap_calls', 'call_split',
+    'merge_type', 'account_tree', 'manage_search', 'task', 'checklist',
   ];
 
   platonSchema: PlatonTable[] = [];

@@ -1,5 +1,6 @@
 import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
@@ -10,6 +11,8 @@ import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzSpinModule } from 'ng-zorro-antd/spin';
 import { NzTagModule } from 'ng-zorro-antd/tag';
 import { NzEmptyModule } from 'ng-zorro-antd/empty';
+import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
+import { NzRadioModule } from 'ng-zorro-antd/radio';
 import { NgxEchartsModule, NGX_ECHARTS_CONFIG } from 'ngx-echarts';
 import type { EChartsOption } from 'echarts';
 
@@ -22,10 +25,10 @@ import { environment } from '../../../environments/environment';
   selector: 'ui-indicator-detail',
   standalone: true,
   imports: [
-    CommonModule, RouterModule,
+    CommonModule, RouterModule, FormsModule,
     MatIconModule, MatCardModule, MatTooltipModule,
     NzBreadCrumbModule, NzTabsModule,
-    NzSpinModule, NzTagModule, NzEmptyModule,
+    NzSpinModule, NzTagModule, NzEmptyModule, NzDatePickerModule, NzRadioModule,
     NgxEchartsModule,
   ],
   providers: [
@@ -71,14 +74,18 @@ export class IndicatorDetailComponent implements OnInit {
   loading: Record<string, boolean> = {};
   chartOptions: Record<string, EChartsOption> = {};
 
-  /** Période affichée pour les graphiques en courbe (jours), par vizId. 7 jours par défaut. */
+  /** Période affichée pour les graphiques en courbe (jours), par vizId. 7 jours par défaut. -1 = plage personnalisée. */
   historyPeriodDays: Record<string, number> = {};
+
+  /** Plage de dates personnalisée par vizId, utilisée quand historyPeriodDays[vizId] === -1. */
+  historyCustomRange: Record<string, [Date, Date] | null> = {};
 
   readonly historyPeriodOptions: { label: string; value: number }[] = [
     { label: '7 jours', value: 7 },
     { label: '30 jours', value: 30 },
     { label: '90 jours', value: 90 },
     { label: 'Tout', value: 0 },
+    { label: 'Personnalisé', value: -1 },
   ];
 
   isLoading = true;
@@ -237,7 +244,7 @@ export class IndicatorDetailComponent implements OnInit {
       };
     } else if (viz.type === 'line-chart') {
       const fullHistory = result.metadata?.['history'] ?? [];
-      const history = this.filterHistoryByPeriod(fullHistory, this.historyPeriodDays[viz.id] ?? 7);
+      const history = this.filterHistory(viz, fullHistory);
       this.chartOptions[viz.id] = {
         tooltip: { trigger: 'axis' },
         xAxis: { type: 'category', data: history.map((h: any) => new Date(h.timestamp).toLocaleDateString()) },
@@ -286,8 +293,29 @@ export class IndicatorDetailComponent implements OnInit {
     this.cdr.markForCheck();
   }
 
-  /** Filtre l'historique sur les `days` derniers jours. `days === 0` = tout l'historique. */
-  private filterHistoryByPeriod(history: { value: number; timestamp: Date }[], days: number): { value: number; timestamp: Date }[] {
+  /** Change la plage de dates personnalisée pour la courbe d'un viz et reconstruit le graphique. */
+  onCustomRangeChange(viz: IndicatorVisualization, range: [Date, Date] | null): void {
+    this.historyCustomRange[viz.id] = range;
+    const result = this.results[viz.id];
+    if (result) this.buildChartOptions(viz, result);
+    this.cdr.markForCheck();
+  }
+
+  /** Filtre l'historique selon la période sélectionnée (jours glissants, tout, ou plage personnalisée). */
+  private filterHistory(viz: IndicatorVisualization, history: { value: number; timestamp: Date }[]): { value: number; timestamp: Date }[] {
+    const days = this.historyPeriodDays[viz.id] ?? 7;
+
+    if (days === -1) {
+      const range = this.historyCustomRange[viz.id];
+      if (!range) return history;
+      const start = new Date(range[0]).setHours(0, 0, 0, 0);
+      const end = new Date(range[1]).setHours(23, 59, 59, 999);
+      return history.filter(h => {
+        const t = new Date(h.timestamp).getTime();
+        return t >= start && t <= end;
+      });
+    }
+
     if (!days) return history;
     const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
     return history.filter(h => new Date(h.timestamp).getTime() >= cutoff);

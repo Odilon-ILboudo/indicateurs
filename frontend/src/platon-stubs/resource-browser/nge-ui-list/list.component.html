@@ -1,0 +1,67 @@
+<ng-container *ngIf="selectable">
+  <ng-container *ngFor="let item of selections; trackBy: _trackBy.bind(this)">
+    <ng-container *ngTemplateOutlet="_template(item, 'selection'); context: { item: item }"></ng-container>
+  </ng-container>
+</ng-container>
+
+<!-- TEMPLATE FOR EMPTY STATE -->
+<ng-template #emptyStateTemplate>
+  <ng-container *ngIf="!filter?.trim(); else: noResult">
+    <ng-container *ngTemplateOutlet="_emptyStateTemplate"></ng-container>
+  </ng-container>
+  <ng-template #noResult>
+    <ng-container *ngTemplateOutlet="_noResultTemplate; context: { $implicit: filter }"></ng-container>
+  </ng-template>
+</ng-template>
+
+<!-- APPLY CURRENT FILTER TO ITEMS IF NEEDED AND STORE THE RESULT TO A VARIABLE `filtered` -->
+<ng-container *ngIf="_filtered() as filtered">
+  <ng-container *ngIf="filtered.length; else: emptyStateTemplate">
+    <ul class="ui-list-container" [ngClass]="classes">
+      <ng-container
+        *ngFor="
+          let item of filtered;
+          trackBy: _trackBy.bind(this);
+          let index = index;
+          let first = first;
+          let last = last;
+          let even = even;
+          let odd = odd
+        "
+      >
+        <ng-container
+          *ngIf="{ item: item, items: filtered, odd: odd, last: last, even: even, index: index, first: first } as context"
+        >
+          <div class="ui-list-item">
+            <!-- HEADER -->
+            <ng-container *ngIf="_template(context, 'header') as header">
+              <li class="ui-list-item-header">
+                <ng-container *ngTemplateOutlet="header; context: context"></ng-container>
+              </li>
+            </ng-container>
+            <!-- ROW -->
+            <ng-container *ngIf="_template(context, 'row') as row">
+              <li class="ui-list-item-content" [class.selectable]="selectable">
+                <ng-container *ngTemplateOutlet="row; context: context"></ng-container>
+                <!-- CHECKBOX -->
+                <label class="ui-list-label" *ngIf="selectable">
+                  <input
+                    class="ui-list-label__checkbox"
+                    type="checkbox"
+                    [(ngModel)]="_selectionStates[$any(item)[idField]]"
+                    (ngModelChange)="_toggleSelection(item)"
+                  />
+                  <span class="ui-list-label__text">
+                    <span class="ui-list-label__check">
+                      <span class="ui-list-label__icon">✓</span>
+                    </span>
+                  </span>
+                </label>
+              </li>
+            </ng-container>
+          </div>
+        </ng-container>
+      </ng-container>
+    </ul>
+  </ng-container>
+</ng-container>

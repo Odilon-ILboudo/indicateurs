@@ -100,30 +100,34 @@
               <span class="t-warning">≤ {{ viz.thresholds.warning }} : Moyen</span>
               <span class="t-danger">&gt; {{ viz.thresholds.warning }} : Difficile</span>
             </div>
-            <button mat-button class="refresh-btn" (click)="computeViz(viz)">
-              <mat-icon>refresh</mat-icon> Recalculer
-            </button>
           </div>
 
           <!-- GAUGE / LINE-CHART / BAR-CHART / HISTOGRAM -->
           <div class="view-chart"
             *ngIf="viz.type !== 'card' && chartOptions[viz.id]">
             <div class="history-period-selector" *ngIf="viz.type === 'line-chart'">
-              <button
-                *ngFor="let opt of historyPeriodOptions"
-                type="button"
-                class="period-btn"
-                [class.active]="(historyPeriodDays[viz.id] ?? 7) === opt.value"
-                (click)="onHistoryPeriodChange(viz, opt.value)">
-                {{ opt.label }}
-              </button>
+              <nz-radio-group
+                [ngModel]="historyPeriodDays[viz.id] ?? 7"
+                (ngModelChange)="onHistoryPeriodChange(viz, $event)"
+                nzButtonStyle="solid"
+                nzSize="default">
+                <label nz-radio-button
+                  *ngFor="let opt of historyPeriodOptions"
+                  [nzValue]="opt.value">
+                  {{ opt.label }}
+                </label>
+              </nz-radio-group>
+              <nz-range-picker
+                *ngIf="(historyPeriodDays[viz.id] ?? 7) === -1"
+                class="custom-range-picker"
+                nzFormat="dd/MM/yyyy"
+                [ngModel]="historyCustomRange[viz.id]"
+                (ngModelChange)="onCustomRangeChange(viz, $event)">
+              </nz-range-picker>
             </div>
             <div echarts [options]="chartOptions[viz.id]"
               [style.height]="viz.type === 'bar-chart' ? '400px' : '300px'">
             </div>
-            <button mat-button class="refresh-btn" (click)="computeViz(viz)">
-              <mat-icon>refresh</mat-icon> Recalculer
-            </button>
           </div>
 
           <!-- Aucune donnée -->

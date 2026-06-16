@@ -71,6 +71,12 @@ export class IndicatorService {
     );
   }
 
+  getUserPreference(userId: string, indicatorId: string): Observable<any> {
+    return this.http.get<any>(
+      `${this.preferencesUrl}/${encodeURIComponent(indicatorId)}?userId=${encodeURIComponent(userId)}`,
+    );
+  }
+
   // ── Écriture ─────────────────────────────────────────────────────────────
 
   createIndicator(data: Partial<IndicatorDefinition> & { formula?: any }): Observable<IndicatorDefinition> {
@@ -256,6 +262,20 @@ export class IndicatorService {
       `${this.preferencesUrl}/${encodeURIComponent(indicatorId)}?userId=${encodeURIComponent(userId)}`,
       { enabledVizIds: vizIds },
     ).subscribe();
+  }
+
+  /** Met à jour les préférences de l'utilisateur pour un indicateur (couleur personnalisée, visualisation active, etc.). */
+  updateUserPreference(userId: string, indicatorId: string, data: {
+    displayPreferences?: { color?: string; icon?: string };
+    activeVizId?: string;
+  }): Observable<any> {
+    if (data.activeVizId && data.displayPreferences === undefined) {
+      this.vizPreferencesCache.set(indicatorId, data.activeVizId);
+    }
+    return this.http.patch(
+      `${this.preferencesUrl}/${encodeURIComponent(indicatorId)}?userId=${encodeURIComponent(userId)}`,
+      data,
+    );
   }
 
   private invalidateCache(): void {

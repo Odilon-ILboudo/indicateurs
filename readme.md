@@ -20,7 +20,7 @@ fonctionnement global du projet sans avoir à parcourir tout le code source.
 4. [Bases de données](#4-bases-de-données)
 5. [Modèle de données - entités `indicators`](#5-modèle-de-données--entités-indicators)
 6. [Moteur DSL - calcul des indicateurs](#6-moteur-dsl--calcul-des-indicateurs)
-7. [Modèle "Option B+" - contextType + visualizations](#7-modèle-option-b--contexttype--visualizations)
+7. [Modèle - contextType + visualizations](#7-modèle-option-b--contexttype--visualizations)
 8. [Familles d'indicateurs et visibilité par rôle](#8-familles-dindicateurs-et-visibilité-par-rôle)
 9. [Routes API](#9-routes-api)
 10. [Frontend](#10-frontend)
@@ -444,7 +444,7 @@ résultats, "Afficher tout" si > 5 lignes).
 
 ---
 
-## 7. Modèle "Option B+" - `contextType` + `visualizations[]`
+## 7. Modèle - `contextType` + `visualizations[]`
 
 **1 indicateur = 1 `contextType` unique**, mais peut avoir **N visualisations**
 (`visualizations: IndicatorVisualization[]`), chacune avec :

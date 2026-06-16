@@ -1,0 +1,35 @@
+:host {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.9em;
+  --color-username: var(--brand-text-secondary);
+}
+
+nz-badge {
+  position: relative;
+  margin-right: 12px;
+  &.no-username {
+    margin-right: 0;
+  }
+}
+
+nz-avatar {
+  background-color: #ccc;
+}
+
+i {
+  position: absolute;
+  right: 0px;
+  top: -4px;
+}
+
+div {
+  display: inline-flex;
+  flex-direction: column;
+  line-height: 1em;
+  font-size: inherit;
+  align-items: baseline;
+  :last-child {
+    color: var(--color-username);
+  }
+}

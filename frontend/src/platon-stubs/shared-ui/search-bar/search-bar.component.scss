@@ -1,0 +1,54 @@
+:host {
+  display: block;
+  width: 100%;
+  padding: 0;
+  height: 44px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  background-color: var(--brand-background-components, 'white');
+}
+
+input {
+  height: 100%;
+  flex: 1;
+  border-radius: 8px;
+  background-color: transparent;
+  box-shadow: none;
+  border: none;
+  text-overflow: ellipsis;
+}
+
+input:focus {
+  outline: none;
+}
+
+input:disabled {
+  cursor: not-allowed;
+}
+
+button {
+  padding: 0;
+  height: 44px !important;
+}
+
+::placeholder {
+  color: var(--brand-text-secondary);
+  opacity: 1; /* Firefox */
+}
+
+::-ms-input-placeholder {
+  /* Edge 12 -18 */
+  color: var(--brand-text-secondary);
+}
+
+.mat-mdc-button > .mat-icon {
+  margin-left: 0;
+  margin-right: 0px;
+  display: inline-block;
+  position: relative;
+  vertical-align: top;
+  font-size: 1.125rem;
+  height: 1.125rem;
+  width: 1.125rem;
+}

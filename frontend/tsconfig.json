@@ -53,6 +53,9 @@
       "@cisstech/nge/directives": ["./src/platon-stubs/nge-directives.ts"],
       "@cisstech/nge/pipes": ["./src/platon-stubs/nge-pipes.ts"],
       "@cisstech/nge/ui/icon": ["./src/platon-stubs/nge-ui-icon.ts"],
+      "@cisstech/nge/ui/list": ["./src/platon-stubs/resource-browser/nge-ui-list/list.ts"],
+      "@cisstech/nge/markdown": ["./src/platon-stubs/nge-markdown.ts"],
+      "@cisstech/nge/services": ["./src/platon-stubs/nge-services.ts"],
       "@platon/feature/peer/browser": ["./src/platon-stubs/feature-peer-browser.ts"]
     }
   },

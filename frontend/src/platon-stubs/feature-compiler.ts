@@ -9,3 +9,8 @@ export interface ActivityExerciseGroup {
 }
 
 export type ActivitySettings = Record<string, unknown>
+
+export type Variables = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [k: string]: any
+}

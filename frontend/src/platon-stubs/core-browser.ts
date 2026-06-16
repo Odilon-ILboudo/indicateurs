@@ -65,17 +65,29 @@ export class DialogService {
 @NgModule({})
 export class DialogModule {}
 
-@Component({
-  standalone: true,
-  selector: 'user-avatar',
-  template: '<span class="user-avatar">{{ userIdOrName }}</span>',
-  styles: ['.user-avatar { font-size: 0.85em; color: var(--brand-text-secondary, #888); }'],
-})
-export class UserAvatarComponent {
-  @Input() userIdOrName?: string
-  @Input() noIcon?: boolean
-  @Input() showUsername?: string
+@Injectable({ providedIn: 'root' })
+export class StorageService {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  set<T>(key: string, value: T): Observable<any> {
+    localStorage.setItem(key, JSON.stringify(value))
+    return of(undefined)
+  }
+
+  get<T>(key: string, defaultValue?: T): Observable<T> {
+    const raw = localStorage.getItem(key)
+    return of(raw == null ? (defaultValue as T) : (JSON.parse(raw) as T))
+  }
+
+  remove(key: string): Observable<void> {
+    localStorage.removeItem(key)
+    return of(undefined)
+  }
 }
+
+export { UserAvatarComponent } from './core-browser/user-avatar/user-avatar.component'
+export { UserGroupAvatarComponent } from './core-browser/user-group-avatar/user-group-avatar.component'
+export { UserSearchBarComponent } from './core-browser/user-search-bar/user-search-bar.component'
+export { UserService } from './core-browser/user.service'
 
 @Injectable({ providedIn: 'root' })
 export class TagService {

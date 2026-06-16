@@ -1,0 +1,86 @@
+:host {
+  container-type: inline-size;
+  container-name: resource-item;
+}
+
+:host::ng-deep {
+  // Appliquons aussi le container type au composant article principal
+  ui-list-item-article {
+    container-type: inline-size;
+    container-name: list-item;
+  }
+  .article-title {
+    max-width: 75%;
+  }
+
+  .ant-ribbon {
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    mat-icon {
+      width: 18px;
+      height: 18px;
+      font-size: 18px;
+    }
+  }
+
+  @container list-item (max-width: 500px) {
+    .action {
+      margin-right: 12px;
+      .list-item-article-action-title {
+        display: none;
+      }
+    }
+    .container-wide {
+      display: none;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .action {
+      margin-right: 12px;
+      .list-item-article-action-title {
+        display: none;
+      }
+    }
+  }
+}
+
+.spacer {
+  flex: 1;
+}
+
+.action {
+  cursor: pointer;
+}
+
+.icon-configurable {
+  display: inline-block;
+  margin-left: 0.5rem;
+}
+
+.resource-item-stats {
+  color: var(--brand-text-secondary);
+  font-size: 1rem;
+}
+
+.resource-item-title {
+  color: var(--brand-text-primary);
+}
+
+.btn-show-references {
+  padding: 0;
+}
+
+.customise-font {
+  font-family: Verdana, Geneva, Tahoma, sans-serif;
+}
+
+.custom-popover {
+  max-height: 20rem;
+  overflow-y: auto;
+  max-width: 40rem;
+  padding-right: 1.2rem;
+  margin-right: -0.8rem;
+}

@@ -22,6 +22,32 @@ export enum OrderingDirections {
   DESC = 'DESC',
 }
 
+export enum UserOrderings {
+  NAME = 'NAME',
+  CREATED_AT = 'CREATED_AT',
+  UPDATED_AT = 'UPDATED_AT',
+}
+
+export const DEFAULT_SEARCH_BAR_LIMIT = 5
+
+export interface UserFilters {
+  readonly roles?: (UserRoles | keyof typeof UserRoles)[]
+  readonly search?: string
+  readonly active?: boolean
+  readonly groups?: string[]
+  readonly lmses?: string[]
+  readonly offset?: number
+  readonly limit?: number
+  readonly order?: UserOrderings | keyof typeof UserOrderings
+  readonly direction?: OrderingDirections | keyof typeof OrderingDirections
+}
+
+export interface UserGroupFilters {
+  readonly search?: string
+  readonly offset?: number
+  readonly limit?: number
+}
+
 export interface ListResponse<T> {
   resources: T[]
   total: number
@@ -68,4 +94,5 @@ export function uniquifyBy<T>(array: T[], key: keyof T): T[] {
 export interface UserGroup {
   readonly id: string
   readonly name: string
+  readonly users: User[]
 }

@@ -7,7 +7,7 @@
     <nz-option nzLabel="latest" nzValue="latest" />
     <nz-option *ngFor="let item of versions.all" [nzLabel]="item.tag" [nzValue]="item.tag" />
   </nz-select>
-  <div class="btn-group">
+  <div class="ant-btn-group">
     <a *ngIf="canPreview" nz-button nzType="primary" nz-tooltip="Prévisualiser" (click)="preview.emit()">
       <i nz-icon nzType="play-circle" nzTheme="outline"></i>
     </a>

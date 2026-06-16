@@ -1,0 +1,23 @@
+:host {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.9em;
+}
+
+nz-avatar {
+  margin-right: 12px;
+  background-color: #ccc;
+}
+
+div {
+  display: inline-flex;
+  flex-direction: column;
+  line-height: 1em;
+  font-size: inherit;
+  align-items: baseline;
+  :last-child {
+    cursor: pointer;
+    padding: 0.2rem 0;
+    color: var(--color-username);
+  }
+}

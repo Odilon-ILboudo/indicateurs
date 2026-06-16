@@ -203,9 +203,9 @@
   }
   
   .card-context {
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    gap: 4px;
+    justify-content: space-between;
     margin-top: 8px;
     padding-top: 8px;
     border-top: 1px solid rgba(0, 0, 0, 0.06);
@@ -213,62 +213,43 @@
     color: #8c8c8c;
     font-weight: 500;
 
+    .context-info {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
     mat-icon {
       font-size: 12px;
       width: 12px;
       height: 12px;
     }
-  }
 
-  // Sélecteur de visualisation (chips en bas de la card)
-  .viz-selector {
-    display: flex;
-    gap: 4px;
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid rgba(0, 0, 0, 0.06);
-
-    .viz-chip {
-      display: inline-flex;
+    .edit-button {
+      opacity: 1;
+      transition: all 0.2s ease;
+      padding: 0;
+      height: 24px;
+      width: 24px;
+      color: #1890ff;
+      display: flex;
       align-items: center;
       justify-content: center;
-      width: 28px;
-      height: 28px;
-      border-radius: 6px;
-      border: 1px solid rgba(0, 0, 0, 0.12);
-      background: transparent;
-      cursor: pointer;
-      padding: 0;
-      transition: background 0.15s ease, border-color 0.15s ease;
 
       mat-icon {
         font-size: 16px;
         width: 16px;
         height: 16px;
-        color: #8c8c8c;
+        color: #1890ff;
       }
 
       &:hover {
-        background: rgba(24, 144, 255, 0.08);
-        border-color: rgba(24, 144, 255, 0.3);
-
-        mat-icon { color: #1890ff; }
-      }
-
-      &.active {
-        background: rgba(24, 144, 255, 0.12);
-        border-color: #1890ff;
-
-        mat-icon { color: #1890ff; }
+        background: rgba(24, 144, 255, 0.1);
+        border-radius: 4px;
       }
     }
   }
 
-  // La card s'étend quand des chips de viz sont présentes
-  &.has-multi-viz {
-    min-height: 140px;
-    overflow: visible;
-  }
 }
 
 // Animation de chargement

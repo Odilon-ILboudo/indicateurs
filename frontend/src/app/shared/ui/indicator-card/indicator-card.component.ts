@@ -3,21 +3,37 @@ import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatButtonModule } from '@angular/material/button';
 import { RouterModule } from '@angular/router';
+import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
+import { NzFormModule } from 'ng-zorro-antd/form';
+import { NzSelectModule } from 'ng-zorro-antd/select';
+import { NzColorPickerModule } from 'ng-zorro-antd/color-picker';
+import { NzButtonModule } from 'ng-zorro-antd/button';
+import { NzMessageService } from 'ng-zorro-antd/message';
+import { FormsModule } from '@angular/forms';
 import { IndicatorService } from '../../../core/services/indicator.service';
-import { DashboardContext, IndicatorDefinition, IndicatorValue, IndicatorVisualization, ViewVisualizationType } from '../../../core/models/indicator.model';
+import { DashboardContext, IndicatorDefinition, IndicatorValue, IndicatorVisualization } from '../../../core/models/indicator.model';
 import { environment } from '../../../../environments/environment';
+import { IndicatorConfigModalComponent } from './indicator-config-modal.component';
+import { ModalDataService } from './modal-data.service';
 
 @Component({
   selector: 'ui-indicator-card',
   standalone: true,
-  imports: [CommonModule, MatIconModule, MatCardModule, MatTooltipModule, RouterModule],
+  imports: [
+    CommonModule, FormsModule, MatIconModule, MatCardModule, MatTooltipModule, MatButtonModule, RouterModule,
+    NzModalModule, NzFormModule, NzSelectModule, NzColorPickerModule, NzButtonModule
+  ],
   templateUrl: './indicator-card.component.html',
   styleUrls: ['./indicator-card.component.scss']
 })
 export class IndicatorCardComponent implements OnInit, OnChanges {
   private readonly indicatorService = inject(IndicatorService);
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly modal = inject(NzModalService);
+  private readonly message = inject(NzMessageService);
+  private readonly modalData = inject(ModalDataService);
 
   @Input() indicator!: IndicatorDefinition;
   @Input() context!: DashboardContext;
@@ -31,17 +47,45 @@ export class IndicatorCardComponent implements OnInit, OnChanges {
   value: IndicatorValue | null = null;
   isLoading: boolean = true;
   activeVizId: string | null = null;
+  userColorPreference: string | null = null;
+
+  // Configuration modal
+  configColor: string = '';
+  configVizId: string | null = null;
+  isSavingConfig: boolean = false;
 
   ngOnInit(): void {
     this.initActiveViz();
+    this.loadUserColorPreference();
     this.loadValue();
   }
 
   ngOnChanges(): void {
     if (this.indicator && this.context) {
       this.initActiveViz();
+      this.loadUserColorPreference();
       this.loadValue();
     }
+  }
+
+  private loadUserColorPreference(): void {
+    const userId = environment.defaultUserId;
+    this.indicatorService.getUserPreference(userId, this.indicator.id).subscribe({
+      next: (preference) => {
+        this.applyUserColorForActiveViz(preference?.displayPreferences);
+      },
+    });
+  }
+
+  private applyUserColorForActiveViz(displayPreferences?: any): void {
+    if (displayPreferences && this.activeVizId) {
+      // Couleur personnalisée pour cette visualisation spécifique
+      const colorKey = `viz_${this.activeVizId}`;
+      this.userColorPreference = displayPreferences[colorKey] || null;
+    } else {
+      this.userColorPreference = null;
+    }
+    this.cdr.detectChanges();
   }
 
   /** Visualisations que l'utilisateur a choisi de voir (toutes par défaut). */
@@ -58,21 +102,9 @@ export class IndicatorCardComponent implements OnInit, OnChanges {
     this.activeVizId = valid?.id ?? this.visibleVisualizations[0].id;
   }
 
-  selectViz(viz: IndicatorVisualization, event: Event): void {
-    event.stopPropagation();
-    if (viz.id === this.activeVizId) return;
-    this.activeVizId = viz.id;
-    this.indicatorService.setVizPreference(environment.defaultUserId, this.indicator.id, viz.id);
-    this.loadValue();
-  }
-
   get activeViz(): IndicatorVisualization | undefined {
     return this.visibleVisualizations.find(v => v.id === this.activeVizId)
       ?? this.visibleVisualizations[0];
-  }
-
-  get hasMultipleViz(): boolean {
-    return this.visibleVisualizations.length > 1;
   }
 
   private loadValue(): void {
@@ -172,28 +204,6 @@ export class IndicatorCardComponent implements OnInit, OnChanges {
     }
   }
 
-  getVizTypeIcon(type: ViewVisualizationType): string {
-    const icons: Record<ViewVisualizationType, string> = {
-      card: 'credit_card',
-      gauge: 'speed',
-      'line-chart': 'show_chart',
-      'bar-chart': 'bar_chart',
-      histogram: 'equalizer',
-    };
-    return icons[type] ?? 'analytics';
-  }
-
-  getVizTypeLabel(type: ViewVisualizationType): string {
-    const labels: Record<ViewVisualizationType, string> = {
-      card: 'Carte',
-      gauge: 'Jauge',
-      'line-chart': 'Courbe',
-      'bar-chart': 'Barres',
-      histogram: 'Histogramme',
-    };
-    return labels[type] ?? type;
-  }
-
   getContextLabel(scope: string): string {
     const labels: Record<string, string> = {
       learner: 'Apprenant',
@@ -204,5 +214,82 @@ export class IndicatorCardComponent implements OnInit, OnChanges {
       group: 'Groupe',
     };
     return labels[scope] ?? scope;
+  }
+
+  openConfigModal(event: Event): void {
+    event.stopPropagation();
+
+    // Passer les données via le service
+    this.modalData.setData(
+      this.indicator?.visualizations || [],
+      this.visibleVisualizations.map(v => v.id)
+    );
+
+    const modal = this.modal.create({
+      nzTitle: `Configuration - ${this.indicator.name}`,
+      nzWidth: 500,
+      nzClosable: true,
+      nzContent: IndicatorConfigModalComponent,
+      nzOkText: 'Sauvegarder',
+      nzCancelText: 'Annuler',
+      nzOnOk: (componentInstance: IndicatorConfigModalComponent) => {
+        return this.saveVizVisibility(componentInstance, modal);
+      },
+    });
+  }
+
+  private saveVizVisibility(componentInstance: IndicatorConfigModalComponent, modal: any): Promise<void> {
+    this.isSavingConfig = true;
+    const userId = environment.defaultUserId;
+    const enabledVizIds = componentInstance.getEnabledVizIds();
+    const allVizIds = enabledVizIds.length === this.visibleVisualizations.length ? null : enabledVizIds;
+
+    this.indicatorService.setEnabledVizIds(userId, this.indicator.id, allVizIds);
+    this.message.success('Visualisations sauvegardées');
+    this.isSavingConfig = false;
+    this.cdr.detectChanges();
+
+    return Promise.resolve();
+  }
+
+  private savePreferences(modal: any): Promise<void> {
+    this.isSavingConfig = true;
+    const userId = environment.defaultUserId;
+
+    // Construire displayPreferences avec la clé viz_{vizId}
+    const vizIdToSave = this.configVizId || this.activeVizId;
+    const displayPreferences = {
+      [`viz_${vizIdToSave}`]: this.configColor,
+    };
+
+    return new Promise((resolve, reject) => {
+      // Appeler l'API pour sauvegarder les préférences
+      this.indicatorService.updateUserPreference(userId, this.indicator.id, {
+        displayPreferences,
+        activeVizId: this.configVizId ?? undefined,
+      }).subscribe({
+        next: () => {
+          this.message.success('Préférences sauvegardées');
+
+          // Mettre à jour la couleur de l'icône immédiatement pour cette viz
+          this.userColorPreference = this.configColor;
+
+          // Mettre à jour la visualisation active si elle a changé
+          if (this.configVizId && this.configVizId !== this.activeVizId) {
+            this.activeVizId = this.configVizId;
+          }
+
+          this.isSavingConfig = false;
+          this.cdr.detectChanges();
+          this.loadValue();
+          resolve();
+        },
+        error: (err) => {
+          this.message.error('Erreur lors de la sauvegarde');
+          this.isSavingConfig = false;
+          reject(err);
+        },
+      });
+    });
   }
 }

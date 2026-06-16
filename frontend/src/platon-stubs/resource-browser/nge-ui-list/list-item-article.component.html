@@ -1,0 +1,61 @@
+<article class="mat-elevation-z1" [class.bordered]="!articleBannerUrl">
+  <img class="article-banner" [src]="articleBannerUrl" [alt]="articleBannerAlt" *ngIf="articleBannerUrl" />
+  <div class="article-content-wrapper">
+    <header class="article-header">
+      <div class="article-image">
+        <ng-container *ngIf="articleIconTemplate; else: noImageTemplate">
+          <ng-container *ngTemplateOutlet="articleIconTemplate"></ng-container>
+        </ng-container>
+        <ng-template #noImageTemplate>
+          <img *ngIf="articleIconUrl" [src]="articleIconUrl" [alt]="articleIconAlt" />
+        </ng-template>
+      </div>
+      @if (articleTitle | istemplate) {
+        <h3 class="article-title" [routerLink]="articleUrl" (click)="didClickTitle.emit()">
+          <ng-container *ngTemplateOutlet="articleTitle" />
+        </h3>
+      } @else {
+        <div class="article-title" [routerLink]="articleUrl" (click)="didClickTitle.emit()">
+          {{ articleTitle }}
+        </div>
+      }
+    </header>
+    <p class="article-description">
+      @if (articleDescription | istemplate) {
+        <ng-container *ngTemplateOutlet="articleDescription" />
+      } @else {
+        {{ articleDescription }}
+      }
+    </p>
+    <div class="article-tags" [class.clickable]="isTagsCliclable" *ngIf="articleTags?.length">
+      @for (tag of articleTags; track $index) {
+        @if (tag | isstring) {
+          <div class="article-tag" (click)="didClickTag.emit(tag)">
+            @if (articleTagIconTemplate) {
+              <div class="article-tag-icon">
+                <ng-container *ngTemplateOutlet="articleTagIconTemplate; context: { text: tag }" />
+              </div>
+            }
+            {{ tag }}
+          </div>
+        } @else {
+          <div
+            class="article-tag"
+            [style.--article-tag-background-color]="tag.color ?? '#5d7092'"
+            (click)="didClickTagItem.emit(tag)"
+          >
+            @if (articleTagIconTemplate) {
+              <div class="article-tag-icon">
+                <ng-container *ngTemplateOutlet="articleTagIconTemplate; context: { text: tag.text, data: tag.data }" />
+              </div>
+            }
+            {{ tag.text }}
+          </div>
+        }
+      }
+    </div>
+    <footer class="article-footer">
+      <ng-content></ng-content>
+    </footer>
+  </div>
+</article>
