@@ -1,35 +1,39 @@
 <div class="indicator-selector">
-  <div class="filters">
-    <nz-select
-      nzPlaceHolder="Filtrer par contexte"
-      [(ngModel)]="filters.scope"
+  <div class="toolbar">
+    <nz-radio-group
+      [(ngModel)]="filters.grouping"
       (ngModelChange)="applyFilters()"
-      style="width: 200px">
-      <nz-option nzValue="all" nzLabel="Tous les contextes" />
-      <nz-option nzValue="course" nzLabel="Cours" />
-      <nz-option nzValue="activity" nzLabel="Activité" />
-      <nz-option nzValue="learner" nzLabel="Apprenant" />
-      <nz-option nzValue="group" nzLabel="Groupe" />
-      <nz-option nzValue="teacher" nzLabel="Enseignant" />
-      <nz-option nzValue="admin" nzLabel="Admin" />
-    </nz-select>
+      nzButtonStyle="solid">
+      <label nz-radio-button nzValue="standalone">Indicateurs uniques</label>
+      <label nz-radio-button nzValue="families">Familles</label>
+    </nz-radio-group>
 
-    <nz-select
-      nzPlaceHolder="Trier par"
-      [(ngModel)]="filters.sortBy"
-      (ngModelChange)="applyFilters()"
-      style="width: 200px">
-      <nz-option nzValue="name" nzLabel="Nom" />
-      <nz-option nzValue="popular" nzLabel="Plus utilisés" />
-      <nz-option nzValue="unpopular" nzLabel="Moins utilisés" />
-    </nz-select>
+    <div class="toolbar-right">
+      <nz-select
+        nzPlaceHolder="Filtrer par contexte"
+        [(ngModel)]="filters.scope"
+        (ngModelChange)="applyFilters()"
+        style="width: 190px">
+        <nz-option nzValue="all" nzLabel="Tous les contextes" />
+        <nz-option nzValue="course" nzLabel="Cours" />
+        <nz-option nzValue="activity" nzLabel="Activité" />
+        <nz-option nzValue="learner" nzLabel="Apprenant" />
+        <nz-option nzValue="group" nzLabel="Groupe" />
+        <nz-option nzValue="teacher" nzLabel="Enseignant" />
+        <nz-option nzValue="admin" nzLabel="Admin" />
+      </nz-select>
 
+      <nz-select
+        nzPlaceHolder="Trier par"
+        [(ngModel)]="filters.sortBy"
+        (ngModelChange)="applyFilters()"
+        style="width: 160px">
+        <nz-option nzValue="name" nzLabel="Nom" />
+        <nz-option nzValue="popular" nzLabel="Plus utilisés" />
+        <nz-option nzValue="unpopular" nzLabel="Moins utilisés" />
+      </nz-select>
+    </div>
   </div>
-
-  <nz-tabs [nzSelectedIndex]="filters.grouping === 'standalone' ? 0 : 1" (nzSelectedIndexChange)="onGroupingTabChange($event)">
-    <nz-tab nzTitle="Indicateurs uniques"></nz-tab>
-    <nz-tab nzTitle="Familles"></nz-tab>
-  </nz-tabs>
 
   <!-- État de chargement -->
   <div *ngIf="isLoading" class="loading-state">

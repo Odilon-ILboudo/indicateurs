@@ -190,11 +190,24 @@ toutes les dépendances `@platon/*` / `@cisstech/nge/*` sont remplacées par des
 | Stub (`src/platon-stubs/`) | Alias tsconfig |
 |---|---|
 | `core-common.ts` / `core-browser.ts` | `@platon/core/common` / `@platon/core/browser` |
+| `core-browser/user-search-bar/` | composant `UserSearchBarComponent` (ControlValueAccessor) |
 | `course-common.ts` / `course-browser.ts` | `@platon/feature/course/{common,browser}` |
 | `resource-common.ts` / `resource-browser.ts` | `@platon/feature/resource/{common,browser}` |
+| `resource-browser/resource-version/` | `ResourceVersionComponent` / `ResourceVersioningComponent` |
+| `resource-browser/resource-files/` | `ResourceFilesComponent` |
+| `resource-browser/event-list/`, `event-item/` | `ResourceEventListComponent` / `ResourceEventItemComponent` |
+| `resource-browser/member-table/` | `ResourceMemberTableComponent` |
+| `resource-browser/invitation-form/`, `invitation-table/` | `ResourceInvitationFormComponent` / `ResourceInvitationTableComponent` |
+| `resource-browser/resource-sharing/` | `ResourceSharingComponent` |
+| `resource-browser/template-card/`, `template-selection/` | `TemplateCardComponent` / `TemplateSelectionComponent` |
+| `resource-browser/circle-tree/`, `resource-filters/` | `CircleTreeComponent` / `ResourceFiltersComponent` |
+| `resource-browser/resource-item/`, `resource-list/` | `ResourceItemComponent` / `ResourceListComponent` |
+| `resource-browser/nge-ui-list/` | `NgeUiListModule`, `ListComponent`, `ListTemplateComponent` |
 | `feature-result-common.ts` / `feature-result-browser.ts` | `@platon/feature/result/{common,browser}` |
 | `feature-tuto-browser.ts`, `feature-peer-browser.ts`, `feature-compiler.ts`, `shared-ui.ts` | divers `@platon/feature/*`, `@platon/shared/ui` |
 | `nge-directives.ts`, `nge-pipes.ts`, `nge-ui-icon.ts` | `@cisstech/nge/{directives,pipes,ui/icon}` |
+| `nge-services.ts` | `@cisstech/nge/services` → `ClipboardService`, `PickerBrowserService` |
+| `nge-markdown.ts` | `@cisstech/nge/markdown` → `NgeMarkdownComponent` (rendu minimal) |
 
 Points clés de ces stubs :
 - `AuthService.ready()` retourne un utilisateur basé sur `environment.defaultUserId`
@@ -206,6 +219,10 @@ Points clés de ces stubs :
   PLaTon est en lecture seule.
 - Les composants UI (`UiLayoutTabsComponent`, `UiStatisticCardComponent`,
   `UiSearchBarComponent`, etc.) sont réimplémentés en Angular 21.
+- `@angular/cdk/portal` n'est pas installé : `ComponentType<T>` est défini
+  localement dans les stubs qui en ont besoin (ex. `event-item`).
+- Les icônes assets nge (`assets/vendors/nge/icons/`) sont absentes :
+  `NgeUiIconModule` utilise les glyphes AntD (folder/file) en remplacement.
 
 ---
 
@@ -409,13 +426,34 @@ contextId, activityId?, vizId?, forceRefresh?)` :
   `PlatonService.getUserNameMap()` avant stockage/retour - jamais d'UUID exposé
   côté frontend.
 
-### Snapshots "vivants" - refresh automatique
+### Snapshots "vivants" et cache cours/groupe/activité - refresh automatique
 
 `IngestionService` appelle, en fire-and-forget après chaque événement PLaTon
-ingéré pour une activité, `IndicatorsService.refreshSnapshots(indicatorId,
-activityId)` : recalcule (`forceRefresh = true`) **toutes** les
-`IndicatorSnapshot` de cette activité, pour chaque visualisation. Les erreurs par
-snapshot sont loggées sans bloquer les autres.
+ingéré pour une activité, deux méthodes complémentaires :
+
+1. `IndicatorsService.refreshSnapshots(indicatorId, activityId)` : recalcule
+   (`forceRefresh = true`) **toutes** les `IndicatorSnapshot` épinglées pour
+   cette activité, pour chaque visualisation. Les erreurs par snapshot sont
+   loggées sans bloquer les autres.
+
+2. `IndicatorsService.refreshActivityViews(indicatorId, activityId)` : recalcule
+   (`forceRefresh = true`) toutes les `indicator_values` de type
+   `course`/`group`/`activity` dont le `contextId` composite référence cette
+   `activityId` (matching `LIKE` sur les 4 formes possibles :
+   `activityId`, `activityId:vizId`, `courseId:activityId`,
+   `courseId:activityId:vizId`). Déduit les couples uniques
+   `(contextType, contextId d'origine)` et recalcule par visualisation.
+
+Ces deux appels sont indépendants : `refreshSnapshots` couvre les groupes
+explicitement épinglés, `refreshActivityViews` couvre toutes les vues
+cours/groupe/activité simplement consultées (cachées par `computeView`). Ensemble,
+ils garantissent que **toutes** les valeurs course/group/activity en cache sont
+fraîches après chaque événement d'ingestion.
+
+**Tradeoff** : chaque événement déclenche le recalcul de toutes les vues déjà
+consultées pour cette activité. Pour une activité avec beaucoup de groupes/vues,
+cela peut représenter de nombreux recalculs DSL en arrière-plan. Aucune limite ni
+debounce n'est implémentée pour l'instant.
 
 ### Recalcul (`recalculate`)
 
@@ -467,11 +505,33 @@ interface IndicatorVisualization {
 ### Sélection de la visualisation par l'utilisateur - persistée en BDD
 
 Si un indicateur a plusieurs visualisations, l'utilisateur choisit laquelle
-afficher (chips sur la carte, onglets sur la page détail). Le choix est persisté
-dans `user_indicator_preferences.active_viz_id` (pas `localStorage`), via
-`IndicatorService.setVizPreference()` (cache in-memory + `PATCH
-/preferences/:indicatorId`). Cohérence carte ↔ détail garantie par ce cache
-partagé.
+afficher. Le choix est persisté dans `user_indicator_preferences.active_viz_id`
+(pas `localStorage`), via `IndicatorService.setVizPreference()` (cache in-memory
++ `PATCH /preferences/:indicatorId`). Cohérence carte ↔ détail garantie par ce
+cache partagé.
+
+- Sur la **carte** : aucun sélecteur visible — la visualisation active est celle
+  sauvegardée (ou la première par défaut). Le changement se fait uniquement via
+  le **modal d'édition** (icône crayon, toujours visible).
+- Sur la **page détail** : onglets `nz-tabs` par visualisation, calcul lazy à la
+  demande (`onVizTabChange`).
+
+### Modal d'édition de la carte (`IndicatorConfigModalComponent`)
+
+Bouton crayon (toujours visible) sur chaque carte → `NzModalService.create()`
+charge `IndicatorConfigModalComponent`. Les données sont transmises via
+`ModalDataService.setData()` (service singleton), lu dans le `ngOnInit` du modal.
+
+Le modal permet de **cocher/décocher les visualisations visibles** (minimum 1
+obligatoire : la dernière cochée est désactivée + tooltip). La sélection est
+persistée dans `user_indicator_preferences.enabled_viz_ids` via
+`IndicatorService.setEnabledVizIds()`.
+
+### Wizard - icon picker
+
+L'étape 2 du wizard affiche les icônes sous forme d'une **grille de boutons
+cliquables** (37 icônes, 36×36px, bordure bleue sur la sélection) au lieu d'un
+`nz-select` textuel.
 
 ### Masquage sélectif de visualisations - `enabledVizIds`
 
@@ -712,11 +772,18 @@ avec lien "Modifier le filtre".
 
 - `learner` → `getIndicatorValue()` (valeur pré-calculée)
 - `course`/`group`/`activity` (+ `activityId`) → `computeView()` (cache backend)
-- Multi-vues : chips si `visibleVisualizations.length > 1`, `selectViz()` change
-  la vue active + persiste + recharge.
+- Visualisation active : fixée par la préférence sauvegardée ou
+  `visibleVisualizations[0]`. **Pas de chips de sélection sur la carte** —
+  le changement de viz se fait uniquement via le modal d'édition (icône crayon).
 - `activity` : navigue avec `queryParams = { from: 'activity', activityId,
   courseId, ... }` ; un clic sur un snapshot "groupe" navigue avec `from:
   'group-snapshot'`.
+
+### `IndicatorSelectorComponent` (onglet "Indicateurs")
+
+La barre d'outils est sur **une seule ligne** : onglets `Indicateurs uniques |
+Familles` (`nz-radio-group`) à gauche, filtres "Filtrer par contexte" et "Trier
+par" (`nz-select`) à droite.
 
 ### Page activité (`/dashboard/courses/:id/activities/:activityId`)
 
@@ -727,6 +794,13 @@ Deux sections d'indicateurs :
    dropdown filtré (groupes déjà ajoutés masqués) → `POST .../snapshots` (409 si
    doublon, géré côté UI) ; édition de titre inline, suppression avec
    popconfirm.
+
+### `IndicatorDetailComponent` - filtres de période
+
+Pour les visualisations `line-chart`, un sélecteur de période est affiché :
+`7 jours | 30 jours | 90 jours | Tout | Personnalisé` sous forme de
+`nz-radio-group` natif Ant Design (`nzButtonStyle="solid"`). L'option
+"Personnalisé" affiche un `nz-range-picker` avec bornes inclusives (00:00–23:59).
 
 ### Graphiques (`buildChartOptions`)
 
@@ -748,8 +822,9 @@ Deux sections d'indicateurs :
    sur la base PLaTon via `FormulaInterpreterService` + `PlatonService`, stocke
    le résultat et le retourne.
 4. Un événement PLaTon ingéré (`POST /ingest`) met à jour la valeur `learner`
-   correspondante puis déclenche en fire-and-forget `refreshSnapshots()` pour les
-   `IndicatorSnapshot` de groupe liées à cette activité.
+   correspondante puis déclenche en fire-and-forget `refreshSnapshots()` (snapshots
+   épinglés) et `refreshActivityViews()` (cache de toutes les vues
+   course/group/activity consultées pour cette activité).
 5. Le frontend affiche la visualisation choisie (carte/jauge/courbe/barres/
    histogramme) selon les préférences (`activeVizId`/`enabledVizIds`) et les
    règles de visibilité par rôle (`RoleService`).

@@ -1,11 +1,17 @@
 .indicator-selector {
   padding: 16px;
   
-  .filters {
+  .toolbar {
     display: flex;
-    gap: 16px;
-    margin-bottom: 24px;
-    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+
+    .toolbar-right {
+      display: flex;
+      gap: 8px;
+    }
   }
   
   .description {
