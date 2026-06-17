@@ -10,18 +10,14 @@ export interface FormulaDefinition {
   pipeline: { id: string; type: string; label?: string; params: Record<string, any> }[];
 }
 
-/** Une visualisation au sein d'un indicateur (1 indicateur peut en avoir plusieurs). */
+/** Une visualisation au sein d’un indicateur (1 indicateur peut en avoir plusieurs). */
 export interface IndicatorVisualization {
   id: string;
   label: string;
   type: VizType;
   icon?: string;
   color?: string;
-  /** Métadonnées d’affichage propres à cette visualisation (unité + seuils de performance). */
   unit?: string;
-  thresholds?: { good: number; warning: number; danger: number };
-  /** Formule propre à cette vue. Si absente, utilise indicator.formula. */
-  formula?: FormulaDefinition | null;
 }
 
 @Entity('indicator_definitions')
@@ -60,6 +56,14 @@ export class IndicatorDefinition {
   /** Formule partagée utilisée par les visualisations sans formule propre. */
   @Column({ type: 'jsonb', nullable: true })
   formula: FormulaDefinition | null;
+
+  /** Seuils de performance partagés par toutes les visualisations (optionnel). */
+  @Column({ type: 'jsonb', nullable: true })
+  thresholds: { good?: number; warning?: number } | null;
+
+  /** Aide à l'analyse : texte libre expliquant comment interpréter les résultats (optionnel). */
+  @Column({ type: 'text', nullable: true })
+  interpretationHint: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

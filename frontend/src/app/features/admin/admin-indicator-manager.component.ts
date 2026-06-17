@@ -25,50 +25,6 @@ import { IndicatorConfigComponent } from './indicator-config.component';
 import { IndicatorBuilderComponent, CONTEXT_LABELS, IndicatorFamilyPreset } from './indicator-builder.component';
 import { buildIndicatorDisplayRows, IndicatorDisplayRow } from '../../shared/utils/indicator-family-grouping';
 
-// ── Modale : historique des versions de formule ───────────────────────────────
-
-@Component({
-  selector: 'ui-history-modal',
-  standalone: true,
-  imports: [CommonModule, NzTagModule, NzButtonModule, NzEmptyModule, NzPopconfirmModule, MatIconModule],
-  template: `
-    <div class="history-list" *ngIf="versions?.length; else empty">
-      <div *ngFor="let v of versions" class="history-item">
-        <div class="history-header">
-          <strong>Version {{ v.versionNum }}</strong>
-          <span class="history-date">{{ v.createdAt | date:'dd/MM/yyyy HH:mm' }}</span>
-          <span *ngIf="v.createdBy" class="history-by">par {{ v.createdBy }}</span>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
-          <nz-tag *ngFor="let s of v.formula?.pipeline" nzColor="default">{{ s.type }}</nz-tag>
-          <span *ngIf="!v.formula?.pipeline?.length" style="color:#bbb;font-size:12px">Pipeline vide</span>
-        </div>
-        <button nz-button nzSize="small" nzType="dashed"
-          nz-popconfirm
-          nzPopconfirmTitle="Revenir à cette version ? La formule actuelle sera remplacée."
-          (nzOnConfirm)="modalData.onRollback(v.id)">
-          <mat-icon style="font-size:14px;line-height:1.4;vertical-align:middle">restore</mat-icon>
-          Restaurer cette version
-        </button>
-      </div>
-    </div>
-    <ng-template #empty>
-      <nz-empty nzNotFoundContent="Aucune version enregistrée pour cet indicateur."></nz-empty>
-    </ng-template>
-  `,
-  styles: [`
-    .history-list { display:flex; flex-direction:column; gap:10px; max-height:65vh; overflow-y:auto; }
-    .history-item { border:1px solid #e8e8e8; border-radius:8px; padding:12px 14px; }
-    .history-header { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
-    .history-date { font-size:12px; color:#888; }
-    .history-by   { font-size:12px; color:#aaa; }
-  `],
-})
-export class HistoryModalComponent {
-  readonly modalData = inject(NZ_MODAL_DATA) as { versions: any[]; onRollback: (id: string) => void };
-  get versions() { return this.modalData.versions; }
-}
-
 // ── Modale : logs d'exécution ─────────────────────────────────────────────────
 
 @Component({
@@ -132,24 +88,34 @@ export interface FamilyStartResult {
 @Component({
   selector: 'ui-family-start-modal',
   standalone: true,
-  imports: [CommonModule, FormsModule, NzFormModule, NzInputModule, NzSelectModule, NzButtonModule],
+  imports: [CommonModule, FormsModule, NzFormModule, NzInputModule, NzSelectModule, NzButtonModule, MatIconModule, NzTooltipModule],
   template: `
     <div class="family-start">
       <p style="color:#888;font-size:13px;margin-top:0">
         Une famille regroupe plusieurs indicateurs créés ensemble - un par contexte sélectionné -
-        partageant le même nom de base, la même description et les mêmes événements déclencheurs.
+        partageant le même nom de base, la même description et les mêmes événements déclencheurs et bien sûr, on peut les modifier sur chaque indicateur.
         Vous configurerez ensuite la visualisation et la formule de chacun, l'un après l'autre.
       </p>
 
       <nz-form-item>
-        <nz-form-label [nzRequired]="true">Nom de la famille</nz-form-label>
+        <nz-form-label [nzRequired]="true">
+          Nom de la famille
+          <mat-icon style="font-size:14px;width:14px;height:14px;vertical-align:middle;margin-left:4px;color:#8c8c8c;cursor:help"
+            nz-tooltip="Nom commun à tous les indicateurs de la famille. Il sera affiché comme titre du groupe dans le tableau de bord."
+            nzTooltipPlacement="right">info_outline</mat-icon>
+        </nz-form-label>
         <nz-form-control>
           <input nz-input [(ngModel)]="familyName" placeholder="ex: Tentatives avant première réussite" />
         </nz-form-control>
       </nz-form-item>
 
       <nz-form-item>
-        <nz-form-label>Description</nz-form-label>
+        <nz-form-label>
+          Description
+          <mat-icon style="font-size:14px;width:14px;height:14px;vertical-align:middle;margin-left:4px;color:#8c8c8c;cursor:help"
+            nz-tooltip="Explication de ce que mesure cette famille. Partagée par tous les indicateurs, visible dans la page de sélection."
+            nzTooltipPlacement="right">info_outline</mat-icon>
+        </nz-form-label>
         <nz-form-control>
           <textarea nz-input [(ngModel)]="description" rows="3"
             placeholder="Décrivez ce que mesure cette famille d'indicateurs…"></textarea>
@@ -157,7 +123,12 @@ export interface FamilyStartResult {
       </nz-form-item>
 
       <nz-form-item>
-        <nz-form-label [nzRequired]="true">Événements déclencheurs</nz-form-label>
+        <nz-form-label [nzRequired]="true">
+          Événements déclencheurs
+          <mat-icon style="font-size:14px;width:14px;height:14px;vertical-align:middle;margin-left:4px;color:#8c8c8c;cursor:help"
+            nz-tooltip="Événements PLaTon qui déclenchent le recalcul automatique des indicateurs de cette famille. Choisissez les événements liés à ce que vous mesurez."
+            nzTooltipPlacement="right">info_outline</mat-icon>
+        </nz-form-label>
         <nz-form-control>
           <nz-select [(ngModel)]="requiredEvents" nzMode="tags"
             nzPlaceHolder="ex: exercise.answered" style="width:100%">
@@ -170,7 +141,12 @@ export interface FamilyStartResult {
       </nz-form-item>
 
       <nz-form-item>
-        <nz-form-label [nzRequired]="true">Contextes à couvrir</nz-form-label>
+        <nz-form-label [nzRequired]="true">
+          Contextes à couvrir
+          <mat-icon style="font-size:14px;width:14px;height:14px;vertical-align:middle;margin-left:4px;color:#8c8c8c;cursor:help"
+            nz-tooltip="Sélectionnez les rôles ou niveaux pour lesquels cet indicateur sera disponible. Un indicateur distinct sera créé pour chaque contexte choisi."
+            nzTooltipPlacement="right">info_outline</mat-icon>
+        </nz-form-label>
         <nz-form-control>
           <nz-select [(ngModel)]="contextTypes" nzMode="multiple"
             nzPlaceHolder="Sélectionnez un ou plusieurs contextes" style="width:100%">
@@ -362,15 +338,6 @@ export class IndicatorFamilyStartModalComponent {
               </button>
               -->
 
-              <!-- Historique des versions (seulement si DSL) -->
-              <button *ngIf="hasFormula(ind)"
-                nz-button nzType="default" nzSize="small"
-                nz-tooltip="Historique des versions de formule"
-                [nzLoading]="historyLoading.has(ind.id)"
-                (click)="openHistory(ind)">
-                <mat-icon *ngIf="!historyLoading.has(ind.id)" style="font-size:16px;line-height:1.3">history</mat-icon>
-              </button>
-
               <!-- Logs d'exécution -->
               <button
                 nz-button nzType="text" nzSize="small"
@@ -472,7 +439,6 @@ export class AdminIndicatorManagerComponent implements OnInit {
   groupingFilter: 'families' | 'standalone' = 'standalone';
   loading = false;
   recalculating = new Set<string>();
-  historyLoading = new Set<string>();
   logsLoading    = new Set<string>();
 
   ngOnInit(): void {
@@ -511,8 +477,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
   }
 
   hasFormula(ind: IndicatorDefinition): boolean {
-    if ((ind as any).formula?.pipeline?.length) return true;
-    return (ind.visualizations ?? []).some(v => v.formula?.pipeline?.length);
+    return !!ind.formula?.pipeline?.length;
   }
 
   // ── Modales ───────────────────────────────────────────────────────────────
@@ -582,36 +547,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
     });
   }
 
-  openHistory(indicator: IndicatorDefinition): void {
-    this.historyLoading.add(indicator.id);
-    this.indicatorSvc.getFormulaHistory(indicator.id).subscribe({
-      next: versions => {
-        this.historyLoading.delete(indicator.id);
-        this.modalSvc.create({
-          nzTitle: `Historique des formules - ${indicator.name}`,
-          nzContent: HistoryModalComponent,
-          nzData: {
-            versions,
-            onRollback: (versionId: string) => {
-              this.indicatorSvc.rollbackFormula(indicator.id, versionId).subscribe({
-                next: () => {
-                  this.messageSvc.success('Formule restaurée avec succès');
-                  this.load();
-                },
-                error: err => this.messageSvc.error(err?.error?.message ?? 'Erreur lors du rollback'),
-              });
-            },
-          },
-          nzFooter: null,
-          nzWidth: 680,
-        });
-      },
-      error: () => {
-        this.historyLoading.delete(indicator.id);
-        this.messageSvc.error('Impossible de charger l\'historique');
-      },
-    });
-  }
+
 
   openLogs(indicator: IndicatorDefinition): void {
     this.logsLoading.add(indicator.id);
@@ -650,6 +586,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
       next: () => {
         this.messageSvc.success(`Indicateur "${indicator.name}" supprimé`);
         this.indicators = this.indicators.filter(i => i.id !== indicator.id);
+        this.applyGroupingFilter();
       },
       error: () => this.messageSvc.error('Erreur lors de la suppression'),
     });

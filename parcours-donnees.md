@@ -66,8 +66,6 @@ pages. `apiUrl = ${environment.apiUrl}/indicators` (L11),
 | `recalculateIndicator(id)` L109-113 | `POST {apiUrl}/:id/recalculate` | E.3 |
 | `previewFormulaRaw(formula, context)` L117-122 | `POST {apiUrl}/preview` | E.2 |
 | `previewFormulaSteps(formula, context)` L124-129 | `POST {apiUrl}/preview-steps` | E.2 |
-| `getFormulaHistory(id)` L133-135 | `GET {apiUrl}/:id/formula-history` | E.4 |
-| `rollbackFormula(id, versionId)` L137-141 | `POST {apiUrl}/:id/rollback/:versionId` | E.4 |
 | `getExecutionLogs(id, limit=50)` L145-147 | `GET {apiUrl}/:id/logs?limit=` | E.5 |
 | `getPlatonSchema()` L149-153 | `GET {apiUrl}/schema` | E.2, E.6 |
 | `computeView(id, contextType, contextId, activityId?, vizId?)` L164-177 | `POST {apiUrl}/:id/compute-view` | B.2, C, F |
@@ -376,7 +374,7 @@ visible pour `canManageIndicators`/`canCreateIndicators` (`RoleService`).
    **`DELETE /api/indicators/:id`** → `indicators.controller.ts:205-209`
    `deleteIndicator` → `indicators.service.ts:158-165` `delete` (suppression
    dans `indicator_definitions`, cascade ORM sur `indicator_values`,
-   `indicator_formula_versions`, `indicator_execution_logs`,
+   `indicator_execution_logs`,
    `indicator_snapshots`, `user_indicator_preferences` selon les relations
    de l'entité).
 4. `openBuilder(indicator?)` L469-480 → ouvre `IndicatorBuilderComponent`
@@ -459,29 +457,7 @@ jointure sur `CourseMembers`).
      `contextType: 'learner'`, `contextId: userId`.
 4. L226 : retourne `{ processed, updated, failed }`.
 
-### E.4 Historique de formule + rollback
-
-- **Ouvrir l'historique** : `admin-indicator-manager.component.ts:534-563`
-  `openHistory(indicator)` → `indicatorSvc.getFormulaHistory(indicator.id)`
-  (L536, `indicator.service.ts:133-135`) → **`GET /api/indicators/:id/formula-history`**
-  → `indicators.controller.ts:93-95` `getFormulaHistory` →
-  `indicators.service.ts:387-393` `getFormulaHistory` → repo
-  `formulaVersionModel` (table `indicator_formula_versions`,
-  `where: { indicatorId }`, triées par date).
-- **Rollback** : la modale `HistoryModalComponent` (`onRollback(versionId)`)
-  → `admin-indicator-manager.component.ts:545`
-  `indicatorSvc.rollbackFormula(indicator.id, versionId)` →
-  **`POST /api/indicators/:id/rollback/:versionId`** →
-  `indicators.controller.ts:188-193` `rollbackFormula` →
-  `indicators.service.ts:395-402` `rollbackFormula` :
-  1. L396 `formulaVersionModel.findOne({ where: { id: versionId, indicatorId: id } })`
-     (table `indicator_formula_versions`) - 404 si introuvable.
-  2. L399-400 `findById(id)` (L43-47), puis `indicator.formula = version.formula`.
-  3. L401 `indicatorModel.save(indicator)` → écrit `indicator_definitions`.
-  4. Le rollback **ne crée pas** de nouvelle version (contrairement à
-     `update`/`create`).
-
-### E.5 Logs d'exécution
+### E.4 Logs d'exécution
 
 `admin-indicator-manager.component.ts:565-583` `openLogs(indicator)` →
 `indicatorSvc.getExecutionLogs(indicator.id, 100)` (L567,
@@ -1051,10 +1027,9 @@ vers le moteur DSL.
 
 | Entité | Table | Écrite par |
 |---|---|---|
-| `IndicatorDefinition` | `indicator_definitions` | `create`/`update`/`toggleStatus`/`delete` (E.1), `incrementUsageCount`/`decrementUsageCount` (D), `rollbackFormula` (E.4) |
+| `IndicatorDefinition` | `indicator_definitions` | `create`/`update`/`toggleStatus`/`delete` (E.1), `incrementUsageCount`/`decrementUsageCount` (D) |
 | `IndicatorValue` | `indicator_values` | `computeView` (B.2), `calculateAndStoreValue` (D.1), `recalculate` (E.3), `processIndicatorUpdate` (I.3), `saveIndicatorValue` legacy (J.1) |
-| `IndicatorFormulaVersion` | `indicator_formula_versions` | `saveFormulaVersion` lors de `create`/`update` (E.1) ; lue par `getFormulaHistory`/`rollbackFormula` (E.4) |
-| `IndicatorExecutionLog` | `indicator_execution_logs` | écrite à l'intérieur de `interpret()` (B.2 étape 9, E.3, F.3) si `context.indicatorId` fourni ; lue par `getExecutionLogs` (E.5) |
+| `IndicatorExecutionLog` | `indicator_execution_logs` | écrite à l'intérieur de `interpret()` (B.2 étape 9, E.3, F.3) si `context.indicatorId` fourni ; lue par `getExecutionLogs` (E.4) |
 | `IndicatorSnapshot` | `indicator_snapshots` | CRUD F.2, lue/rafraîchie par `refreshSnapshots` (F.3) |
 | `UserIndicatorPreference` | `user_indicator_preferences` | CRUD D |
 

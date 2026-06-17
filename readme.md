@@ -88,28 +88,14 @@ JWT_SECRET=
 Redis est configuré (`redis: { host, port, password }`, valeurs par défaut
 `localhost:6379`) mais **n'est utilisé nulle part actuellement**.
 
-### Lancer le backend
+### Lancer le projet
 
 ```bash
-cd api
-npm install
-nest start --watch     # mode développement, recommandé (recompile auto)
-# ou
-npm run build && npm run start   # mode prod - lit dist/, recompiler après chaque changement
+yarn start
 ```
 
-Le serveur écoute sur `http://localhost:3001`, préfixe global `/api`, CORS ouvert
-pour `http://localhost:4200` / `http://localhost:3000` / `http://127.0.0.1:4200`.
-
-### Lancer le frontend
-
-```bash
-cd frontend
-npm install
-ng serve
-```
-
-Application disponible sur `http://localhost:4200`.
+Le backend écoute sur `http://localhost:3001`, préfixe global `/api`.
+Le frontend est disponible sur `http://localhost:4200`.
 
 ---
 
@@ -244,7 +230,6 @@ Tables principales :
 | `CourseGroupsMember` (`group_id` varchar, `user_id`) | Appartenance aux groupes |
 
 **Particularités du schéma PLaTon (à connaître pour écrire des requêtes/formules)** :
-- `Courses` n'a **pas** de colonne `isActive` - filtrer uniquement par `owner_id`.
 - `Activities` n'a **pas** de colonne `name` : le titre est dans
   `source->'variables'->>'title'`, avec fallback sur `Resources.name` via
   `LEFT JOIN "Resources" r ON r.id = (a.source->>'resource')::uuid`.
@@ -255,7 +240,7 @@ Tables principales :
 ### 4.2 Base `indicators` (lecture/écriture)
 
 Gérée par TypeORM, `synchronize: true` en développement (les tables/colonnes sont
-créées/migrées automatiquement au démarrage). 6 entités, détaillées section 5.
+créées/migrées automatiquement au démarrage). 5 entités, détaillées section 5.
 
 ---
 
@@ -273,8 +258,10 @@ La définition d'un indicateur.
 | `contextType` | `'learner'\|'teacher'\|'admin'\|'course'\|'activity'\|'group'` | contexte unique de cet indicateur (voir section 7) |
 | `familyName` | string \| null | regroupement nominal de plusieurs indicateurs créés ensemble (section 8) |
 | `requiredEvents` | jsonb (string[]) | événements PLaTon qui déclenchent un recalcul |
-| `visualizations` | jsonb (`IndicatorVisualization[]`) | une ou plusieurs visualisations, chacune avec sa propre formule (section 7) |
-| `formula` | jsonb \| null | formule "fallback" utilisée par les visualisations sans formule propre |
+| `visualizations` | jsonb (`IndicatorVisualization[]`) | une ou plusieurs visualisations — représentations visuelles différentes d'une même formule (section 7) |
+| `formula` | jsonb \| null | **formule unique partagée par toutes les visualisations** (1 indicateur = 1 formule) |
+| `thresholds` | jsonb \| null | seuils de performance globaux `{ good?: number; warning?: number }` — colore la valeur (vert/orange/rouge) et affiche la légende dans le détail ; optionnel |
+| `interpretationHint` | text \| null | aide à l'analyse : texte libre expliquant comment interpréter les résultats, affiché dans le panneau latéral du détail ; optionnel |
 | `isActive` | boolean | actif / désactivé |
 | `usageCount` | number | compteur d'utilisation |
 
@@ -284,16 +271,11 @@ La valeur calculée pour un contexte donné.
 
 - Contrainte unique `(indicatorId, contextType, contextId)`.
 - Pour `course`/`group`/`activity` : `contextId` peut être une **clé composite**
-  `courseId:activityId:vizId` (voir `computeView`, section 6).
+  `courseId:activityId` (voir `computeView`, section 6).
 - Pour `learner` : `contextId = userId`.
 - `value: float` - toujours présent (0 si le résultat n'est pas un scalaire).
 - `metadata: jsonb` - `{ count?, lastUpdate?, history?, structuredValue?, users?, ... }`
   pour les résultats non scalaires (bar-chart, histogram).
-
-### `IndicatorFormulaVersion` (table `indicator_formula_versions`)
-
-Snapshot versionné (`versionNum`, `formula` jsonb, `createdBy`, `createdAt`) à
-chaque modification d'un indicateur. Permet le `rollback`.
 
 ### `IndicatorExecutionLog` (table `indicator_execution_logs`)
 
@@ -411,8 +393,7 @@ pipeline:
 `POST /indicators/:id/compute-view` appelle `computeView(indicatorId, contextType,
 contextId, activityId?, vizId?, forceRefresh?)` :
 
-- **Résolution de la formule** : `viz.formula` si elle a un pipeline non vide,
-  sinon `indicator.formula` (fallback).
+- **Résolution de la formule** : `indicator.formula` — toutes les visualisations partagent la même formule (**1 indicateur = 1 formule**).
 - **Résolution `activityId`** :
   - `learner` → `activityId ?? process.env.TARGET_ACTIVITY_ID`
   - `course`/`group`/`activity` → fourni par l'appelant, pas de fallback
@@ -489,14 +470,13 @@ résultats, "Afficher tout" si > 5 lignes).
 
 ```typescript
 interface IndicatorVisualization {
-  id: string;          // uuid stable, généré côté builder
+  id: string;     // uuid stable, généré côté builder
   label: string;
   type: 'card' | 'gauge' | 'line-chart' | 'bar-chart' | 'histogram';
   icon?: string;
   color?: string;
   unit?: string;
-  thresholds?: { good: number; warning: number; danger: number };
-  formula?: { version: '1.0'; pipeline: FormulaStep[] } | null;  // sinon → indicator.formula
+  // Pas de formule propre ni de seuils : tout est au niveau de l'indicateur.
 }
 ```
 
@@ -510,7 +490,7 @@ afficher. Le choix est persisté dans `user_indicator_preferences.active_viz_id`
 + `PATCH /preferences/:indicatorId`). Cohérence carte ↔ détail garantie par ce
 cache partagé.
 
-- Sur la **carte** : aucun sélecteur visible — la visualisation active est celle
+- Sur la **carte** : aucun sélecteur visible - la visualisation active est celle
   sauvegardée (ou la première par défaut). Le changement se fait uniquement via
   le **modal d'édition** (icône crayon, toujours visible).
 - Sur la **page détail** : onglets `nz-tabs` par visualisation, calcul lazy à la
@@ -545,14 +525,11 @@ d'accéder directement à `indicator.visualizations`.
 
 | Étape | Contenu |
 |---|---|
-| 1. Définition | Nom, description, événements déclencheurs (`requiredEvents`) - pas de contexte ici |
-| 2. Vues | Liste plate de "vues" (`FlatView`), chacune avec ses `contextTypes[]`, sa visualisation (type/icône/couleur/unité/seuils) |
-| 3. Formule | Pipeline DSL par vue - sélecteur en boutons-onglets, mode Visuel/Import, "Tester" et "Déboguer pas à pas" |
+| 1. Définition | Nom, description, aide à l'analyse (`interpretationHint`), événements déclencheurs (`requiredEvents`) |
+| 2. Contexte & vues | `contextType` unique, liste de visualisations (type/icône/couleur/unité), **seuil de performance global** (`good`/`warning`, optionnel) |
+| 3. Formule | Pipeline DSL **unique partagé par toutes les vues** — mode Visuel/Import, "Tester" et "Déboguer pas à pas" |
 
-À la soumission, les `FlatView[]` sont reconverties en `visualizations[]` /
-`contextType` pour le format backend (`submit()`), et inversement à l'édition
-(`hydrate()`, avec fusion par `view.id` si une même vue apparaît dans plusieurs
-`contextTypes`).
+**Principe clé** : 1 indicateur = 1 formule. Les visualisations diffèrent uniquement par leur rendu visuel, jamais par les données calculées. À la soumission, `submit()` sauvegarde la formule au niveau de l'indicateur.
 
 `FORMULA_RECIPES` fournit des recettes prêtes à l'emploi (Tentatives avant
 réussite, Note moyenne, Taux de réussite, Notes moyennes par ressource - avec
@@ -599,12 +576,7 @@ n'applique pas ce filtre** - c'est l'outil de gestion, il doit tout montrer.
 
 ### Comment changer de rôle pour tester
 
- `localStorage.setItem('userRole', ...)` **ne fonctionne pas** :
-`SidebarComponent.loadUser()` appelle `userService.getUserById(environment.defaultUserId)`
-puis `roleService.setRole(user.role)` à **chaque chargement de page**, écrasant
-toute valeur manuelle.
-
-**Mécanisme réel** : changer `environment.defaultUserId` dans
+Changer `environment.defaultUserId` dans
 `frontend/src/environments/environment.ts` vers l'un des UUID de test documentés
 en commentaire sur cette ligne (student / admin / teacher).
 
@@ -634,7 +606,6 @@ GET  /indicators/:id
 GET  /indicators/:id/context-configs   - alias de compat : { contextType, visualizations, formula }
 GET  /indicators/:id/values?contextType=&contextId=&period=&limit=
 GET  /indicators/:id/usage
-GET  /indicators/:id/formula-history
 GET  /indicators/:id/logs?limit=
 
 POST /indicators                       - créer
@@ -643,7 +614,6 @@ POST /indicators/preview               - { formula, context } → { result } (ex
 POST /indicators/preview-steps         - idem mais pas-à-pas (debug)
 POST /indicators/:id/compute-view      - { contextType, contextId, vizId?, activityId? }
 POST /indicators/:id/recalculate
-POST /indicators/:id/rollback/:versionId
 
 PATCH  /indicators/:id
 PATCH  /indicators/:id/status
@@ -773,17 +743,11 @@ avec lien "Modifier le filtre".
 - `learner` → `getIndicatorValue()` (valeur pré-calculée)
 - `course`/`group`/`activity` (+ `activityId`) → `computeView()` (cache backend)
 - Visualisation active : fixée par la préférence sauvegardée ou
-  `visibleVisualizations[0]`. **Pas de chips de sélection sur la carte** —
+  `visibleVisualizations[0]`. **Pas de chips de sélection sur la carte** -
   le changement de viz se fait uniquement via le modal d'édition (icône crayon).
 - `activity` : navigue avec `queryParams = { from: 'activity', activityId,
   courseId, ... }` ; un clic sur un snapshot "groupe" navigue avec `from:
   'group-snapshot'`.
-
-### `IndicatorSelectorComponent` (onglet "Indicateurs")
-
-La barre d'outils est sur **une seule ligne** : onglets `Indicateurs uniques |
-Familles` (`nz-radio-group`) à gauche, filtres "Filtrer par contexte" et "Trier
-par" (`nz-select`) à droite.
 
 ### Page activité (`/dashboard/courses/:id/activities/:activityId`)
 
@@ -856,53 +820,14 @@ exposé** sans corriger les points suivants.
 → Priorité : brancher un guard/rôle réel sur les routes d'écriture + preview, et
 remplacer `vm` par `isolated-vm`.
 
-### Corrections déjà appliquées
-
-1. **Fuite de colonnes sensibles via `fetch`/`join`** (`platon.service.ts`) -
-   `queryTable`/`queryTableForGroup` faisaient `SELECT *` sur n'importe quelle
-   table (`Users.password`, `email`, `discord_id`, ...). Fix : constante
-   `SENSITIVE_COLUMN_PATTERN` (regex sur le nom de colonne :
-   `password|passwd|secret|token|api[_-]?key|hash|salt|credential|email|phone|discord|ip_address`),
-   méthode `getSafeColumns(table)` (via `information_schema.columns`, mise en
-   cache) + `buildSafeSelect(table)`. Appliqué aussi à `getAvailableTables()`
-   (schéma exposé au builder) - les colonnes sensibles ne sont même plus
-   sélectionnables dans l'UI.
-2. **`executeFilter` - opérateur inconnu** : avant, un opérateur invalide
-   laissait passer **toutes** les lignes (`default: return true`). Maintenant
-   lève une erreur explicite (pipeline → 0, erreur visible dans les logs/le
-   débogueur).
-3. **`executeJs` - fuite d'erreurs internes** : la stack complète n'est loggée
-   que côté serveur ; le message renvoyé au client masque les chemins
-   (`/...` → `[chemin masqué]`) et les références `evalmachine.<anonymous>:N:M`
-   (→ `le code`).
-
-### Autres points
-
-- `authInterceptor` (frontend) est vide - aucun token envoyé.
-- `DashboardSettingsService` / `TeacherContextSelectorComponent` utilisent
-  `environment.defaultUserId` en dur (pas de session réelle).
-
 ---
 
 ## 13. Limites connues / reste à faire
 
-- **Authentification + guard** sur `/api/indicators*` (priorité haute, lié au
-  point RCE ci-dessus).
+- **Authentification + guard** sur `/api/indicators*` (priorité haute — voir section 12 RCE).
 - Remplacer `vm` par `isolated-vm` pour l'étape `js`.
-- **Détection dynamique de compatibilité de jointure** dans l'étape `join` du
-  builder - pas encore implémentée. La BDD PLaTon n'a aucune contrainte FK
-  déclarée (`information_schema.table_constraints` ne contient aucune
-  `FOREIGN KEY`), donc pas de carte de relations dérivable du schéma. Pistes
-  envisagées : (1) comparaison des `data_type` des deux colonnes (gratuit, déjà
-  disponible côté front via `getAvailableTables()`) ; (2) nouvelle route
-  backend exécutant un `COUNT(DISTINCT ...)` croisant un échantillon des deux
-  colonnes pour estimer le nombre de correspondances.
-- `TeacherContextSelectorComponent` utilise `environment.defaultUserId` comme
-  `teacherId` - à remplacer par l'utilisateur connecté une fois l'auth en place.
-- `ActivityIndicatorService` (module legacy `activity-attempts`) doit être migré
-  pour utiliser le moteur DSL au lieu de sa logique hardcodée.
+- `ActivityIndicatorService` (module legacy `activity-attempts`) doit être migré pour utiliser le moteur DSL au lieu de sa logique hardcodée.
 - Filtres de date sur la page des logs d'exécution.
-- Diff visuel entre deux versions de formule (`indicator_formula_versions`).
 - Redis configuré (`configuration.ts`) mais inutilisé.
 - Aucun test unitaire sur `FormulaInterpreterService`.
 - Page `/dashboard/resources/move` référencée dans l'UI mais route non créée.

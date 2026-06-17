@@ -2,14 +2,9 @@
 import { FormulaDefinition, IndicatorDefinition } from './entities/indicator-definition.entity';
 
 /**
- * Résout la formule DSL à utiliser pour un indicateur : la formule propre à la
- * visualisation ciblée (ou, sans vizId, la première visualisation ayant une formule),
- * sinon la formule legacy `indicator.formula`.
+ * Retourne la formule DSL de l'indicateur.
+ * 1 indicateur = 1 formule, partagée par toutes ses visualisations.
  */
-export function resolveFormula(indicator: IndicatorDefinition, vizId?: string): FormulaDefinition | null {
-  const vizList = indicator.visualizations ?? [];
-  const viz = vizId
-    ? vizList.find(v => v.id === vizId) ?? vizList[0]
-    : vizList.find(v => v.formula?.pipeline?.length);
-  return viz?.formula?.pipeline?.length ? viz.formula : indicator.formula;
+export function resolveFormula(indicator: IndicatorDefinition): FormulaDefinition | null {
+  return indicator.formula ?? null;
 }

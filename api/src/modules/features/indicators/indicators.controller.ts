@@ -89,11 +89,6 @@ export class IndicatorsController {
     return { usageCount: indicator.usageCount };
   }
 
-  @Get(':id/formula-history')
-  async getFormulaHistory(@Param('id') id: string) {
-    return this.indicatorsService.getFormulaHistory(id);
-  }
-
   @Get(':id/logs')
   async getExecutionLogs(
     @Param('id') id: string,
@@ -141,13 +136,13 @@ export class IndicatorsController {
    * Prévisualise le résultat brut d'un pipeline DSL sans persister.
    * Supporte les contextes learner et group.
    * POST /api/indicators/preview
-   * Body: { formula, context: { userId?, groupId?, activityId? } }
+   * Body: { formula, context: { userId?, groupId?, activityId?, courseId? } }
    */
   @Post('preview')
   async previewFormula(
     @Body() body: {
       formula: any;
-      context: { userId?: string; groupId?: string; activityId?: string };
+      context: { userId?: string; groupId?: string; activityId?: string; courseId?: string };
     },
   ) {
     return this.indicatorsService.preview(body.formula, body.context);
@@ -157,7 +152,7 @@ export class IndicatorsController {
   async previewFormulaSteps(
     @Body() body: {
       formula: any;
-      context: { userId?: string; groupId?: string; activityId?: string };
+      context: { userId?: string; groupId?: string; activityId?: string; courseId?: string };
     },
   ) {
     return this.indicatorsService.previewSteps(body.formula, body.context);
@@ -166,14 +161,6 @@ export class IndicatorsController {
   @Post(':id/recalculate')
   async recalculate(@Param('id') id: string) {
     return this.indicatorsService.recalculate(id);
-  }
-
-  @Post(':id/rollback/:versionId')
-  async rollbackFormula(
-    @Param('id') id: string,
-    @Param('versionId') versionId: string,
-  ) {
-    return this.indicatorsService.rollbackFormula(id, versionId);
   }
 
   @Patch(':id')

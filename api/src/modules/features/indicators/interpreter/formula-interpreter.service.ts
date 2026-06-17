@@ -41,18 +41,21 @@ export class FormulaInterpreterService {
   async interpretWithSteps(
     formula: FormulaDefinition,
     context: FormulaContext,
-  ): Promise<{ steps: Array<{ index: number; type: string; durationMs: number; output: any; error?: string }> }> {
+    fetchLimit = 500,
+  ): Promise<{ steps: Array<{ index: number; type: string; durationMs: number; output: any; error?: string; truncated?: boolean }> }> {
     if (!formula?.pipeline?.length) return { steps: [] };
 
-    const steps: Array<{ index: number; type: string; durationMs: number; output: any; error?: string }> = [];
+    const steps: Array<{ index: number; type: string; durationMs: number; output: any; error?: string; truncated?: boolean }> = [];
     let current: any = null;
 
     for (let i = 0; i < formula.pipeline.length; i++) {
       const step = formula.pipeline[i];
       const t0 = Date.now();
       try {
-        current = await this.executeStep(step, current, context);
-        steps.push({ index: i, type: step.type, durationMs: Date.now() - t0, output: current });
+        current = await this.executeStep(step, current, context, fetchLimit);
+        const truncated = Array.isArray(current) && current.length > 200;
+        const debugOutput = truncated ? current.slice(0, 200) : current;
+        steps.push({ index: i, type: step.type, durationMs: Date.now() - t0, output: debugOutput, truncated });
       } catch (err) {
         steps.push({ index: i, type: step.type, durationMs: Date.now() - t0, output: null, error: (err as Error).message });
         break;
@@ -114,7 +117,7 @@ export class FormulaInterpreterService {
    * Détecte si une formule a la forme "agrégat simple sur SessionData" éligible au calcul
    * incrémental (delta) : fetch(SessionData, contextFields incluant user_id) → extract(field)
    * → exactement un aggregate (avg/sum/count/min/max), suivi optionnellement de round/divide.
-   * Retourne null si la formule a une autre forme (filter/join/groupBy/js, etc.) — ces
+   * Retourne null si la formule a une autre forme (filter/join/groupBy/js, etc.) - ces
    * pipelines restent recalculés intégralement à chaque événement.
    */
   getIncrementalShape(formula: FormulaDefinition): { extractField: string; postSteps: FormulaStep[] } | null {
@@ -173,9 +176,9 @@ export class FormulaInterpreterService {
     return { result: this.applyPostSteps(Object.values(rowValues), shape.postSteps), rowValues };
   }
 
-  private async executeStep(step: FormulaStep, input: any, context: FormulaContext): Promise<any> {
+  private async executeStep(step: FormulaStep, input: any, context: FormulaContext, fetchLimit?: number): Promise<any> {
     switch (step.type) {
-      case 'fetch':     return this.executeFetch(step.params, context);
+      case 'fetch':     return this.executeFetch(step.params, context, fetchLimit);
       case 'join':      return this.executeJoin(step.params, input, context);
       case 'filter':    return this.executeFilter(step.params, input);
       case 'groupBy':   return this.executeGroupBy(step.params, input);
@@ -206,7 +209,7 @@ export class FormulaInterpreterService {
     course_id:   'courseId',
   };
 
-  private async executeFetch(params: Record<string, any>, context: FormulaContext): Promise<any[]> {
+  private async executeFetch(params: Record<string, any>, context: FormulaContext, limit?: number): Promise<any[]> {
     const { contextFields = [] } = params;
     const rawTable: string = params['table'] ?? '';
     const table = FormulaInterpreterService.LEGACY_TABLE_MAP[rawTable] ?? rawTable;
@@ -238,7 +241,7 @@ export class FormulaInterpreterService {
       if (val) filters[col] = val as string;
     }
 
-    return this.platonService.queryTable(table, filters);
+    return this.platonService.queryTable(table, filters, limit);
   }
 
   /**

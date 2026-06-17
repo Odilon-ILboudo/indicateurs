@@ -122,28 +122,16 @@ export class IndicatorService {
 
   previewFormulaRaw(
     formula: any,
-    context: { userId?: string; groupId?: string; activityId?: string },
+    context: { userId?: string; groupId?: string; activityId?: string; courseId?: string },
   ): Observable<{ result: any }> {
     return this.http.post<{ result: any }>(`${this.apiUrl}/preview`, { formula, context });
   }
 
   previewFormulaSteps(
     formula: any,
-    context: { userId?: string; groupId?: string; activityId?: string },
+    context: { userId?: string; groupId?: string; activityId?: string; courseId?: string },
   ): Observable<{ steps: StepDebugResult[] }> {
     return this.http.post<{ steps: StepDebugResult[] }>(`${this.apiUrl}/preview-steps`, { formula, context });
-  }
-
-  // ── Versioning ────────────────────────────────────────────────────────────
-
-  getFormulaHistory(indicatorId: string): Observable<any[]> {
-    return this.http.get<any[]>(`${this.apiUrl}/${indicatorId}/formula-history`);
-  }
-
-  rollbackFormula(indicatorId: string, versionId: string): Observable<IndicatorDefinition> {
-    return this.http.post<IndicatorDefinition>(
-      `${this.apiUrl}/${indicatorId}/rollback/${versionId}`, {},
-    );
   }
 
   // ── Logs ──────────────────────────────────────────────────────────────────

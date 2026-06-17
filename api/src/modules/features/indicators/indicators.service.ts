@@ -4,7 +4,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { IndicatorDefinition } from './entities/indicator-definition.entity';
 import { IndicatorValue, buildValueMetadata } from './entities/indicator-value.entity';
-import { IndicatorFormulaVersion } from './entities/indicator-formula-version.entity';
 import { IndicatorExecutionLog } from './entities/indicator-execution-log.entity';
 import { IndicatorSnapshot } from './entities/indicator-snapshot.entity';
 import { UserIndicatorPreference } from '../user-preferences/entities/user-indicator-preference.entity';
@@ -21,8 +20,6 @@ export class IndicatorsService {
     private indicatorModel: Repository<IndicatorDefinition>,
     @InjectRepository(IndicatorValue, 'indicators')
     private indicatorValueModel: Repository<IndicatorValue>,
-    @InjectRepository(IndicatorFormulaVersion, 'indicators')
-    private formulaVersionModel: Repository<IndicatorFormulaVersion>,
     @InjectRepository(IndicatorExecutionLog, 'indicators')
     private executionLogModel: Repository<IndicatorExecutionLog>,
     @InjectRepository(UserIndicatorPreference, 'indicators')
@@ -128,23 +125,11 @@ export class IndicatorsService {
     });
     const saved = await this.indicatorModel.save(indicator);
 
-    if (saved.formula?.pipeline?.length) {
-      await this.saveFormulaVersion(saved.id, saved.formula, definition.createdBy);
-    }
-
     return saved;
   }
 
   async update(id: string, data: Partial<IndicatorDefinition> & { updatedBy?: string }): Promise<IndicatorDefinition> {
     const indicator = await this.findById(id);
-
-    const newFormula = (data as any).formula;
-    if (newFormula?.pipeline?.length) {
-      const formulaChanged = JSON.stringify(indicator.formula) !== JSON.stringify(newFormula);
-      if (formulaChanged) {
-        await this.saveFormulaVersion(id, newFormula, (data as any).updatedBy);
-      }
-    }
 
     Object.assign(indicator, data);
     return this.indicatorModel.save(indicator);
@@ -160,7 +145,6 @@ export class IndicatorsService {
     const indicator = await this.findById(id);
     await this.preferenceModel.delete({ indicatorId: id });
     await this.executionLogModel.delete({ indicatorId: id });
-    await this.formulaVersionModel.delete({ indicatorId: id });
     await this.indicatorValueModel.delete({ indicatorId: id });
     await this.indicatorModel.remove(indicator);
   }
@@ -267,7 +251,7 @@ export class IndicatorsService {
       : vizList[0];
 
     // La formule à utiliser : propre à la viz, sinon formule partagée
-    const formula = resolveFormula(indicator, vizId);
+    const formula = resolveFormula(indicator);
 
     if (!formula?.pipeline?.length) {
       throw new BadRequestException(
@@ -279,11 +263,10 @@ export class IndicatorsService {
       ? (activityId ?? process.env.TARGET_ACTIVITY_ID)
       : activityId;
 
-    // Clé de cache : inclut vizId pour distinguer les vues d'un même indicateur
-    const baseContextId = (contextType === 'course' || contextType === 'group') && resolvedActivityId
+    // Clé de cache : 1 valeur par indicateur/contexte, partagée par toutes les visualisations
+    const cacheContextId = (contextType === 'course' || contextType === 'group') && resolvedActivityId
       ? `${contextId}:${resolvedActivityId}`
       : contextId;
-    const cacheContextId = viz?.id ? `${baseContextId}:${viz.id}` : baseContextId;
 
     const existing = await this.indicatorValueModel.findOne({
       where: { indicatorId, contextType, contextId: cacheContextId },
@@ -336,48 +319,32 @@ export class IndicatorsService {
 
   async preview(
     formula: any,
-    context: { userId?: string; groupId?: string; activityId?: string },
+    context: { userId?: string; groupId?: string; activityId?: string; courseId?: string },
   ): Promise<{ result: any }> {
-    const result = await this.formulaInterpreter.interpret(formula, {
+    const raw = await this.formulaInterpreter.interpret(formula, {
       userId: context.userId,
       groupId: context.groupId,
       activityId: context.activityId ?? process.env.TARGET_ACTIVITY_ID,
+      courseId: context.courseId,
     });
+    const result = Array.isArray(raw) && raw.length > 200 ? raw.slice(0, 200) : raw;
     return { result };
   }
 
   async previewSteps(
     formula: any,
-    context: { userId?: string; groupId?: string; activityId?: string },
+    context: { userId?: string; groupId?: string; activityId?: string; courseId?: string },
   ) {
     return this.formulaInterpreter.interpretWithSteps(formula, {
       userId: context.userId,
       groupId: context.groupId,
       activityId: context.activityId ?? process.env.TARGET_ACTIVITY_ID,
+      courseId: context.courseId,
     });
   }
 
   async getPlatonSchema() {
     return this.platonService.getAvailableTables();
-  }
-
-  // ── Versioning ────────────────────────────────────────────────────────────
-
-  async getFormulaHistory(id: string): Promise<IndicatorFormulaVersion[]> {
-    return this.formulaVersionModel.find({
-      where: { indicatorId: id },
-      order: { versionNum: 'DESC' },
-      take: 20,
-    });
-  }
-
-  async rollbackFormula(id: string, versionId: string): Promise<IndicatorDefinition> {
-    const version = await this.formulaVersionModel.findOne({ where: { id: versionId, indicatorId: id } });
-    if (!version) throw new NotFoundException(`Version ${versionId} introuvable pour l'indicateur ${id}`);
-
-    const indicator = await this.findById(id);
-    indicator.formula = version.formula;
-    return this.indicatorModel.save(indicator);
   }
 
   // ── Logs ─────────────────────────────────────────────────────────────────
@@ -467,7 +434,7 @@ export class IndicatorsService {
    * (computeView), même sans snapshot explicite ; sans ce rafraîchissement ce cache restait figé
    * à sa valeur de première consultation. Le contextId composite (`${contextId}:${activityId}`
    * pour course/group, `${activityId}` pour activity, suffixé de `:${viz.id}` selon la vue) est
-   * celui produit par computeView — voir sa construction de `cacheContextId`.
+   * celui produit par computeView - voir sa construction de `cacheContextId`.
    */
   async refreshActivityViews(indicatorId: string, activityId: string): Promise<void> {
     const indicator = await this.indicatorModel.findOne({ where: { id: indicatorId } });
@@ -515,15 +482,6 @@ export class IndicatorsService {
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
-
-  private async saveFormulaVersion(indicatorId: string, formula: any, createdBy?: string): Promise<void> {
-    const lastVersion = await this.formulaVersionModel.findOne({
-      where: { indicatorId },
-      order: { versionNum: 'DESC' },
-    });
-    const versionNum = (lastVersion?.versionNum ?? 0) + 1;
-    await this.formulaVersionModel.save({ indicatorId, versionNum, formula, createdBy });
-  }
 
   private calculateTrend(history: any[]): 'up' | 'down' | 'stable' {
     if (!history || history.length < 2) return 'stable';

@@ -41,6 +41,13 @@
     <p>Chargement des indicateurs...</p>
   </div>
 
+  <!-- État vide -->
+  <nz-empty
+    *ngIf="!isLoading && displayRows.length === 0"
+    [nzNotFoundContent]="allIndicators.length === 0 ? 'Aucun indicateur disponible pour le moment.' : 'Aucun indicateur ne correspond aux filtres sélectionnés.'"
+    style="margin: 48px 0">
+  </nz-empty>
+
   <!-- Tableau des indicateurs -->
   <nz-table
     *ngIf="!isLoading && displayRows.length > 0"

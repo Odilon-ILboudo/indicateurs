@@ -166,10 +166,10 @@ export class IndicatorCardComponent implements OnInit, OnChanges {
   getThresholdColor(): string {
     if (!this.value) return '#d9d9d9';
     const val = this.value.value;
-    const thresholds = this.activeViz?.thresholds;
-    if (!thresholds) return '#d9d9d9';
-    if (val <= thresholds.good)    return '#52c41a';
-    if (val <= thresholds.warning) return '#fa8c16';
+    const t = this.indicator?.thresholds;
+    if (!t || (t.good == null && t.warning == null)) return '#d9d9d9';
+    if (t.good != null && val <= t.good)       return '#52c41a';
+    if (t.warning != null && val <= t.warning) return '#fa8c16';
     return '#ff4d4f';
   }
 

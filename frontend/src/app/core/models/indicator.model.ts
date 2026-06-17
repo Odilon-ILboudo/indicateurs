@@ -12,18 +12,14 @@ export interface IndicatorFormula {
   }[];
 }
 
-/** Une visualisation au sein d'un indicateur. */
+/** Une visualisation au sein d’un indicateur. */
 export interface IndicatorVisualization {
   id: string;
   label: string;
   type: ViewVisualizationType;
   icon?: string;
   color?: string;
-  /** Métadonnées d’affichage propres à cette visualisation (unité + seuils de performance). */
   unit?: string;
-  thresholds?: { good: number; warning: number; danger: number };
-  /** Formule propre à cette vue. Si absente, utilise indicator.formula. */
-  formula?: IndicatorFormula | null;
 }
 
 export interface ViewResult {
@@ -43,6 +39,10 @@ export interface IndicatorDefinition {
   requiredEvents: string[];
   /** Tableau de visualisations (min. 1). La première est la vue "carte" par défaut. */
   visualizations: IndicatorVisualization[];
+  /** Seuils de performance partagés par toutes les visualisations (optionnel). */
+  thresholds?: { good?: number; warning?: number } | null;
+  /** Aide à l'analyse : texte libre expliquant comment interpréter les résultats (optionnel). */
+  interpretationHint?: string | null;
   usageCount?: number;
   isActive: boolean;
   metadata?: Record<string, any>;

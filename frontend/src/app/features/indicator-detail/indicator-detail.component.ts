@@ -230,7 +230,7 @@ export class IndicatorDetailComponent implements OnInit {
     const unit  = viz.unit  ?? '';
 
     if (viz.type === 'gauge') {
-      const max = viz.thresholds?.good ?? 100;
+      const max = this.indicator?.thresholds?.good ?? 100;
       this.chartOptions[viz.id] = {
         series: [{
           type: 'gauge', radius: '70%', min: 0, max,
@@ -323,11 +323,11 @@ export class IndicatorDetailComponent implements OnInit {
 
   // ── Helpers template ──────────────────────────────────────────────────────
 
-  getThresholdColor(viz: IndicatorVisualization, value: number): string {
-    const t = viz.thresholds;
-    if (!t) return '#1890ff';
-    if (value <= t.good)    return '#52c41a';
-    if (value <= t.warning) return '#faad14';
+  getThresholdColor(_viz: IndicatorVisualization, value: number): string {
+    const t = this.indicator?.thresholds;
+    if (!t || (t.good == null && t.warning == null)) return '#1890ff';
+    if (t.good != null && value <= t.good)       return '#52c41a';
+    if (t.warning != null && value <= t.warning) return '#faad14';
     return '#ff4d4f';
   }
 

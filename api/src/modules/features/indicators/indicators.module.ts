@@ -7,7 +7,6 @@ import { IndicatorsService } from './indicators.service';
 import { FormulaInterpreterService } from './interpreter/formula-interpreter.service';
 import { IndicatorDefinition } from './entities/indicator-definition.entity';
 import { IndicatorValue } from './entities/indicator-value.entity';
-import { IndicatorFormulaVersion } from './entities/indicator-formula-version.entity';
 import { IndicatorExecutionLog } from './entities/indicator-execution-log.entity';
 import { IndicatorSnapshot } from './entities/indicator-snapshot.entity';
 import { UserIndicatorPreference } from '../user-preferences/entities/user-indicator-preference.entity';
@@ -15,7 +14,7 @@ import { UserIndicatorPreference } from '../user-preferences/entities/user-indic
 @Module({
   imports: [
     TypeOrmModule.forFeature(
-      [IndicatorDefinition, IndicatorValue, IndicatorFormulaVersion, IndicatorExecutionLog, IndicatorSnapshot, UserIndicatorPreference],
+      [IndicatorDefinition, IndicatorValue, IndicatorExecutionLog, IndicatorSnapshot, UserIndicatorPreference],
       'indicators',
     ),
     EventEmitterModule.forRoot(),

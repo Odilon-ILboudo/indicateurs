@@ -103,13 +103,6 @@ import { IndicatorDefinition } from '../../core/models/indicator.model';
         </nz-form-control>
       </nz-form-item>
       
-      <!-- Critique -->
-      <nz-form-item>
-        <nz-form-label>Critique (&lt;)</nz-form-label>
-        <nz-form-control>
-          <nz-input-number [(ngModel)]="config.thresholds.danger" [nzMin]="0" [nzMax]="100" style="width: 100%"></nz-input-number>
-        </nz-form-control>
-      </nz-form-item>
       
       <!-- Actions -->
       <div class="form-actions">
@@ -159,13 +152,13 @@ export class IndicatorConfigComponent implements OnInit {
     icon: 'analytics',
     color: '#1890ff',
     unit: '',
-    thresholds: { good: 80, warning: 60, danger: 40 }
+    thresholds: { good: null as number | null, warning: null as number | null }
   };
-  
+
   ngOnInit(): void {
     if (this.modalData?.indicator) {
       this.indicator = this.modalData.indicator;
-      
+
       const viz0 = this.indicator.visualizations?.[0];
       this.config.name = this.indicator.name;
       this.config.description = this.indicator.description || '';
@@ -173,22 +166,22 @@ export class IndicatorConfigComponent implements OnInit {
       this.config.color = viz0?.color || '#1890ff';
       this.config.unit = viz0?.unit || '';
       this.config.thresholds = {
-        good: viz0?.thresholds?.good || 80,
-        warning: viz0?.thresholds?.warning || 60,
-        danger: viz0?.thresholds?.danger || 40
+        good: this.indicator.thresholds?.good ?? null,
+        warning: this.indicator.thresholds?.warning ?? null,
       };
     }
   }
-  
+
   save(): void {
-    // Mettre à jour le nom/description + les propriétés d'affichage de la première viz
     const viz0 = this.indicator.visualizations?.[0];
     const updatedVizs = this.indicator.visualizations?.map((v, i) =>
-      i === 0 ? { ...v, icon: this.config.icon, color: this.config.color, unit: this.config.unit, thresholds: this.config.thresholds } : v
+      i === 0 ? { ...v, icon: this.config.icon, color: this.config.color, unit: this.config.unit } : v
     ) ?? [];
+    const hasThresholds = this.config.thresholds.good != null || this.config.thresholds.warning != null;
     const updates = {
       name: this.config.name,
       description: this.config.description,
+      thresholds: hasThresholds ? { good: this.config.thresholds.good ?? undefined, warning: this.config.thresholds.warning ?? undefined } : null,
       visualizations: updatedVizs.length ? updatedVizs : [{
         id: viz0?.id ?? crypto.randomUUID(),
         label: viz0?.label ?? 'Vue',
@@ -196,7 +189,6 @@ export class IndicatorConfigComponent implements OnInit {
         icon: this.config.icon,
         color: this.config.color,
         unit: this.config.unit,
-        thresholds: this.config.thresholds,
       }],
     };
     

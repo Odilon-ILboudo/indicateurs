@@ -89,52 +89,97 @@
 
         <ng-container *ngIf="!loading[viz.id]">
 
-          <!-- CARD -->
-          <div class="view-card" *ngIf="viz.type === 'card' && results[viz.id]">
-            <div class="scalar-value" [style.color]="getThresholdColor(viz, results[viz.id].value)">
-              {{ results[viz.id].value | number:'1.0-2' }}
-              <span class="unit">{{ viz.unit || '' }}</span>
-            </div>
-            <div class="thresholds" *ngIf="viz.thresholds">
-              <span class="t-good">≤ {{ viz.thresholds.good }} : Bon</span>
-              <span class="t-warning">≤ {{ viz.thresholds.warning }} : Moyen</span>
-              <span class="t-danger">&gt; {{ viz.thresholds.warning }} : Difficile</span>
-            </div>
-          </div>
+          <div class="viz-layout" *ngIf="results[viz.id]; else noData">
 
-          <!-- GAUGE / LINE-CHART / BAR-CHART / HISTOGRAM -->
-          <div class="view-chart"
-            *ngIf="viz.type !== 'card' && chartOptions[viz.id]">
-            <div class="history-period-selector" *ngIf="viz.type === 'line-chart'">
-              <nz-radio-group
-                [ngModel]="historyPeriodDays[viz.id] ?? 7"
-                (ngModelChange)="onHistoryPeriodChange(viz, $event)"
-                nzButtonStyle="solid"
-                nzSize="default">
-                <label nz-radio-button
-                  *ngFor="let opt of historyPeriodOptions"
-                  [nzValue]="opt.value">
-                  {{ opt.label }}
-                </label>
-              </nz-radio-group>
-              <nz-range-picker
-                *ngIf="(historyPeriodDays[viz.id] ?? 7) === -1"
-                class="custom-range-picker"
-                nzFormat="dd/MM/yyyy"
-                [ngModel]="historyCustomRange[viz.id]"
-                (ngModelChange)="onCustomRangeChange(viz, $event)">
-              </nz-range-picker>
+            <!-- Colonne principale : rendu de la visualisation -->
+            <div class="viz-main">
+
+              <!-- CARD -->
+              <div class="view-card" *ngIf="viz.type === 'card'">
+                <div class="scalar-value" [style.color]="getThresholdColor(viz, results[viz.id].value)">
+                  {{ results[viz.id].value | number:'1.0-2' }}
+                  <span class="unit">{{ viz.unit || '' }}</span>
+                </div>
+              </div>
+
+              <!-- GAUGE / LINE-CHART / BAR-CHART / HISTOGRAM -->
+              <div class="view-chart" *ngIf="viz.type !== 'card' && chartOptions[viz.id]">
+                <div class="history-period-selector" *ngIf="viz.type === 'line-chart'">
+                  <nz-radio-group
+                    [ngModel]="historyPeriodDays[viz.id] ?? 7"
+                    (ngModelChange)="onHistoryPeriodChange(viz, $event)"
+                    nzButtonStyle="solid"
+                    nzSize="default">
+                    <label nz-radio-button
+                      *ngFor="let opt of historyPeriodOptions"
+                      [nzValue]="opt.value">
+                      {{ opt.label }}
+                    </label>
+                  </nz-radio-group>
+                  <nz-range-picker
+                    *ngIf="(historyPeriodDays[viz.id] ?? 7) === -1"
+                    class="custom-range-picker"
+                    nzFormat="dd/MM/yyyy"
+                    [ngModel]="historyCustomRange[viz.id]"
+                    (ngModelChange)="onCustomRangeChange(viz, $event)">
+                  </nz-range-picker>
+                </div>
+                <div echarts [options]="chartOptions[viz.id]"
+                  [style.height]="viz.type === 'bar-chart' ? '400px' : '300px'">
+                </div>
+              </div>
+
             </div>
-            <div echarts [options]="chartOptions[viz.id]"
-              [style.height]="viz.type === 'bar-chart' ? '400px' : '300px'">
-            </div>
+
+            <!-- Panneau latéral -->
+            <aside class="viz-side-panel">
+
+              <!-- Aide à l'analyse -->
+              <div class="side-block" *ngIf="indicator?.interpretationHint">
+                <div class="side-block-title">
+                  <mat-icon>lightbulb</mat-icon>
+                  Aide à l'analyse
+                </div>
+                <p class="side-block-text">{{ indicator!.interpretationHint }}</p>
+              </div>
+
+              <!-- Seuils -->
+              <div class="side-block" *ngIf="indicator?.thresholds?.good != null || indicator?.thresholds?.warning != null">
+                <div class="side-block-title">
+                  <mat-icon>tune</mat-icon>
+                  Seuils
+                </div>
+                <div class="side-thresholds">
+                  <span class="st-good" *ngIf="indicator?.thresholds?.good != null">
+                    <span class="st-dot"></span> ≤ {{ indicator!.thresholds!.good }} {{ viz.unit || '' }} : Bon
+                  </span>
+                  <span class="st-warning" *ngIf="indicator?.thresholds?.warning != null">
+                    <span class="st-dot"></span> ≤ {{ indicator!.thresholds!.warning }} {{ viz.unit || '' }} : Moyen
+                  </span>
+                  <span class="st-danger" *ngIf="indicator?.thresholds?.warning != null">
+                    <span class="st-dot"></span> &gt; {{ indicator!.thresholds!.warning }} {{ viz.unit || '' }} : Difficile
+                  </span>
+                </div>
+              </div>
+
+              <!-- Dernière mise à jour -->
+              <div class="side-block" *ngIf="results[viz.id]?.metadata?.lastUpdate">
+                <div class="side-block-title">
+                  <mat-icon>schedule</mat-icon>
+                  Dernière mise à jour
+                </div>
+                <p class="side-block-text side-meta">
+                  {{ results[viz.id].metadata.lastUpdate | date:'d MMM yyyy, HH\'h\'mm':'':'fr-FR' }}
+                </p>
+              </div>
+
+            </aside>
           </div>
 
           <!-- Aucune donnée -->
-          <nz-empty
-            *ngIf="!results[viz.id] && !loading[viz.id]"
-            nzNotFoundContent="Aucune donnée disponible.">
-          </nz-empty>
+          <ng-template #noData>
+            <nz-empty *ngIf="!loading[viz.id]" nzNotFoundContent="Aucune donnée disponible."></nz-empty>
+          </ng-template>
 
         </ng-container>
       </nz-tab>

@@ -568,14 +568,14 @@ export class IndicatorViewModalComponent {
   stepLabel(type: string): string { return STEP_LABELS[type] ?? type; }
   stepColor(type: string): string { return STEP_COLORS[type] ?? '#8c8c8c'; }
 
-  /** Pipeline effectif d'une visualisation : sa formule propre, ou la formule globale en repli. */
-  vizPipeline(viz: IndicatorVisualization): { id: string; type: string; label?: string }[] {
-    return viz.formula?.pipeline?.length ? viz.formula.pipeline : (this.ind.formula?.pipeline ?? []);
+  /** Pipeline de l'indicateur (partagé par toutes ses visualisations). */
+  vizPipeline(_viz: IndicatorVisualization): { id: string; type: string; label?: string }[] {
+    return this.ind.formula?.pipeline ?? [];
   }
 
-  /** True si la visualisation a sa propre formule (false = elle utilise la formule globale de l'indicateur). */
-  usesOwnFormula(viz: IndicatorVisualization): boolean {
-    return !!viz.formula?.pipeline?.length;
+  /** Toujours false : toutes les visualisations partagent la formule de l'indicateur. */
+  usesOwnFormula(_viz: IndicatorVisualization): boolean {
+    return false;
   }
 }
 
@@ -587,7 +587,7 @@ export class IndicatorViewModalComponent {
   imports: [
     CommonModule, FormsModule, MatIconModule, MatTooltipModule,
     NzTableModule, NzSwitchModule, NzSelectModule, NzInputModule,
-    NzModalModule, NzTagModule, NzSpinModule, NzRadioModule,
+    NzModalModule, NzTagModule, NzSpinModule, NzRadioModule, NzEmptyModule,
   ],
   templateUrl: './indicator-selector.component.html',
   styleUrls: ['./indicator-selector.component.scss']

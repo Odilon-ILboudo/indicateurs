@@ -49,11 +49,16 @@ export class ActivityPresenter implements OnDestroy {
   }
 
   private async refresh(courseId: string, activityId: string): Promise<void> {
-    const [course, activity, results] = await Promise.all([
+    const fakeCourse = { id: courseId } as import('@platon/feature/course/common').Course
+    const [course, activitiesResp, results] = await Promise.all([
       firstValueFrom(this.courseService.find({ id: courseId })),
-      firstValueFrom(this.courseService.findActivity(courseId, activityId)),
+      firstValueFrom(this.courseService.listActivities(fakeCourse)),
       firstValueFrom(this.resultService.activityResults(activityId)),
     ])
+
+    // listActivities retourne progression et exerciseCount, contrairement à findActivity
+    const activity = activitiesResp.resources.find(a => a.id === activityId)
+    if (!activity) throw new Error(`Activité ${activityId} introuvable dans le cours ${courseId}`)
 
     this.context.next({ state: 'READY', course, activity, results })
   }
