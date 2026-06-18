@@ -345,7 +345,7 @@ return totals;` },
       <div class="section-label">
         Seuil de performance
         <mat-icon class="info-icon"
-          nz-tooltip="Optionnel. Définit 3 zones colorées : ● Bon (vert) : valeur ≤ seuil Bon — ● Moyen (orange) : valeur entre Bon et Moyen — ● Difficile (rouge) : valeur > seuil Moyen. La zone Difficile est déduite automatiquement, il n'y a pas de champ à remplir pour elle. Colore la valeur dans la carte et affiche la légende dans le panneau latéral."
+          nz-tooltip="Optionnel. Définit 3 zones colorées : ● Bon (vert) : valeur ≤ seuil Bon - ● Moyen (orange) : valeur entre Bon et Moyen - ● Difficile (rouge) : valeur > seuil Moyen. La zone Difficile est déduite automatiquement, il n'y a pas de champ à remplir pour elle. Colore la valeur dans la carte et affiche la légende dans le panneau latéral."
           nzTooltipPlacement="right">info_outline</mat-icon>
       </div>
       <div class="threshold-row">
@@ -354,7 +354,7 @@ return totals;` },
           <nz-input-number
             [ngModel]="def.thresholds?.good ?? null"
             (ngModelChange)="onThresholdGoodChange($event)"
-            [nzMin]="0" nzSize="small" nzPlaceHolder="—">
+            [nzMin]="0" nzSize="small" nzPlaceHolder="-">
           </nz-input-number>
         </div>
         <div class="threshold-item">
@@ -362,7 +362,7 @@ return totals;` },
           <nz-input-number
             [ngModel]="def.thresholds?.warning ?? null"
             (ngModelChange)="onThresholdWarningChange($event)"
-            [nzMin]="0" nzSize="small" nzPlaceHolder="—">
+            [nzMin]="0" nzSize="small" nzPlaceHolder="-">
           </nz-input-number>
         </div>
         <button nz-button nzType="text" nzDanger *ngIf="def.thresholds" (click)="clearThresholds()" style="margin-left:8px">

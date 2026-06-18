@@ -124,8 +124,8 @@ indicateurs*.
 | `requiredEvents` | Liste d'événements PLaTon (`exercise.answered`, …) qui, lors de l'ingestion, déclenchent un recalcul de la valeur `learner` et un `refreshSnapshots()` des snapshots de groupe liés à l'activité concernée. |
 | `isActive` | Indicateur visible/calculable ou désactivé globalement. |
 | `usageCount` | Compteur d'utilisation (nombre d'utilisateurs l'ayant activé). |
-| `formula` | **Formule unique partagée par toutes les visualisations** — pipeline DSL (1 indicateur = 1 formule). |
-| `thresholds` | `{ good?: number; warning?: number }` — seuils globaux optionnels : ≤ good = vert, ≤ warning = orange, > warning = rouge. Affectent la couleur de la valeur (card) et la légende du panneau latéral. |
+| `formula` | **Formule unique partagée par toutes les visualisations** - pipeline DSL (1 indicateur = 1 formule). |
+| `thresholds` | `{ good?: number; warning?: number }` - seuils globaux optionnels : ≤ good = vert, ≤ warning = orange, > warning = rouge. Affectent la couleur de la valeur (card) et la légende du panneau latéral. |
 | `interpretationHint` | Texte libre optionnel affiché dans le panneau latéral de la page détail pour guider l'interprétation des résultats. |
 | `visualizations[]` | Voir ci-dessous - au moins une, généralement la première = vue par défaut. |
 

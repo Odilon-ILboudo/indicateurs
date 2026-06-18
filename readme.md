@@ -25,8 +25,6 @@ fonctionnement global du projet sans avoir à parcourir tout le code source.
 9. [Routes API](#9-routes-api)
 10. [Frontend](#10-frontend)
 11. [Flux métier de bout en bout](#11-flux-métier-de-bout-en-bout)
-12. [Sécurité - état actuel](#12-sécurité--état-actuel)
-13. [Limites connues / reste à faire](#13-limites-connues--reste-à-faire)
 
 ---
 
@@ -53,7 +51,7 @@ redéploiement n'est nécessaire pour ajouter un nouvel indicateur.
 
 ### Prérequis
 
-- Node.js + npm
+- Node.js + yarn
 - Deux bases PostgreSQL accessibles :
   - **PLaTon** (lecture seule - données pédagogiques existantes)
   - **indicators** (lecture/écriture - créée/synchronisée automatiquement par
@@ -258,9 +256,9 @@ La définition d'un indicateur.
 | `contextType` | `'learner'\|'teacher'\|'admin'\|'course'\|'activity'\|'group'` | contexte unique de cet indicateur (voir section 7) |
 | `familyName` | string \| null | regroupement nominal de plusieurs indicateurs créés ensemble (section 8) |
 | `requiredEvents` | jsonb (string[]) | événements PLaTon qui déclenchent un recalcul |
-| `visualizations` | jsonb (`IndicatorVisualization[]`) | une ou plusieurs visualisations — représentations visuelles différentes d'une même formule (section 7) |
+| `visualizations` | jsonb (`IndicatorVisualization[]`) | une ou plusieurs visualisations - représentations visuelles différentes d'une même formule (section 7) |
 | `formula` | jsonb \| null | **formule unique partagée par toutes les visualisations** (1 indicateur = 1 formule) |
-| `thresholds` | jsonb \| null | seuils de performance globaux `{ good?: number; warning?: number }` — colore la valeur (vert/orange/rouge) et affiche la légende dans le détail ; optionnel |
+| `thresholds` | jsonb \| null | seuils de performance globaux `{ good?: number; warning?: number }` - colore la valeur (vert/orange/rouge) et affiche la légende dans le détail ; optionnel |
 | `interpretationHint` | text \| null | aide à l'analyse : texte libre expliquant comment interpréter les résultats, affiché dans le panneau latéral du détail ; optionnel |
 | `isActive` | boolean | actif / désactivé |
 | `usageCount` | number | compteur d'utilisation |
@@ -393,7 +391,7 @@ pipeline:
 `POST /indicators/:id/compute-view` appelle `computeView(indicatorId, contextType,
 contextId, activityId?, vizId?, forceRefresh?)` :
 
-- **Résolution de la formule** : `indicator.formula` — toutes les visualisations partagent la même formule (**1 indicateur = 1 formule**).
+- **Résolution de la formule** : `indicator.formula` - toutes les visualisations partagent la même formule (**1 indicateur = 1 formule**).
 - **Résolution `activityId`** :
   - `learner` → `activityId ?? process.env.TARGET_ACTIVITY_ID`
   - `course`/`group`/`activity` → fourni par l'appelant, pas de fallback
@@ -507,12 +505,6 @@ obligatoire : la dernière cochée est désactivée + tooltip). La sélection es
 persistée dans `user_indicator_preferences.enabled_viz_ids` via
 `IndicatorService.setEnabledVizIds()`.
 
-### Wizard - icon picker
-
-L'étape 2 du wizard affiche les icônes sous forme d'une **grille de boutons
-cliquables** (37 icônes, 36×36px, bordure bleue sur la sélection) au lieu d'un
-`nz-select` textuel.
-
 ### Masquage sélectif de visualisations - `enabledVizIds`
 
 L'utilisateur peut aussi masquer certaines visualisations d'un indicateur
@@ -527,7 +519,7 @@ d'accéder directement à `indicator.visualizations`.
 |---|---|
 | 1. Définition | Nom, description, aide à l'analyse (`interpretationHint`), événements déclencheurs (`requiredEvents`) |
 | 2. Contexte & vues | `contextType` unique, liste de visualisations (type/icône/couleur/unité), **seuil de performance global** (`good`/`warning`, optionnel) |
-| 3. Formule | Pipeline DSL **unique partagé par toutes les vues** — mode Visuel/Import, "Tester" et "Déboguer pas à pas" |
+| 3. Formule | Pipeline DSL **unique partagé par toutes les vues** - mode Visuel/Import, "Tester" et "Déboguer pas à pas" |
 
 **Principe clé** : 1 indicateur = 1 formule. Les visualisations diffèrent uniquement par leur rendu visuel, jamais par les données calculées. À la soumission, `submit()` sauvegarde la formule au niveau de l'indicateur.
 
@@ -564,15 +556,9 @@ famille ; les indicateurs sans famille restent à leur place. Réutilisé dans
 | `learner` | `student` |
 | `teacher` | `teacher` |
 | `admin` | `admin` |
-| `course` | tous (`student`, `teacher`, `admin`, `demo`) |
+| `course` | tous |
 | `activity` | tous |
 | `group` | `teacher`, `admin` |
-
-`demo` suit la règle de `student` (la plus restrictive) faute de spécification
-dédiée. `canSeeIndicatorContext()` est appliqué dans `overview.page.ts`,
-`indicator-selector.component.ts` et `activity.page.ts` (filtre les indicateurs
-`activity` ET `group`). **L'admin (`admin-indicator-manager.component.ts`)
-n'applique pas ce filtre** - c'est l'outil de gestion, il doit tout montrer.
 
 ### Comment changer de rôle pour tester
 
@@ -793,41 +779,3 @@ Pour les visualisations `line-chart`, un sélecteur de période est affiché :
    histogramme) selon les préférences (`activeVizId`/`enabledVizIds`) et les
    règles de visibilité par rôle (`RoleService`).
 
----
-
-## 12. Sécurité - état actuel
-
- Ce projet est en développement actif et **n'est pas prêt pour un déploiement
-exposé** sans corriger les points suivants.
-
-### Failles critiques non corrigées
-
-- **Aucune authentification** sur `/api/indicators*` (et le reste de l'API).
-  `AdminGuard` (`api/src/modules/core/guards/admin.guard.ts`) est un stub qui
-  retourne toujours `true` et **n'est branché sur aucune route**.
-- **`executeJs` utilise le module Node `vm`**, qui n'est **pas un sandbox de
-  sécurité** (échappement connu via `this.constructor.constructor('return
-  process')()`). Combiné à l'absence d'auth, `POST /indicators/preview` /
-  `/preview-steps` permettent une **exécution de code arbitraire (RCE) non
-  authentifiée** en envoyant `{ formula: { pipeline: [{ type: 'js', params: {
-  code: '<payload>' } }] }, context: {} }`.
-- `create`/`update` (`indicators.service.ts`) ne valident pas le contenu de
-  `formula`/`visualizations[].formula` : un pipeline `js` malveillant
-  **persisté** est ré-exécuté automatiquement par `refreshSnapshots()` à chaque
-  événement PLaTon ingéré (déclenchable par n'importe quel étudiant qui répond à
-  un exercice).
-
-→ Priorité : brancher un guard/rôle réel sur les routes d'écriture + preview, et
-remplacer `vm` par `isolated-vm`.
-
----
-
-## 13. Limites connues / reste à faire
-
-- **Authentification + guard** sur `/api/indicators*` (priorité haute — voir section 12 RCE).
-- Remplacer `vm` par `isolated-vm` pour l'étape `js`.
-- `ActivityIndicatorService` (module legacy `activity-attempts`) doit être migré pour utiliser le moteur DSL au lieu de sa logique hardcodée.
-- Filtres de date sur la page des logs d'exécution.
-- Redis configuré (`configuration.ts`) mais inutilisé.
-- Aucun test unitaire sur `FormulaInterpreterService`.
-- Page `/dashboard/resources/move` référencée dans l'UI mais route non créée.

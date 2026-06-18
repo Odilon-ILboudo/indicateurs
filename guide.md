@@ -56,12 +56,12 @@ rôle Admin.**
 
 | # | Indicateur | `contextType` | Visualisations | Formule (résultat) | Nouveautés introduites |
 |---|---|---|---|---|---|
-| 1 | Tentatives avant réussite - Apprenant | `learner` | 1 (carte) | scalaire — avg tentatives | wizard 3 étapes, recette, `fetch`/`groupBy`/`findFirst`/`extract`/`aggregate(avg)`/`round`, seuils, recalcul |
-| 2 | Tentatives avant réussite - Activité | `activity` | 2 (carte + jauge) | scalaire — **même formule pour les 2 vues** | multi-viz sur formule unique, sélection de vue (`activeVizId`), masquage (`enabledVizIds`), variante `filter` |
+| 1 | Tentatives avant réussite - Apprenant | `learner` | 1 (carte) | scalaire - avg tentatives | wizard 3 étapes, recette, `fetch`/`groupBy`/`findFirst`/`extract`/`aggregate(avg)`/`round`, seuils, recalcul |
+| 2 | Tentatives avant réussite - Activité | `activity` | 2 (carte + jauge) | scalaire - **même formule pour les 2 vues** | multi-viz sur formule unique, sélection de vue (`activeVizId`), masquage (`enabledVizIds`), variante `filter` |
 | 3 | Tentatives avant réussite - Cours | `course` | 1 (barres horizontales) | objet `{ressource: moy_note}` | `join` **gauche**, `js` retournant un objet structuré |
 | 4 | Tentatives avant réussite - Groupe de TP | `group` | 1 (barres horizontales) | objet `{étudiant: total_tentatives}` | `useGroupContext`, **snapshots** de groupe |
-| 5 | Vue d'ensemble plateforme - Enseignant | `teacher` | 1 (carte) | scalaire — avg note (sessions réelles) | `requiredEvents` vide, `fetch` global, `join` **interne**, `aggregate(avg)`, `round` |
-| 6 | Diagnostic plateforme - Admin | `admin` | 2 (carte + jauge) | scalaire — count utilisateurs sans session | `join` **droite** (`right`), `js`, import/export YAML/JSON, logs d'exécution |
+| 5 | Vue d'ensemble plateforme - Enseignant | `teacher` | 1 (carte) | scalaire - avg note (sessions réelles) | `requiredEvents` vide, `fetch` global, `join` **interne**, `aggregate(avg)`, `round` |
+| 6 | Diagnostic plateforme - Admin | `admin` | 2 (carte + jauge) | scalaire - count utilisateurs sans session | `join` **droite** (`right`), `js`, import/export YAML/JSON, logs d'exécution |
 
 Les indicateurs 1 à 4 partagent une **famille** (`familyName = "Tentatives
 avant réussite"`), créée en une fois via le wizard "Créer une famille". Les
@@ -175,7 +175,7 @@ un second tag dans "Événements déclencheurs" : `activity.completed` (en plus
 de `exercise.answered`).
 
 **Étape 2** : `contextType = activity` (pré-rempli). Configurer **2
-visualisations** — elles afficheront toutes deux le **même scalaire** calculé
+visualisations** - elles afficheront toutes deux le **même scalaire** calculé
 par la formule unique, simplement avec des représentations visuelles
 différentes :
 
@@ -207,7 +207,7 @@ Puis dans la section **"Seuil de performance"** (globale, partagée par les deux
 > Le seuil "Bon ≤ 2" définit aussi le **maximum affiché par la jauge**.
 
 **Étape 3 « Formule »** : cliquer sur la recette **"Tentatives avant
-réussite"** — identique à A.1. Cette formule unique est partagée par la carte
+réussite"** - identique à A.1. Cette formule unique est partagée par la carte
 et la jauge ; comme le contexte `activity` ne fournit pas de `userId`
 (`computeView` ne peuple que `activityId`), le champ
 `contextFields: user_id` est ignoré et le calcul porte sur **tous les
@@ -222,7 +222,7 @@ Tester (Tester + Déboguer). Cliquer **"Créer"** → enchaîne sur "Cours".
    **"Indicateurs"** → carte "Tentatives avant réussite - Activité".
 3. **Sélection de vue active** (`activeVizId`) : cliquer sur les **chips**
    (une par visualisation) pour basculer entre la carte et la jauge. La
-   valeur numérique affichée est identique — seul le rendu visuel change.
+   valeur numérique affichée est identique - seul le rendu visuel change.
    Ce choix est persisté en base (`user_indicator_preferences.active_viz_id`)
    et conservé après rechargement.
 
@@ -266,7 +266,7 @@ retrouver le comportement original avant de sauvegarder.
 **Étape 1** : nom pré-rempli `Tentatives avant réussite - Cours`,
 `requiredEvents` inchangé (`exercise.answered`).
 
-**Étape 2** : `contextType = course`. Configurer **1 visualisation** — la
+**Étape 2** : `contextType = course`. Configurer **1 visualisation** - la
 formule retournant un objet structuré `{ressource: valeur}`, seul le type
 **barres horizontales** est adapté :
 
@@ -306,7 +306,7 @@ Après le `join`, chaque ligne de `input` contient à la fois les champs de
 `SessionData` (`grade`, `resource_id`…) et ceux de `Resources` (`name`,
 `type`…). Le code groupe par `name` (nom lisible de la ressource), calcule
 la moyenne des `grade` de chaque groupe, et retourne un **objet**
-`{ "Nom de la ressource": note_moyenne }` — format attendu par la
+`{ "Nom de la ressource": note_moyenne }` - format attendu par la
 visualisation **barres horizontales** (une barre par clé).
 
 > **Pourquoi 1 seule visualisation ici ?** La formule retourne un objet
@@ -350,7 +350,7 @@ sur toutes les sessions.
 **Étape 1** : nom pré-rempli `Tentatives avant réussite - Groupe de TP`.
 Ajouter un second tag : `exercise.viewed` (en plus de `exercise.answered`).
 
-**Étape 2** : `contextType = group`. Configurer **1 visualisation** — la
+**Étape 2** : `contextType = group`. Configurer **1 visualisation** - la
 formule retournera un objet par étudiant, adapté aux barres :
 
 | Vue | Libellé | Type | Icône | Unité |
@@ -381,7 +381,7 @@ return groups;
 
 Après le `join`, chaque ligne a `attempts` (de `SessionData`) + `first_name`
 et `last_name` (de `Users`). Le code additionne toutes les tentatives par
-étudiant et retourne un objet `{ "Prénom Nom": total }` — une barre par
+étudiant et retourne un objet `{ "Prénom Nom": total }` - une barre par
 étudiant dans la visualisation barres horizontales.
 
 Le switch **"Requête groupe de TP"** (`useGroupContext`) déclenche côté
@@ -433,7 +433,7 @@ Pour illustrer la fonction `sum`, remplacer le pipeline par :
 | 3 | `aggregate` | aggregateFn = **`sum`** |
 
 Ce pipeline retourne un **scalaire** (total de toutes les tentatives du
-groupe) — compatible avec carte ou jauge si l'on ajoute une 2ᵉ visualisation.
+groupe) - compatible avec carte ou jauge si l'on ajoute une 2ᵉ visualisation.
 Ne pas sauvegarder, c'est une exploration.
 
 ---
@@ -466,14 +466,14 @@ Section **"Seuil de performance"** :
 
 | # | Étape | Paramètres |
 |---|---|---|
-| 1 | `fetch` | table `SessionData`, contextFields = **(vide)** — requête globale |
+| 1 | `fetch` | table `SessionData`, contextFields = **(vide)** - requête globale |
 | 2 | `join` | table `Activities`, **type Interne (inner)**, clé gauche `activity_id`, clé droite `id` |
 | 3 | `extract` | extractField = `grade` |
 | 4 | `aggregate` | aggregateFn = `avg` |
 | 5 | `round` | decimals = `1` |
 
 La jointure **interne** ne conserve que les sessions dont l'activité existe
-réellement en base — ce qui filtre les données corrompues ou les sessions
+réellement en base - ce qui filtre les données corrompues ou les sessions
 orphelines. `extract(grade)` + `aggregate(avg)` + `round` donnent la note
 moyenne réelle des étudiants sur toute la plateforme.
 
@@ -504,7 +504,7 @@ indicateur"**.
 - Description : `Nombre d'utilisateurs inscrits n'ayant jamais soumis d'exercice.`
 - **Événements déclencheurs** : `exercise.answered`
 
-**Étape 2** : `contextType = admin`. Configurer **2 visualisations** — la
+**Étape 2** : `contextType = admin`. Configurer **2 visualisations** - la
 formule retourne un scalaire, la carte et la jauge l'affichent différemment :
 
 | Vue | Libellé | Type | Icône | Unité |
@@ -540,11 +540,11 @@ return count;
 Après un `join right`, les utilisateurs sans aucune session apparaissent comme
 des lignes avec tous les champs de `SessionData` à `null` (dont `activity_id`).
 Le code JS compte ces lignes et retourne le nombre d'utilisateurs inscrits
-n'ayant jamais soumis d'exercice — une vraie métrique de diagnostic sur
+n'ayant jamais soumis d'exercice - une vraie métrique de diagnostic sur
 l'engagement.
 
 Tester sans sélectionner de Cours ni d'Utilisateur (requête globale). Au
-débogueur, l'étape 2 (join) montre des lignes avec `activity_id = null` — ce
+débogueur, l'étape 2 (join) montre des lignes avec `activity_id = null` - ce
 sont les utilisateurs sans session. L'étape 3 retourne leur nombre.
 
 Cliquer **"Créer"**.
@@ -688,7 +688,7 @@ seuils, couleur configurables) mais reste une limite frontend non résolue.
 ### Note sur le type de visualisation "Histogramme"
 
 L'histogramme attend un tableau de buckets `[{ bucket, count }]`. Cela
-nécessite une étape `js` produisant ce format — la formule ne peut donc pas
+nécessite une étape `js` produisant ce format - la formule ne peut donc pas
 aussi retourner un scalaire utilisable par une carte. Pour tester ce type :
 créer un **indicateur jetable** (`contextType = group`, 1 viz histogramme),
 utiliser le pipeline de la section A.4 "Distribution des notes" ci-dessous.
@@ -716,54 +716,3 @@ for (const row of input) {
 }
 return result;
 ```
-
----
-
-## Récapitulatif - couverture des fonctionnalités
-
-| Fonctionnalité | Où l'exercer |
-|---|---|
-| Wizard "Nouvel indicateur" (3 étapes) | A.1 (et B, C en autonome) |
-| Wizard "Créer une famille" | A.0 |
-| `requiredEvents` : 1 événement, 2, vide, 4 (tous) | A.1 / A.2+A.4 / B / C |
-| Les 6 `contextType` | A.1–A.4, B, C |
-| **1 indicateur = 1 formule** partagée par toutes ses vizes | partout |
-| `fetch` (avec/sans `contextFields`, `useGroupContext`) | toutes ; `useGroupContext` en A.4 ; `contextFields: []` en B/C |
-| `join` - gauche (left) | A.3, A.4 |
-| `join` - interne (inner) | B |
-| `join` - droite (right) | C |
-| `join` - complète (full) | documentée en F (note) |
-| `joinContextFields` | documenté en F |
-| `filter` (tous opérateurs) | A.3 (variantes), A.2 (variante) |
-| `groupBy` | A.1–A.2 (recette) |
-| `findFirst` (avec et sans condition) | A.1 (recette + variante) |
-| `extract` | toutes |
-| `aggregate` - `avg` | A.1–A.2, B |
-| `aggregate` - `sum` | A.4 (variante) |
-| `aggregate` - `count` | B |
-| `aggregate` - `min` | C (variante) |
-| `aggregate` - `max` | A.1 (variante), C (variante) |
-| `round` | A.1, A.2, B, C |
-| `divide` | B |
-| `js` (objet, scalaire, tableau de buckets) | A.3, A.4, C (variante), F (histogramme) |
-| Recettes (`FORMULA_RECIPES`) | A.1–A.4 |
-| Import/Export YAML + JSON + fichier + round-trip | C |
-| Carte + seuils | A.1, A.2, B, C |
-| Jauge + seuils | A.2, C |
-| Barres horizontales | A.3, A.4 |
-| Histogramme | F (indicateur jetable) |
-| Graphique ligne | F (note sur limitation) |
-| Multi-viz sur formule unique | A.2 (carte + jauge), C (carte + jauge) |
-| Sélection de vue active (`activeVizId`) | A.2 |
-| Masquage de vue (`enabledVizIds`) | A.2 |
-| Familles d'indicateurs | A.0–A.4, D |
-| Renommer une famille | D |
-| Visibilité par rôle | E |
-| Snapshots de groupe (CRUD + 409 + auto-refresh) | A.4 |
-| Précalcul de contexte | A.2 |
-| Recalcul | A.1, B |
-| Logs d'exécution | F |
-| Activation/désactivation (`isActive`) | F |
-| Suppression | F (sur un indicateur jetable) |
-| Filtres liste (contexte/tri/groupement) | D |
-| Aperçu (`/preview`) et débogueur pas-à-pas (`/preview-steps`) | toutes |
