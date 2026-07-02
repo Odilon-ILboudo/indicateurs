@@ -11,10 +11,10 @@ SessionData (PLaTon DB)
 platon_outbox_events
        │ relay NestJS (toutes les 2s)
        ▼
-RabbitMQ – exchange: platon.events
-   ├── queue indicators.learner   → score apprenant
-   ├── queue indicators.group     → stats groupe / cours
-   └── queue indicators.activity  → stats activité
+RabbitMQ – exchange: platon.events (topic)
+   │  routing key = event_type (dynamique, ex: "exercise.answered")
+   ├── queue indicators.learner   → onLearnerEvent   (contextType = 'learner')
+   └── queue indicators.aggregate → onAggregateEvent (contextType ≠ 'learner')
        │ consumers NestJS
        ▼
 indicator_values (indicators DB)
@@ -115,25 +115,26 @@ PGPASSWORD=test psql -h localhost -p 5432 -U platon -d indicators -c \
 
 **Fichier :** `api/src/modules/features/ingestion/ingestion-consumer.service.ts`
 
-Trois consumers indépendants reçoivent le même événement en parallèle :
+Deux consumers avec routing key `'#'` (reçoivent tous les types d'événements) :
 
 ### Consumer `indicators.learner`
 
 - **Ce qu'il traite :** indicateurs `contextType = 'learner'`
-- **Comment :** `processIndicatorUpdate()` — exécute la formule DSL pour l'apprenant concerné, calcul incrémental si éligible
-- **Résultat :** met à jour `indicator_values` pour `(indicatorId, learner, userId)`
+- **Comment :** `ingestForContext(raw, 'learner')` → `processIndicatorUpdate()` — calcul incrémental si éligible, sinon SQL complet
+- **Résultat :** met à jour `indicator_values` pour `(indicatorId, learner, userId)` + émet WS
 
-### Consumer `indicators.group`
+### Consumer `indicators.aggregate`
 
-- **Ce qu'il traite :** indicateurs `contextType = 'group'` ou `'course'`
-- **Comment :** `refreshSnapshots()` + `refreshActivityViews()` avec delta event
-- **Résultat :** recalcule les snapshots épinglés et les vues de cours/groupe en cache
+- **Ce qu'il traite :** tous les indicateurs `contextType ≠ 'learner'`
+- **Comment :** `getAffectedIndicators()` filtre `contextType !== 'learner'` → `processAggregateIndicator()` dispatch par contextType :
 
-### Consumer `indicators.activity`
-
-- **Ce qu'il traite :** indicateurs `contextType = 'activity'`
-- **Comment :** `computeView(forceRefresh=true)`
-- **Résultat :** recalcule la valeur agrégée pour l'activité
+| contextType | Action |
+|---|---|
+| `activity` | `computeView(activityId, forceRefresh)` + emit WS |
+| `course` | `computeView(courseId, forceRefresh)` + emit WS |
+| `group` | `refreshSnapshots()` + `refreshActivityViews()` (émettent WS eux-mêmes) |
+| `teacher` | `getTeacherByCourse(courseId)` → `computeView` + emit WS |
+| `admin` + futurs | `refreshCachedContextValues()` |
 
 ---
 
@@ -244,10 +245,9 @@ Lors du traitement d'un événement, les logs suivants apparaissent dans l'ordre
 # Relay — lit l'outbox et publie
 [IngestionRelayService]    DEBUG Relay : 1 événement(s) publiés (cursor → 7)
 
-# 3 consumers reçoivent en parallèle
-[IngestionConsumerService]  LOG [learner] ← événement reçu user=e901cddd... session=3fd495b1...
-[IngestionConsumerService]  LOG [group]   ← événement reçu activity=53100bc2...
-[IngestionConsumerService]  LOG [activity]← événement reçu activity=53100bc2...
+# 2 consumers reçoivent en parallèle
+[IngestionConsumerService]  LOG [learner]    ← événement reçu user=e901cddd... session=3fd495b1...
+[IngestionConsumerService]  LOG [aggregate]  ← événement reçu activity=53100bc2...
 
 # Consumer learner — formule exécutée
 [IngestionService]          LOG [learner] 4 indicateur(s) à traiter event="exercise.answered"

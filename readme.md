@@ -112,13 +112,18 @@ modules/
     platon/platon.service.ts    - toutes les requêtes SQL brutes vers la BDD PLaTon
   features/
     indicators/                 - cœur du projet : entités, moteur DSL, CRUD, snapshots
-      entities/                 - 5 entités TypeORM (voir section 5)
+      entities/                 - 7 entités TypeORM (voir section 5)
       calculators/              - legacy hardcodé, ne plus utiliser
       interpreter/formula-interpreter.service.ts - moteur DSL (voir section 6)
       indicators.controller.ts  - toutes les routes /api/indicators*
       indicators.service.ts     - logique métier (computeView, recalculate, snapshots…)
+    event-types/                - types d'événements PLaTon gérés en BDD (CRUD, seed au démarrage)
     user-preferences/           - préférences d'affichage par utilisateur
-    ingestion/                  - réception d'événements PLaTon en temps réel
+    ingestion/                  - consumers RabbitMQ, WebSocket gateway, service d'ingestion
+      ingestion-consumer.service.ts - 2 consumers routing key '#' (learner + aggregate)
+      indicators.gateway.ts     - WebSocket /indicators, émet indicator.updated
+      ingestion.service.ts      - logique de calcul incrémental / recalcul total
+    ingestion-relay/            - cron */2 * * * * * : lit platon_outbox_events → publie RabbitMQ
     aggregation/                - cron quotidien/hebdo (agrégations)
     activity-indicator/         - endpoint legacy spécifique à un indicateur d'activité
     courses/                    - proxy lecture PLaTon : cours, sections, activités, groupes, résultats
@@ -281,6 +286,19 @@ La valeur calculée pour un contexte donné.
 Un log par exécution de pipeline : `indicatorId`, `userId` (ou `groupId`),
 `value`, `durationMs`, `error`, `executedAt`.
 
+### `IndicatorFeedback` (table `indicator_feedback`)
+
+Feedback utilisateur sur un indicateur : `indicatorId`, `userId`, `rating`, `comment`, `createdAt`.
+
+### `IndicatorNotification` (table `indicator_notifications`)
+
+Notification destinée à un utilisateur : `indicatorId`, `userId`, `message`, `read`, `createdAt`.
+
+### `IndicatorEventType` (table `indicator_event_types`)
+
+Types d'événements PLaTon déclarés en BDD : `id`, `name`, `label`, `description`, `isActive`.
+Géré via `GET/POST/PATCH/DELETE /api/event-types`. Seed automatique de `exercise.answered` au démarrage si la table est vide. Permet d'ajouter de nouveaux types d'événements sans redéploiement.
+
 ### `IndicatorSnapshot` (table `indicator_snapshots`)
 
 "Carte épinglée" d'un indicateur `group` pour une activité donnée (panneau
@@ -358,7 +376,7 @@ utilisé par le débogueur pas-à-pas du builder (`POST /preview-steps`).
 | `aggregate` | Agrège un `number[]`. | `aggregateFn: 'avg'\|'sum'\|'count'\|'min'\|'max'` |
 | `round` | Arrondit un nombre. | `decimals` (défaut 2) |
 | `divide` | Divise par une constante (0 si `divideBy === 0`). | `divideBy` |
-| `js` | Exécute du JS arbitraire ; `input` = sortie de l'étape précédente, doit définir/`return` dans `result`. | `code` - exécuté via `vm.runInContext` avec un timeout de 2s. **Voir section 12 : ce n'est pas un sandbox sécurisé.** |
+| `js` | Exécute du JS arbitraire ; `input` = sortie de l'étape précédente, doit `return` un résultat. | `code` - exécuté dans un **vrai isolate V8** (`isolated-vm`, 32 Mo, timeout 2s). Analyse statique préalable (13 patterns interdits). Voir [`js.md`](js.md) pour le détail des protections. |
 
 Rétro-compatibilité : les anciens noms de table `sessions`/`activities` sont
 mappés vers `SessionData`/`Activities` (`LEGACY_TABLE_MAP`).
@@ -660,13 +678,22 @@ GET /v1/resources/user-circle?userId=  - cercle personnel d'un user
 GET /v1/resources/:id
 ```
 
+### Types d'événements (`/api/event-types`, `event-types.controller.ts`)
+
+```
+GET    /event-types
+POST   /event-types
+PATCH  /event-types/:id
+DELETE /event-types/:id
+```
+
 ### Autres modules
 
 ```
 GET /api/users/:id
 
-POST /api/ingest        - un événement PLaTon
-POST /api/ingest/batch  - plusieurs événements
+POST /api/ingest        - injection directe d'un événement (HTTP, legacy)
+POST /api/ingest/batch  - injection directe batch (HTTP, legacy)
 
 GET  /api/indicators/activity-attempts/value
 GET  /api/indicators/activity-attempts/raw
@@ -772,10 +799,15 @@ Pour les visualisations `line-chart`, un sélecteur de période est affiché :
    backend vérifie le cache (`indicator_values`), sinon exécute le pipeline DSL
    sur la base PLaTon via `FormulaInterpreterService` + `PlatonService`, stocke
    le résultat et le retourne.
-4. Un événement PLaTon ingéré (`POST /ingest`) met à jour la valeur `learner`
-   correspondante puis déclenche en fire-and-forget `refreshSnapshots()` (snapshots
-   épinglés) et `refreshActivityViews()` (cache de toutes les vues
-   course/group/activity consultées pour cette activité).
+4. Un événement PLaTon déclenche le trigger PostgreSQL sur `SessionData` →
+   écrit dans `platon_outbox_events` → `IngestionRelayService` (cron 2s) publie
+   vers RabbitMQ → 2 consumers (`indicators.learner` et `indicators.aggregate`)
+   traitent en parallèle. Le consumer `learner` met à jour la valeur incrémentale
+   ou recalcule en SQL complet. Le consumer `aggregate` dispatch par `contextType`
+   (activity/course/group/teacher/admin). Après chaque traitement, `refreshSnapshots()`
+   et `refreshActivityViews()` sont appelés en fire-and-forget. Un événement
+   `indicator.updated` est émis via WebSocket (`/indicators`) pour la mise à jour
+   temps réel du frontend. Voir [`INGESTION.md`](INGESTION.md) pour le détail.
 5. Le frontend affiche la visualisation choisie (carte/jauge/courbe/barres/
    histogramme) selon les préférences (`activeVizId`/`enabledVizIds`) et les
    règles de visibilité par rôle (`RoleService`).

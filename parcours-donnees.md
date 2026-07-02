@@ -863,87 +863,83 @@ appels indicateurs identifiés. `settings/members/members.page.ts` utilise
 
 ## I - Ingestion d'événements PLaTon
 
-Module `api/src/modules/features/ingestion/` (`@Controller('ingest')` →
-`/api/ingest`).
+Le pipeline d'ingestion est entièrement piloté par RabbitMQ. Voir [`INGESTION.md`](INGESTION.md)
+pour le schéma complet, les commandes de test et les IDs de référence.
 
-### I.1 `POST /api/ingest`
+### I.1 Trigger PostgreSQL → `platon_outbox_events`
 
-`ingestion.controller.ts` `ingestEvent(event: IngestionEventDto)` :
-normalise `event.timestamp`, puis **fire-and-forget**
-`ingestionService.ingestEvent(event)` (sans `await`, `.catch()` log
-uniquement), répond immédiatement
-`{ status: 'accepted', message: 'Event received for processing' }` (HTTP 202,
-`@HttpCode(HttpStatus.ACCEPTED)`).
+Déclenché automatiquement par `trg_platon_outbox_session_data` sur
+`AFTER INSERT OR UPDATE OF grade` sur `SessionData` (BDD PLaTon).
+Écrit une ligne dans `platon_outbox_events` : `event_type`, `payload`
+(userId, sessionId, activityId, courseId, grade, attempts).
 
-### I.2 `POST /api/ingest/batch`
+### I.2 `IngestionRelayService` → RabbitMQ
 
-`ingestion.controller.ts` `ingestBatch(events: IngestionEventDto[])` :
-même normalisation par event, **fire-and-forget**
-`ingestionService.ingestBatch(processedEvents)`, répond
-`{ status: 'accepted', message: '<n> events received' }` (HTTP 202).
+`api/src/modules/features/ingestion-relay/ingestion-relay.service.ts`
 
-### I.3 Cascade - `IngestionService.ingestEvent` (`ingestion.service.ts`)
+Cron `*/2 * * * * *` :
+1. `SELECT * FROM platon_outbox_events WHERE id > last_id` (BDD PLaTon, lecture seule).
+2. Publie chaque ligne dans RabbitMQ exchange `platon.events` (topic), routing key = `event_type`.
+3. Avance `ingestion_cursors.last_id` (BDD indicators).
 
-1. `isValidEvent(event)` - vérifie `type`, `userId`, force
-   `timestamp` si absent. Invalide → warning + `return`.
-2. `findAffectedIndicators(event)` :
-   - `refreshIndicatorCache()` - recharge
-     `indicatorDefinitionModel.find({ where: { isActive: true } })`
-     (table `indicator_definitions`) si le cache (TTL 60000 ms) est expiré ou vide.
-   - filtre les indicateurs dont `requiredEvents` (champ JSON de
-     `IndicatorDefinition`) inclut `event.type`.
-3. Si aucun indicateur affecté → `return`.
-4. Pour chaque indicateur affecté :
-   a. `processIndicatorUpdate(indicator, event)` :
-      - Ne traite que `contextType === 'learner'` ; sinon
-        log debug et retourne sans rien faire.
-      - Si `formula?.pipeline?.length > 0` : calcule `newValue` via
-        `formulaInterpreter.interpret(indicator.formula, { userId:
-        event.userId, activityId: event.activityId, courseId:
-        event.courseId, indicatorId: indicator.id })`.
-      - `indicatorValueModel.findOne({ where: { indicatorId:
-        indicator.id, contextType: 'learner', contextId: event.userId } })`
-        (table `indicator_values`).
-      - Si trouvé et `hasDslFormula` : update `value`/`metadata.lastUpdate`,
-        `save`. Sinon : `create` + `save` (`value: 0`
-        si pas de formule DSL).
-      - **Effet de bord** : `eventEmitter.emit('indicator.<name>.updated',
-        {...})` (`EventEmitter2` interne).
-   b. **Fire-and-forget** : si `event.activityId` présent,
-      `this.indicatorsService.refreshSnapshots(indicator.id, event.activityId)`
-      (sans `await`, `.catch()` warning) - **cascade décrite en F.3**.
-5. `eventEmitter.emit('ingestion.event.processed', { eventType,
-   indicatorsCount, processingTime })`.
-6. Erreur globale → `eventEmitter.emit('ingestion.event.error', {...})`
-   puis re-throw - capturée par le `.catch()` du contrôleur.
+### I.3 Consumers RabbitMQ
 
-`ingestBatch(events)` : boucle séquentielle, appelle `ingestEvent`
-pour chaque event, comptabilise `{ total, processed, failed }` -
-valeur jamais consultée par le contrôleur (appel fire-and-forget).
+`api/src/modules/features/ingestion/ingestion-consumer.service.ts`
 
-### I.4 Méthodes annexes (non routées)
+Deux consumers, routing key `'#'` (reçoit tous les types d'événements) :
 
-- `getIngestionStats()` : taille/âge du cache d'indicateurs, pas
-  d'accès DB.
-- `resetIndicator(indicatorId, contextId?)` :
-  `indicatorValueModel.delete({ indicatorId, [contextId] })` → DELETE sur
-  `indicator_values`.
+#### Consumer `indicators.learner` → `onLearnerEvent`
 
-> **Côté frontend**, aucun composant n'appelle directement `/ingest` ou
-> `/ingest/batch`. `core/services/indicator-event.service.ts` (`ingestUrl =
-> environment.indicatorsApiUrl + '/ingest'`) expose `flush()` →
-> `POST {ingestUrl}/batch`, toutes les 5s ou si la file dépasse 50 événements,
-> et des méthodes `sendExerciseAnswered`/
-> `sendSessionCompleted`/`sendSessionStarted`/`sendActivityViewed`/
-> `sendCourseEnrolled`. Ce service est consommé par
-> `core/interceptors/indicator.interceptor.ts` (enregistré globalement dans
-> `app.config.ts` via `withInterceptors([indicatorInterceptor])`) : il
-> intercepte les requêtes `POST/PUT/PATCH/DELETE` et, si l'URL contient
-> `/exercises/.../answers` ou `/sessions`, traduit la réponse en
-> `IndicatorEvent` (`indicator.interceptor.ts`). **Ces URLs
-> (`/exercises`, `/sessions`) ne sont pas exposées par ce microservice** -
-> l'interceptor est prévu pour s'activer une fois le frontend intégré dans
-> l'application PLaTon principale (où ces routes existent réellement).
+→ `ingestionService.ingestForContext(raw, 'learner')`
+→ `processIndicatorUpdate(indicator, event)` pour chaque indicateur actif
+dont `requiredEvents` contient `event.type` :
+
+1. `getIncrementalShape(formula)` — analyse la formule.
+2. **Si incrémental possible** (shape connue + métadonnées en BDD + sessionId présent) :
+   - chemin `findFirst` → met à jour `candidateRows`/`groupCandidateRows` + `computeResultFromCandidates` (0 SQL)
+   - chemin `groupBy` → met à jour `groupRowValues` + `applyPostSteps` (0 SQL)
+   - chemin `rowValues` : A (0 SQL direct) / B (0 SQL + filter) / C (1 SQL ciblé sur 1 ligne)
+3. **Sinon** → `computeWithRowMap` / `interpret()` (SQL complet depuis SessionData)
+4. `UPSERT indicator_values` (valeur + métadonnées JSONB)
+5. `EventEmitter2.emit('indicator.updated', {...})` → `IndicatorsGateway` → WebSocket
+6. Fire-and-forget : `refreshSnapshots(indicatorId, activityId)` si présent
+
+#### Consumer `indicators.aggregate` → `onAggregateEvent`
+
+→ `getAffectedIndicators(event)` filtre `contextType !== 'learner'`
+→ `processAggregateIndicator(indicator, event)` dispatch par `contextType` :
+
+| contextType | Action |
+|---|---|
+| `activity` | `computeView(activityId, forceRefresh=true)` + emit WS |
+| `course` | `computeView(courseId, forceRefresh=true)` + emit WS |
+| `group` | `refreshSnapshots()` + `refreshActivityViews()` (émettent WS eux-mêmes) |
+| `teacher` | `getTeacherByCourse(courseId)` → `computeView` + emit WS |
+| `admin` + futurs | `refreshCachedContextValues(indicatorId, contextType)` |
+
+### I.4 WebSocket — `IndicatorsGateway`
+
+`api/src/modules/features/ingestion/indicators.gateway.ts`
+
+- Namespace `/indicators`, port 3001.
+- `@OnEvent('indicator.updated')` → `server.emit('indicator.updated', payload)`.
+- Payload : `{ indicatorId, indicatorName, contextType, contextId, value, eventType: 'refresh', timestamp }`.
+
+Côté frontend : `frontend/src/app/core/services/indicator-socket.service.ts`
+- Connexion automatique au montage du premier `IndicatorCardComponent`.
+- Filtre les événements par `(indicatorId, contextType, contextId)`.
+- Met à jour la valeur de la carte sans rechargement via `markForCheck()`.
+
+### I.5 `POST /api/ingest` (HTTP legacy)
+
+`ingestion.controller.ts` — endpoint HTTP toujours présent pour les tests manuels.
+En production, les événements arrivent exclusivement par le pipeline RabbitMQ (I.1 → I.3).
+
+> **Côté frontend**, aucun composant n'appelle directement `/ingest`.
+> `core/services/indicator-event.service.ts` expose `flush()` → `POST /ingest/batch`
+> (toutes les 5s), prévu pour s'activer une fois le frontend intégré dans
+> l'application PLaTon principale. Les URLs cibles (`/exercises`, `/sessions`)
+> ne sont pas exposées par ce microservice.
 
 ---
 
