@@ -35,18 +35,32 @@
       align-items: center;
       gap: 16px;
       margin-bottom: 16px;
-      
+
       mat-icon {
         font-size: 40px;
         width: 40px;
         height: 40px;
       }
-      
+
       h1 {
         margin: 0;
         font-size: 28px;
         font-weight: 600;
         color: #1a1a1a;
+      }
+
+      .feedback-btn {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+      }
+    }
+
+    .feedback-modal-body {
+      .feedback-modal-label {
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #262626;
       }
     }
     

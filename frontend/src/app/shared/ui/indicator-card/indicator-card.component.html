@@ -46,9 +46,25 @@
 
       <div class="card-footer">
         <div class="title-section">
-          <span class="title">{{ displayTitle ?? indicator.name }}</span>
+          <span
+            *ngIf="!editingDisplayTitle || !displayTitle"
+            class="title"
+            [class.title--editable]="!!displayTitle"
+            (click)="startTitleEdit($event)">
+            {{ displayTitle ?? indicator.name }}
+          </span>
+          <input
+            *ngIf="editingDisplayTitle && displayTitle"
+            #titleInput
+            class="title-edit-input"
+            [(ngModel)]="draftDisplayTitle"
+            (keydown.enter)="confirmTitleEdit()"
+            (keydown.escape)="cancelTitleEdit()"
+            (blur)="confirmTitleEdit()"
+            (click)="$event.stopPropagation()"
+          />
         </div>
-        <mat-icon class="arrow-icon">arrow_forward</mat-icon>
+        <mat-icon class="arrow-icon" *ngIf="!editingDisplayTitle">arrow_forward</mat-icon>
       </div>
 
       <div class="card-context" *ngIf="indicator?.contextType">
@@ -56,14 +72,28 @@
           <mat-icon>label</mat-icon>
           <span>{{ getContextLabel(indicator.contextType) }}</span>
         </div>
-        <button
-          class="edit-button"
-          mat-icon-button
-          matTooltip="Configurer"
-          matTooltipPosition="above"
-          (click)="openConfigModal($event)">
-          <mat-icon>edit</mat-icon>
-        </button>
+        <div class="card-actions">
+          <button
+            class="edit-button"
+            mat-icon-button
+            matTooltip="Paramètres"
+            matTooltipPosition="above"
+            (click)="openConfigModal($event)">
+            <mat-icon>tune</mat-icon>
+          </button>
+          <button *ngIf="showDeleteButton"
+            class="delete-button"
+            mat-icon-button
+            matTooltip="Supprimer"
+            matTooltipPosition="above"
+            nz-popconfirm
+            nzPopconfirmTitle="Supprimer ce snapshot ?"
+            nzPopconfirmPlacement="top"
+            (nzOnConfirm)="deleteClick.emit()"
+            (click)="$event.stopPropagation()">
+            <mat-icon>delete_outline</mat-icon>
+          </button>
+        </div>
       </div>
 
     </ng-container>

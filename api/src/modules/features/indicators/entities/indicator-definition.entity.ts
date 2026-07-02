@@ -36,9 +36,9 @@ export class IndicatorDefinition {
   @Column({ type: 'varchar', nullable: true })
   contextType: ContextType;
 
-  /** Regroupement nominal de plusieurs indicateurs créés ensemble (ex: "Tentatives avant réussite"). */
+  /** Regroupement nominal de plusieurs indicateurs créés ensemble sous un même cercle. */
   @Column({ type: 'varchar', length: 255, nullable: true })
-  familyName: string | null;
+  circleName: string | null;
 
   @Column({ type: 'jsonb' })
   requiredEvents: string[];

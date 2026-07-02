@@ -18,39 +18,55 @@
     <nz-row [nzGutter]="[24, 24]" nzAlign="top">
       <nz-col nzXs="24" nzSm="24" nzMd="16" nzLg="16" nzXl="16">
 
-        <!-- Indicateurs dynamiques (contextType = 'activity') -->
-        <h4 class="section-title">Indicateurs globaux</h4>
-        <ng-container *ngIf="indicatorsLoading">
-          <nz-spin nzSimple></nz-spin>
-        </ng-container>
+        <!-- ── Section Indicateurs globaux de l'activité ───────────────── -->
+        <nz-divider [nzText]="globalTitle" nzOrientation="left"></nz-divider>
+        <ng-template #globalTitle>
+          <span class="section-divider-btn" (click)="collapsedGlobal = !collapsedGlobal">
+            <mat-icon class="section-chevron" [class.collapsed]="collapsedGlobal">expand_more</mat-icon>
+            Indicateurs de l'activité
+          </span>
+        </ng-template>
 
-        <ng-container *ngIf="!indicatorsLoading">
-          <ng-container *ngIf="activityIndicators.length > 0 && activityContext; else noIndicators">
-            <nz-row [nzGutter]="[16, 16]">
-              <nz-col
-                *ngFor="let ind of activityIndicators"
-                nzXs="24" nzSm="12" nzMd="12" nzLg="8" nzXl="8">
-                <ui-indicator-card
-                  [indicator]="ind"
-                  [context]="activityContext"
-                  [clickable]="true"
-                  [queryParams]="indicatorQueryParams"
-                />
-              </nz-col>
-            </nz-row>
+        <ng-container *ngIf="!collapsedGlobal">
+          <ng-container *ngIf="indicatorsLoading">
+            <nz-spin nzSimple></nz-spin>
           </ng-container>
-          <ng-template #noIndicators>
-            <nz-empty
-              nzNotFoundContent="Aucun indicateur de contexte 'activité' n'a été ajouté."
-              style="margin: 16px 0 24px">
-            </nz-empty>
-          </ng-template>
+          <ng-container *ngIf="!indicatorsLoading">
+            <ng-container *ngIf="activityIndicators.length > 0 && activityContext; else noIndicators">
+              <nz-row [nzGutter]="[16, 16]">
+                <nz-col
+                  *ngFor="let ind of activityIndicators"
+                  nzXs="24" nzSm="12" nzMd="12" nzLg="8" nzXl="8">
+                  <ui-indicator-card
+                    [indicator]="ind"
+                    [context]="activityContext"
+                    [clickable]="true"
+                    [queryParams]="indicatorQueryParams"
+                  />
+                </nz-col>
+              </nz-row>
+            </ng-container>
+            <ng-template #noIndicators>
+              <nz-empty
+                nzNotFoundContent="Aucun indicateur de contexte 'activité' n'a été ajouté."
+                style="margin: 16px 0 24px">
+              </nz-empty>
+            </ng-template>
+          </ng-container>
         </ng-container>
 
-        <!-- Section "Par groupe" - snapshots comparatifs -->
+        <!-- ── Section Indicateurs par groupe ─────────────── -->
         <ng-container *ngIf="!indicatorsLoading && groupIndicators.length > 0 && context.activity">
-          <nz-divider></nz-divider>
+          <nz-divider [nzText]="groupTitle" nzOrientation="left"></nz-divider>
+          <ng-template #groupTitle>
+            <span class="section-divider-btn" (click)="collapsedGroup = !collapsedGroup">
+              <mat-icon class="section-chevron" [class.collapsed]="collapsedGroup">expand_more</mat-icon>
+              Indicateurs par groupe
+            </span>
+          </ng-template>
+
           <app-group-snapshots-panel
+            *ngIf="!collapsedGroup"
             [groupIndicators]="groupIndicators"
             [activityId]="context.activity.id"
             [courseId]="context.course?.id ?? ''"

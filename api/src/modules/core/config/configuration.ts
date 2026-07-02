@@ -42,4 +42,8 @@ export default () => ({
     dailyHour: parseInt(process.env.DAILY_AGGREGATION_HOUR || '1', 10),
     weeklyDayOfWeek: parseInt(process.env.WEEKLY_AGGREGATION_DAY || '1', 10),
   },
+
+  rabbitmq: {
+    uri: process.env.RABBITMQ_URI || 'amqp://guest:guest@localhost:5672',
+  },
 });

@@ -680,12 +680,12 @@ export class CsvDownloadButtonComponent {
     .date-label { font-size:12px; color:var(--brand-text-secondary,#555); margin-top:2px; }
     .separator { width:1px; background-color:var(--brand-border-color-light,rgba(0,0,0,0.06)); }
     mat-card-actions { border-top:1px solid var(--brand-border-color-light,rgba(0,0,0,0.06)); margin:0 16px; padding:8px 0; display:flex; justify-content:space-between; align-items:center; }
-    .action-button { margin:4px; padding:0 10px 0 8px; }
+    .action-button { margin:4px; padding:0 10px 0 8px; display:inline-flex; align-items:center; gap:4px; }
     .more-button { margin:0; padding:0 8px; }
     .progression-value { font-size:40px; }
     .progression-unit { font-size:20px; }
     .progression-exercises { margin-top:6px; font-size:12px; color:var(--brand-text-secondary,#555); text-align:center; }
-    mat-icon { font-size:20px; vertical-align:middle; margin-right:4px; }
+    mat-icon { font-size:20px; width:20px; height:20px; line-height:1; }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [

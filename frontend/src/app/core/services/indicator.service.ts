@@ -2,7 +2,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, BehaviorSubject, map, of, tap } from 'rxjs';
-import { CourseActivity, IndicatorDefinition, IndicatorSnapshot, IndicatorValue, StepDebugResult, TeacherCourse, ViewResult } from '../models/indicator.model';
+import { CourseActivity, IndicatorDefinition, IndicatorFeedback, IndicatorFeedbacksResult, IndicatorNotification, IndicatorSnapshot, IndicatorValue, StepDebugResult, TeacherCourse, ViewResult } from '../models/indicator.model';
 import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
@@ -146,6 +146,13 @@ export class IndicatorService {
     );
   }
 
+  getFullSchema(): Observable<{
+    tables: { name: string; columns: { name: string; type: string; nullable: boolean }[] }[];
+    relations: { sourceTable: string; sourceColumn: string; targetTable: string; targetColumn: string }[];
+  }> {
+    return this.http.get<any>(`${this.apiUrl}/schema/full`);
+  }
+
   // ── Calcul de vue ─────────────────────────────────────────────────────────
 
   /**
@@ -269,5 +276,50 @@ export class IndicatorService {
   private invalidateCache(): void {
     this.indicatorsLoaded = false;
     this.indicatorsCache$.next(null);
+  }
+
+  // ── Feedbacks ──────────────────────────────────────────────────────────────
+
+  submitFeedback(indicatorId: string, userId: string, rating: number, comment?: string): Observable<IndicatorFeedback> {
+    return this.http.post<IndicatorFeedback>(
+      `${this.apiUrl}/${encodeURIComponent(indicatorId)}/feedback`,
+      { userId, rating, comment },
+    );
+  }
+
+  getFeedbacks(indicatorId: string): Observable<IndicatorFeedbacksResult> {
+    return this.http.get<IndicatorFeedbacksResult>(
+      `${this.apiUrl}/${encodeURIComponent(indicatorId)}/feedback`,
+    );
+  }
+
+  deleteFeedback(indicatorId: string, feedbackId: string): Observable<void> {
+    return this.http.delete<void>(
+      `${this.apiUrl}/${encodeURIComponent(indicatorId)}/feedback/${encodeURIComponent(feedbackId)}`,
+    );
+  }
+
+  // ── Notifications ─────────────────────────────────────────────────────────
+
+  searchSimilar(q: string, excludeId?: string): Observable<IndicatorDefinition[]> {
+    const params = excludeId ? `?q=${encodeURIComponent(q)}&excludeId=${encodeURIComponent(excludeId)}` : `?q=${encodeURIComponent(q)}`;
+    return this.http.get<IndicatorDefinition[]>(`${this.apiUrl}/search${params}`);
+  }
+
+  sendNotification(indicatorId: string, title: string, message: string): Observable<IndicatorNotification> {
+    return this.http.post<IndicatorNotification>(
+      `${this.apiUrl}/${encodeURIComponent(indicatorId)}/notify`,
+      { title, message },
+    );
+  }
+
+  getNotifications(): Observable<IndicatorNotification[]> {
+    return this.http.get<IndicatorNotification[]>(`${this.apiUrl}/notifications/all`);
+  }
+
+  // ── Types d'événements ────────────────────────────────────────────────────
+
+  getEventTypes(): Observable<{ id: string; name: string; label: string; description: string | null; isActive: boolean }[]> {
+    return this.http.get<any[]>(`${environment.apiUrl}/event-types`);
   }
 }

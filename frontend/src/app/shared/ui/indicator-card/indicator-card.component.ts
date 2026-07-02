@@ -1,4 +1,5 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, inject, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, inject, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
@@ -10,9 +11,11 @@ import { NzFormModule } from 'ng-zorro-antd/form';
 import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzColorPickerModule } from 'ng-zorro-antd/color-picker';
 import { NzButtonModule } from 'ng-zorro-antd/button';
+import { NzPopconfirmModule } from 'ng-zorro-antd/popconfirm';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { FormsModule } from '@angular/forms';
 import { IndicatorService } from '../../../core/services/indicator.service';
+import { IndicatorSocketService } from '../../../core/services/indicator-socket.service';
 import { DashboardContext, IndicatorDefinition, IndicatorValue, IndicatorVisualization } from '../../../core/models/indicator.model';
 import { environment } from '../../../../environments/environment';
 import { IndicatorConfigModalComponent } from './indicator-config-modal.component';
@@ -23,17 +26,20 @@ import { ModalDataService } from './modal-data.service';
   standalone: true,
   imports: [
     CommonModule, FormsModule, MatIconModule, MatCardModule, MatTooltipModule, MatButtonModule, RouterModule,
-    NzModalModule, NzFormModule, NzSelectModule, NzColorPickerModule, NzButtonModule
+    NzModalModule, NzFormModule, NzSelectModule, NzColorPickerModule, NzButtonModule, NzPopconfirmModule
   ],
   templateUrl: './indicator-card.component.html',
   styleUrls: ['./indicator-card.component.scss']
 })
-export class IndicatorCardComponent implements OnInit, OnChanges {
+export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
   private readonly indicatorService = inject(IndicatorService);
+  private readonly socketService = inject(IndicatorSocketService);
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly modal = inject(NzModalService);
   private readonly message = inject(NzMessageService);
   private readonly modalData = inject(ModalDataService);
+
+  private socketSub?: Subscription;
 
   @Input() indicator!: IndicatorDefinition;
   @Input() context!: DashboardContext;
@@ -41,8 +47,16 @@ export class IndicatorCardComponent implements OnInit, OnChanges {
   @Input() queryParams?: Record<string, string>;
   /** Surcharge le titre affiché dans la card (ex : snapshot.title pour les groupes). */
   @Input() displayTitle?: string;
+  /** Affiche un bouton de suppression dans le card-context (à côté du bouton paramètres). */
+  @Input() showDeleteButton = false;
 
   @Output() valueChange = new EventEmitter<IndicatorValue>();
+  /** Émis avec le nouveau titre quand l'utilisateur confirme l'édition inline. */
+  @Output() titleChange = new EventEmitter<string>();
+  /** Émis quand l'utilisateur confirme la suppression via le popconfirm interne. */
+  @Output() deleteClick = new EventEmitter<void>();
+
+  @ViewChild('titleInput') private titleInputRef?: ElementRef<HTMLInputElement>;
 
   value: IndicatorValue | null = null;
   isLoading: boolean = true;
@@ -54,10 +68,38 @@ export class IndicatorCardComponent implements OnInit, OnChanges {
   configVizId: string | null = null;
   isSavingConfig: boolean = false;
 
+  // Édition inline du titre
+  editingDisplayTitle = false;
+  draftDisplayTitle = '';
+
+  startTitleEdit(event: Event): void {
+    if (!this.displayTitle) return;
+    event.stopPropagation();
+    event.preventDefault();
+    this.draftDisplayTitle = this.displayTitle;
+    this.editingDisplayTitle = true;
+    setTimeout(() => this.titleInputRef?.nativeElement?.focus(), 0);
+  }
+
+  confirmTitleEdit(): void {
+    if (!this.editingDisplayTitle) return;
+    const newTitle = this.draftDisplayTitle.trim();
+    this.editingDisplayTitle = false;
+    if (newTitle && newTitle !== this.displayTitle) {
+      this.titleChange.emit(newTitle);
+    }
+  }
+
+  cancelTitleEdit(): void {
+    this.editingDisplayTitle = false;
+  }
+
   ngOnInit(): void {
     this.initActiveViz();
     this.loadUserColorPreference();
     this.loadValue();
+    this.subscribeToSocket();
+    this.socketService.connect();
   }
 
   ngOnChanges(): void {
@@ -65,7 +107,33 @@ export class IndicatorCardComponent implements OnInit, OnChanges {
       this.initActiveViz();
       this.loadUserColorPreference();
       this.loadValue();
+      this.subscribeToSocket();
     }
+  }
+
+  ngOnDestroy(): void {
+    this.socketSub?.unsubscribe();
+  }
+
+  private subscribeToSocket(): void {
+    this.socketSub?.unsubscribe();
+    if (!this.indicator || !this.context) return;
+
+    const contextId = this.context.scope === 'learner'
+      ? this.context.userId
+      : this.context.scopeId;
+
+    this.socketSub = this.socketService
+      .watchIndicator(this.indicator.id, this.context.scope, contextId)
+      .subscribe(event => {
+        this.value = {
+          value: event.value,
+          timestamp: new Date(event.timestamp),
+          metadata: this.value?.metadata ?? null,
+        };
+        this.valueChange.emit(this.value);
+        this.cdr.markForCheck();
+      });
   }
 
   private loadUserColorPreference(): void {

@@ -3,12 +3,13 @@ import { Module } from '@nestjs/common';
 import { CoreModule } from './modules/core/core.module';
 import { IndicatorsModule } from './modules/features/indicators/indicators.module';
 import { IngestionModule } from './modules/features/ingestion/ingestion.module';
+import { IngestionRelayModule } from './modules/features/ingestion-relay/ingestion-relay.module';
 import { AggregationModule } from './modules/features/aggregation/aggregation.module';
 import { UsersModule } from './modules/features/users/users.module';
 import { UserPreferencesModule } from './modules/features/user-preferences/user-preferences.module';
 import { CoursesModule } from './modules/features/courses/courses.module';
 import { ResourcesModule } from './modules/features/resources/resources.module';
-
+import { EventTypesModule } from './modules/features/event-types/event-types.module';
 
 @Module({
   imports: [
@@ -16,10 +17,12 @@ import { ResourcesModule } from './modules/features/resources/resources.module';
     IndicatorsModule,
     UserPreferencesModule,
     IngestionModule,
+    IngestionRelayModule,
     AggregationModule,
     UsersModule,
     CoursesModule,
     ResourcesModule,
+    EventTypesModule,
   ],
 })
 export class AppModule {}

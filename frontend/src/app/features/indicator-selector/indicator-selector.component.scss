@@ -1,6 +1,11 @@
 .indicator-selector {
   padding: 16px;
-  
+
+  .search-bar {
+    position: relative;
+    margin-bottom: 12px;
+  }
+
   .toolbar {
     display: flex;
     align-items: center;
@@ -83,7 +88,7 @@
     }
   }
 
-  .family-row {
+  .circle-row {
     cursor: pointer;
     background: #f9f0ff;
 
@@ -95,17 +100,27 @@
       display: flex;
       align-items: center;
       gap: 6px;
+      line-height: 1;
     }
 
-    .family-chevron {
+    strong {
+      line-height: 1;
+      vertical-align: middle;
+    }
+
+    .circle-chevron {
       color: #722ed1;
+      vertical-align: middle;
+      flex-shrink: 0;
     }
 
-    .family-icon {
+    .circle-icon {
       color: #722ed1;
       font-size: 18px;
       width: 18px;
       height: 18px;
+      vertical-align: middle;
+      flex-shrink: 0;
     }
   }
 

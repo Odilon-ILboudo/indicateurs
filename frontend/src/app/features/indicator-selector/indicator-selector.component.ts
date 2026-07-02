@@ -122,9 +122,9 @@ const CTX_ICONS: Record<string, string> = {
         <span class="status-badge" [class.active]="ind.isActive">
           {{ ind.isActive ? '● Actif' : '● Inactif' }}
         </span>
-        <span class="family-badge" *ngIf="ind.familyName">
+        <span class="circle-badge" *ngIf="ind.circleName">
           <mat-icon>folder_special</mat-icon>
-          Famille : {{ ind.familyName }}
+          Cercle : {{ ind.circleName }}
         </span>
         <p class="ind-description" *ngIf="ind.description; else noDesc">{{ ind.description }}</p>
         <ng-template #noDesc>
@@ -604,14 +604,16 @@ export class IndicatorSelectorComponent implements OnInit {
 
   allIndicators: IndicatorDefinition[] = [];
   displayRows: IndicatorDisplayRow[] = [];
-  expandedFamilies = new Set<string>();
+  expandedCircles = new Set<string>();
   isLoading = true;
 
   filters = {
     scope: 'all' as 'all' | IndicatorScope,
     sortBy: 'popular' as 'popular' | 'unpopular' | 'name',
-    grouping: 'standalone' as 'standalone' | 'families',
+    grouping: 'standalone' as 'standalone' | 'circles',
   };
+
+  searchKeyword = '';
 
   ngOnInit(): void {
     this.loadIndicators();
@@ -644,9 +646,18 @@ export class IndicatorSelectorComponent implements OnInit {
       filtered = filtered.filter(ind => ind.contextType === this.filters.scope);
     }
 
-    filtered = this.filters.grouping === 'families'
-      ? filtered.filter(ind => !!ind.familyName)
-      : filtered.filter(ind => !ind.familyName);
+    filtered = this.filters.grouping === 'circles'
+      ? filtered.filter(ind => !!ind.circleName)
+      : filtered.filter(ind => !ind.circleName);
+
+    const kw = this.searchKeyword.trim().toLowerCase();
+    if (kw) {
+      filtered = filtered.filter(ind =>
+        ind.name.toLowerCase().includes(kw) ||
+        (ind.description ?? '').toLowerCase().includes(kw) ||
+        (ind.circleName ?? '').toLowerCase().includes(kw),
+      );
+    }
 
     if (this.filters.sortBy === 'popular') {
       filtered.sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0));
@@ -656,14 +667,14 @@ export class IndicatorSelectorComponent implements OnInit {
       filtered.sort((a, b) => a.name.localeCompare(b.name));
     }
 
-    this.displayRows = buildIndicatorDisplayRows(filtered, this.expandedFamilies);
+    this.displayRows = buildIndicatorDisplayRows(filtered, this.expandedCircles);
   }
 
-  toggleFamily(familyName: string): void {
-    if (this.expandedFamilies.has(familyName)) {
-      this.expandedFamilies.delete(familyName);
+  toggleCircle(circleName: string): void {
+    if (this.expandedCircles.has(circleName)) {
+      this.expandedCircles.delete(circleName);
     } else {
-      this.expandedFamilies.add(familyName);
+      this.expandedCircles.add(circleName);
     }
     this.applyFilters();
     this.cdr.detectChanges();

@@ -15,6 +15,7 @@ import { NzDatePickerModule } from 'ng-zorro-antd/date-picker'
 import { NzSelectModule, NzSelectOptionInterface } from 'ng-zorro-antd/select'
 import { NzSliderModule } from 'ng-zorro-antd/slider'
 import { NzInputNumberModule } from 'ng-zorro-antd/input-number'
+import { NzDividerModule } from 'ng-zorro-antd/divider'
 import { NzEmptyModule } from 'ng-zorro-antd/empty'
 import { NzSpinModule } from 'ng-zorro-antd/spin'
 
@@ -62,6 +63,7 @@ import { ActivityPresenter } from './activity.presenter'
     NzSelectModule,
     NzSliderModule,
     NzInputNumberModule,
+    NzDividerModule,
     NzEmptyModule,
     NzSpinModule,
 
@@ -93,6 +95,8 @@ export class CourseActivityPage implements OnInit, OnDestroy {
 
   protected userDistribution: UserActivityResultsDistribution[] = []
   protected context = this.presenter.defaultContext()
+  protected collapsedGlobal = false
+  protected collapsedGroup = false
 
   // Indicateurs par contexte
   protected activityIndicators: IndicatorDefinition[] = []
@@ -171,6 +175,7 @@ export class CourseActivityPage implements OnInit, OnDestroy {
       combineLatest([
         this.indicatorService.loadIndicators(),
         this.settingsService.getSettings(),
+        this.roleService.role$,
       ]).subscribe({
         next: ([indicators, settings]) => {
           const visible = indicators.filter(ind =>

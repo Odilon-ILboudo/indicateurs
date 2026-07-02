@@ -6,7 +6,7 @@ Ce guide construit **6 indicateurs**, un par `contextType` possible
 fonctionnalités implémentées du module Indicateurs : les 10 types d'étapes du
 DSL (y compris les 4 types de jointure et les 5 fonctions d'agrégation), les 5
 types de visualisation, les seuils, le multi-vue (sélection/masquage), les
-familles d'indicateurs, la visibilité par rôle, les snapshots de groupe, le
+cercles d'indicateurs, la visibilité par rôle, les snapshots de groupe, le
 recalcul, les logs d'exécution, l'aperçu/débogueur pas-à-pas, l'import/export
 YAML/JSON, les recettes, et le précalcul de contexte.
 
@@ -15,7 +15,7 @@ YAML/JSON, les recettes, et le précalcul de contexte.
 > par leur représentation visuelle (type de graphique, icône, couleur, seuils),
 > jamais par les données calculées. Pour mesurer des grandeurs différentes,
 > il faut créer des indicateurs différents (éventuellement regroupés dans une
-> même famille).
+> même cercle).
 
 Pour la référence complète de l'architecture, du modèle de données et du
 moteur DSL, voir [`readme.md`](readme.md) - ce guide s'appuie dessus et ne
@@ -43,7 +43,7 @@ répète que ce qui est nécessaire à l'action.
 
 4. Rappel des permissions (`role.service.ts`) :
    - `canCreateIndicators` = **Admin uniquement** → boutons "Nouvel
-     indicateur" et "Créer une famille" invisibles pour les autres rôles.
+     indicateur" et "Créer un cercle" invisibles pour les autres rôles.
    - `canManageIndicators` = Admin **ou** Enseignant → accès en lecture à la
      table de gestion.
 
@@ -63,19 +63,19 @@ rôle Admin.**
 | 5 | Vue d'ensemble plateforme - Enseignant | `teacher` | 1 (carte) | scalaire - avg note (sessions réelles) | `requiredEvents` vide, `fetch` global, `join` **interne**, `aggregate(avg)`, `round` |
 | 6 | Diagnostic plateforme - Admin | `admin` | 2 (carte + jauge) | scalaire - count utilisateurs sans session | `join` **droite** (`right`), `js`, import/export YAML/JSON, logs d'exécution |
 
-Les indicateurs 1 à 4 partagent une **famille** (`familyName = "Tentatives
-avant réussite"`), créée en une fois via le wizard "Créer une famille". Les
+Les indicateurs 1 à 4 partagent une **cercle** (`circleName = "Tentatives
+avant réussite"`), créée en une fois via le wizard "Créer un cercle". Les
 indicateurs 5 et 6 sont autonomes.
 
 ---
 
-## Étape A - Famille "Tentatives avant réussite" (indicateurs 1 à 4)
+## Étape A - Cercle "Tentatives avant réussite" (indicateurs 1 à 4)
 
-### A.0 Lancer le wizard de famille
+### A.0 Lancer le wizard de cercle
 
-1. `/dashboard/indicators` (rôle **Admin**) → bouton **"Créer une famille"**.
-2. Dans la modale "Créer une famille d'indicateurs" :
-   - **Nom de la famille** : `Tentatives avant réussite`
+1. `/dashboard/indicators` (rôle **Admin**) → bouton **"Créer un cercle"**.
+2. Dans la modale "Créer une cercle d'indicateurs" :
+   - **Nom de le cercle** : `Tentatives avant réussite`
    - **Description** : `Nombre moyen de tentatives nécessaires avant la première réussite (note 100), décliné par contexte.`
    - **Événements déclencheurs** (champ tags) : ajouter `exercise.answered`
    - **Contextes à couvrir** (multi-sélection) : cocher dans cet ordre
@@ -93,7 +93,7 @@ automatiquement, jusqu'au dernier (Groupe de TP).
 
 ### A.1 Indicateur 1/6 - Apprenant (`learner`) - LE PLUS SIMPLE
 
-**Étape 1 « Définition »** (déjà pré-remplie par la famille) : vérifier
+**Étape 1 « Définition »** (déjà pré-remplie par le cercle) : vérifier
 nom, description, `requiredEvents = [exercise.answered]`.
 
 **Étape 2 « Contexte »** : `contextType = learner` (pré-rempli). Une
@@ -392,7 +392,7 @@ sélectionné dans le contexte sont conservées.
 **Tester** : choisir un **Cours** puis un **Groupe** (`previewCtx.groupId`).
 "Tester" / "Déboguer pas à pas".
 
-Cliquer **"Créer"** → fin de la famille (4/4), la modale se ferme.
+Cliquer **"Créer"** → fin de le cercle (4/4), la modale se ferme.
 
 #### À tester (rôle Enseignant)
 
@@ -440,7 +440,7 @@ Ne pas sauvegarder, c'est une exploration.
 
 ## Étape B - Indicateur 5/6 - Enseignant (`teacher`) - autonome
 
-Cet indicateur n'appartient à aucune famille. `/dashboard/indicators` →
+Cet indicateur n'appartient à aucun cercle. `/dashboard/indicators` →
 bouton **"Nouvel indicateur"**.
 
 **Étape 1** :
@@ -585,19 +585,19 @@ exercez-les sur n'importe lequel d'entre eux dans
   - "Filtrer par contexte" : Tous les contextes / Cours / Activité /
     Apprenant / Groupe / Enseignant / Admin.
   - "Trier par" : Nom / Plus utilisés / Moins utilisés (`usageCount`).
-  - "Familles / indicateurs uniques" : Familles + indicateurs uniques /
-    Familles uniquement / Indicateurs uniques.
+  - "Cercles / indicateurs uniques" : Cercles + indicateurs uniques /
+    Cercles uniquement / Indicateurs uniques.
 - **Voir le détail** (icône œil) → modale avec : badge actif/inactif, badge
-  "Famille : …" si applicable, description, contextes, déclencheurs (libellés
+  "Cercle : …" si applicable, description, contextes, déclencheurs (libellés
   français pour les non-admins, codes bruts pour l'admin), mode de mise à
   jour ("Temps réel" / "Cron quotidien"), nombre d'utilisations, et la liste
   des visualisations avec leur type et icône.
-- **Familles repliables** : ligne violette avec chevron + badge "N
+- **Cercles repliables** : ligne violette avec chevron + badge "N
   indicateurs" - cliquer pour déplier/replier (`toggleFamily`,
-  `buildIndicatorDisplayRows`). Avec le filtre "Familles uniquement", seule
-  la famille "Tentatives avant réussite" (4 membres) doit apparaître.
-- **Renommer une famille** (icône crayon sur la ligne de famille, onglet
-  Administration) → modale de saisie → met à jour le `familyName` de tous
+  `buildIndicatorDisplayRows`). Avec le filtre "Cercles uniquement", seule
+  le cercle "Tentatives avant réussite" (4 membres) doit apparaître.
+- **Renommer un cercle** (icône crayon sur la ligne de cercle, onglet
+  Administration) → modale de saisie → met à jour le `circleName` de tous
   les membres en parallèle.
 - **Sélection de vue active** + **masquage de vues** : voir étapes A.2.
 

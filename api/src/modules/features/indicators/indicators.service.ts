@@ -2,14 +2,22 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { IndicatorDefinition } from './entities/indicator-definition.entity';
 import { IndicatorValue, buildValueMetadata } from './entities/indicator-value.entity';
 import { IndicatorExecutionLog } from './entities/indicator-execution-log.entity';
 import { IndicatorSnapshot } from './entities/indicator-snapshot.entity';
+import { IndicatorFeedback } from './entities/indicator-feedback.entity';
+import { IndicatorNotification } from './entities/indicator-notification.entity';
 import { UserIndicatorPreference } from '../user-preferences/entities/user-indicator-preference.entity';
-import { FormulaInterpreterService } from './interpreter/formula-interpreter.service';
+import { FormulaInterpreterService, CandidateRowsMap, GroupCandidateRowsMap } from './interpreter/formula-interpreter.service';
 import { PlatonService } from '../../core/platon/platon.service';
 import { resolveFormula } from './formula-resolution.util';
+
+export interface DeltaEvent {
+  sessionId?: string;
+  payload: Record<string, any>;
+}
 
 @Injectable()
 export class IndicatorsService {
@@ -26,9 +34,26 @@ export class IndicatorsService {
     private preferenceModel: Repository<UserIndicatorPreference>,
     @InjectRepository(IndicatorSnapshot, 'indicators')
     private snapshotModel: Repository<IndicatorSnapshot>,
+    @InjectRepository(IndicatorFeedback, 'indicators')
+    private feedbackModel: Repository<IndicatorFeedback>,
+    @InjectRepository(IndicatorNotification, 'indicators')
+    private notificationModel: Repository<IndicatorNotification>,
     private readonly formulaInterpreter: FormulaInterpreterService,
     private readonly platonService: PlatonService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
+
+  private emitUpdated(indicatorId: string, indicatorName: string, contextType: string, contextId: string, value: number): void {
+    this.eventEmitter.emit('indicator.updated', {
+      indicatorId,
+      indicatorName,
+      contextType,
+      contextId,
+      value,
+      eventType: 'refresh',
+      timestamp: new Date(),
+    });
+  }
 
   async findAllActive(): Promise<IndicatorDefinition[]> {
     return this.indicatorModel.find({ where: { isActive: true } });
@@ -36,6 +61,16 @@ export class IndicatorsService {
 
   async findAllForAdmin(): Promise<IndicatorDefinition[]> {
     return this.indicatorModel.find({ order: { createdAt: 'DESC' } });
+  }
+
+  async searchSimilar(q: string, excludeId?: string): Promise<IndicatorDefinition[]> {
+    const term = `%${q.trim()}%`;
+    const qb = this.indicatorModel
+      .createQueryBuilder('ind')
+      .where('(ind.name ILIKE :term OR ind.description ILIKE :term)', { term })
+      .orderBy('ind.name', 'ASC');
+    if (excludeId) qb.andWhere('ind.id != :excludeId', { excludeId });
+    return qb.getMany();
   }
 
   async findById(id: string): Promise<IndicatorDefinition> {
@@ -117,11 +152,11 @@ export class IndicatorsService {
       name: definition.name,
       description: definition.description,
       contextType: definition.contextType ?? null,
-      familyName: definition.familyName ?? null,
+      circleName: definition.circleName ?? null,
       requiredEvents: definition.requiredEvents || [],
       visualizations: definition.visualizations ?? [],
       formula: definition.formula ?? null,
-      isActive: definition.isActive ?? true,
+      isActive: definition.isActive ?? false,
     });
     const saved = await this.indicatorModel.save(indicator);
 
@@ -287,7 +322,31 @@ export class IndicatorsService {
     if (contextType === 'course')   { formulaContext.courseId = contextId; formulaContext.activityId = resolvedActivityId; }
     if (contextType === 'activity') { formulaContext.activityId = contextId; }
 
-    let result = await this.formulaInterpreter.interpret(formula as any, formulaContext);
+    // Pour les formules éligibles au calcul incrémental, stocker l'état intermédiaire en metadata
+    // (rowValues ou groupRowValues) permet aux refresh d'événements ultérieurs d'éviter un SQL complet.
+    const shape = this.formulaInterpreter.getIncrementalShape(formula as any);
+    let result: any;
+    let rowValues: Record<string, number> | undefined;
+    let groupRowValues: Record<string, Record<string, number>> | undefined;
+    let candidateRows: CandidateRowsMap | undefined;
+    let groupCandidateRows: GroupCandidateRowsMap | undefined;
+
+    if (shape?.findFirst) {
+      const computed = await this.formulaInterpreter.computeWithCandidateRows(formula as any, formulaContext, shape);
+      result = computed.result;
+      candidateRows = computed.candidateRows;
+      groupCandidateRows = computed.groupCandidateRows;
+    } else if (shape?.groupByField) {
+      const computed = await this.formulaInterpreter.computeWithGroupRowMap(formula as any, formulaContext, shape);
+      result = computed.result;
+      groupRowValues = computed.groupRowValues;
+    } else if (shape) {
+      const computed = await this.formulaInterpreter.computeWithRowMap(formula as any, formulaContext, shape);
+      result = computed.result;
+      rowValues = computed.rowValues;
+    } else {
+      result = await this.formulaInterpreter.interpret(formula as any, formulaContext);
+    }
 
     if (Array.isArray(result) && result.length > 0 && result[0]?.userIds !== undefined) {
       const allIds: string[] = [...new Set<string>(result.flatMap((b: any) => b.userIds ?? []))];
@@ -309,7 +368,13 @@ export class IndicatorsService {
         contextType,
         contextId: cacheContextId,
         value: scalarValue,
-        metadata: buildValueMetadata(existing?.metadata, scalarValue, { structuredValue }),
+        metadata: buildValueMetadata(existing?.metadata, scalarValue, {
+          structuredValue,
+          ...(rowValues ? { incremental: { rowValues } } : {}),
+          ...(groupRowValues ? { incremental: { groupRowValues } } : {}),
+          ...(candidateRows ? { incremental: { candidateRows } } : {}),
+          ...(groupCandidateRows ? { incremental: { groupCandidateRows } } : {}),
+        }),
       },
       { conflictPaths: ['indicatorId', 'contextType', 'contextId'] },
     );
@@ -345,6 +410,10 @@ export class IndicatorsService {
 
   async getPlatonSchema() {
     return this.platonService.getAvailableTables();
+  }
+
+  async getFullSchema() {
+    return this.platonService.getSchemaWithRelations();
   }
 
   // ── Logs ─────────────────────────────────────────────────────────────────
@@ -394,11 +463,158 @@ export class IndicatorsService {
   }
 
   /**
-   * Rafraîchit (force-recalcul) tous les snapshots d'un indicateur liés à une activité donnée.
-   * Appelé automatiquement par l'ingestion dès qu'un événement affecte cet indicateur.
-   * Chaque visualisation de l'indicateur est recalculée indépendamment.
+   * Mise à jour incrémentale (delta) d'une vue lors d'un événement d'ingestion.
+   * Si la formule est éligible et que rowValues existe déjà en metadata, met à jour uniquement
+   * la session concernée en mémoire et ré-agrège - aucune requête SQL sur PLaTon.
+   * Sinon, repasse en calcul complet via computeView(forceRefresh=true).
    */
-  async refreshSnapshots(indicatorId: string, activityId: string): Promise<void> {
+  async computeViewIncremental(
+    indicatorId: string,
+    contextType: string,
+    contextId: string,
+    activityId: string | undefined,
+    vizId: string | undefined,
+    deltaEvent: DeltaEvent,
+  ): Promise<void> {
+    const indicator = await this.findById(indicatorId);
+    const formula = resolveFormula(indicator);
+    if (!formula?.pipeline?.length) return;
+
+    const cacheContextId = (contextType === 'course' || contextType === 'group') && activityId
+      ? `${contextId}:${activityId}`
+      : contextId;
+
+    const existing = await this.indicatorValueModel.findOne({
+      where: { indicatorId, contextType, contextId: cacheContextId },
+    });
+
+    const shape = this.formulaInterpreter.getIncrementalShape(formula as any);
+
+    if (shape?.findFirst) {
+      // ── Chemin findFirst semi-incrémental ──────────────────────────────────
+      const buildEntry = (payload: Record<string, any> | undefined) => {
+        const { sortField, whereField, whereValue } = shape.findFirst!;
+        const extractedValue = parseFloat(payload?.[shape.extractField]);
+        if (isNaN(extractedValue)) return null;
+        return {
+          sortValue: sortField ? payload?.[sortField] : null,
+          extractedValue,
+          passes: whereField != null ? String(payload?.[whereField]) === String(whereValue) : true,
+        };
+      };
+
+      if (shape.groupByField) {
+        const existingGroupCandidateRows = (existing?.metadata as any)?.incremental?.groupCandidateRows as GroupCandidateRowsMap | undefined;
+        if (existingGroupCandidateRows !== undefined && deltaEvent.sessionId) {
+          const groupKey = String(deltaEvent.payload?.[shape.groupByField] ?? '__null__');
+          const entry = buildEntry(deltaEvent.payload);
+          if (entry) {
+            const newGroupCandidateRows = {
+              ...existingGroupCandidateRows,
+              [groupKey]: { ...(existingGroupCandidateRows[groupKey] ?? {}), [deltaEvent.sessionId]: entry },
+            };
+            const newValue = await this.formulaInterpreter.computeResultFromGroupCandidates(newGroupCandidateRows, shape);
+            await this.indicatorValueModel.upsert(
+              { indicatorId, contextType, contextId: cacheContextId, value: newValue,
+                metadata: buildValueMetadata(existing?.metadata, newValue, { incremental: { groupCandidateRows: newGroupCandidateRows } }) },
+              { conflictPaths: ['indicatorId', 'contextType', 'contextId'] },
+            );
+            return;
+          }
+        }
+      } else {
+        const existingCandidateRows = (existing?.metadata as any)?.incremental?.candidateRows as CandidateRowsMap | undefined;
+        if (existingCandidateRows !== undefined && deltaEvent.sessionId) {
+          const entry = buildEntry(deltaEvent.payload);
+          if (entry) {
+            const newCandidateRows = { ...existingCandidateRows, [deltaEvent.sessionId]: entry };
+            const newValue = await this.formulaInterpreter.computeResultFromCandidates(newCandidateRows, shape);
+            await this.indicatorValueModel.upsert(
+              { indicatorId, contextType, contextId: cacheContextId, value: newValue,
+                metadata: buildValueMetadata(existing?.metadata, newValue, { incremental: { candidateRows: newCandidateRows } }) },
+              { conflictPaths: ['indicatorId', 'contextType', 'contextId'] },
+            );
+            return;
+          }
+        }
+      }
+      // Fallback → calcul complet
+      await this.computeView(indicatorId, contextType, contextId, activityId, vizId, true);
+      return;
+    }
+
+    if (shape?.groupByField) {
+      // ── Chemin groupBy incrémental ─────────────────────────────────────────
+      const existingGroupRowValues = (existing?.metadata as any)?.incremental?.groupRowValues as
+        Record<string, Record<string, number>> | undefined;
+
+      if (existingGroupRowValues !== undefined && deltaEvent.sessionId) {
+        const groupKey = String(deltaEvent.payload?.[shape.groupByField] ?? '__null__');
+        const rawVal = deltaEvent.payload?.[shape.extractField];
+        const v = typeof rawVal === 'number' ? rawVal : parseFloat(rawVal);
+
+        if (!isNaN(v)) {
+          const newGroupRowValues = {
+            ...existingGroupRowValues,
+            [groupKey]: { ...(existingGroupRowValues[groupKey] ?? {}), [deltaEvent.sessionId]: v },
+          };
+          const allValues = Object.values(newGroupRowValues).flatMap(g => Object.values(g));
+          const newValue = await this.formulaInterpreter.applyPostSteps(allValues, shape.postSteps);
+
+          await this.indicatorValueModel.upsert(
+            {
+              indicatorId,
+              contextType,
+              contextId: cacheContextId,
+              value: newValue,
+              metadata: buildValueMetadata(existing?.metadata, newValue, { incremental: { groupRowValues: newGroupRowValues } }),
+            },
+            { conflictPaths: ['indicatorId', 'contextType', 'contextId'] },
+          );
+          return;
+        }
+      }
+
+      // Fallback groupBy → calcul complet
+      await this.computeView(indicatorId, contextType, contextId, activityId, vizId, true);
+      return;
+    }
+
+    // ── Chemin rowValues plat (existant) ────────────────────────────────────
+    const existingRowValues = (existing?.metadata as any)?.incremental?.rowValues as Record<string, number> | undefined;
+
+    if (shape && existingRowValues && deltaEvent.sessionId) {
+      const rawVal = deltaEvent.payload?.[shape.extractField];
+      const newFieldValue = typeof rawVal === 'number' ? rawVal : parseFloat(rawVal);
+
+      if (!isNaN(newFieldValue)) {
+        const rowValues = { ...existingRowValues, [deltaEvent.sessionId]: newFieldValue };
+        const newValue = await this.formulaInterpreter.applyPostSteps(Object.values(rowValues), shape.postSteps);
+
+        await this.indicatorValueModel.upsert(
+          {
+            indicatorId,
+            contextType,
+            contextId: cacheContextId,
+            value: newValue,
+            metadata: buildValueMetadata(existing?.metadata, newValue, { incremental: { rowValues } }),
+          },
+          { conflictPaths: ['indicatorId', 'contextType', 'contextId'] },
+        );
+        return;
+      }
+    }
+
+    // Fallback : rowValues absent (première consultation) ou formule non éligible → calcul complet
+    await this.computeView(indicatorId, contextType, contextId, activityId, vizId, true);
+  }
+
+  /**
+   * Rafraîchit tous les snapshots d'un indicateur liés à une activité donnée.
+   * Si deltaEvent est fourni (appel depuis l'ingestion) → calcul incrémental.
+   * Sans deltaEvent (appel manuel admin) → calcul complet depuis zéro.
+   */
+  async refreshSnapshots(indicatorId: string, activityId: string, deltaEvent?: DeltaEvent): Promise<void> {
     const snapshots = await this.snapshotModel.find({ where: { indicatorId, activityId } });
     if (!snapshots.length) return;
 
@@ -410,14 +626,18 @@ export class IndicatorsService {
     for (const snapshot of snapshots) {
       for (const viz of vizList) {
         try {
-          await this.computeView(
-            snapshot.indicatorId,
-            snapshot.contextType,
-            snapshot.contextId,
-            snapshot.activityId,
-            viz.id,
-            true,
-          );
+          const result = deltaEvent
+            ? await this.computeViewIncremental(
+                snapshot.indicatorId, snapshot.contextType, snapshot.contextId,
+                snapshot.activityId, viz.id, deltaEvent,
+              )
+            : await this.computeView(
+                snapshot.indicatorId, snapshot.contextType, snapshot.contextId,
+                snapshot.activityId, viz.id, true,
+              );
+          if (result) {
+            this.emitUpdated(snapshot.indicatorId, indicator.name, snapshot.contextType, snapshot.contextId, result.value);
+          }
         } catch (err) {
           this.logger.warn(
             `Snapshot refresh échoué - indicatorId=${snapshot.indicatorId} contextId=${snapshot.contextId} viz=${viz.id}: ${(err as Error).message}`,
@@ -436,7 +656,7 @@ export class IndicatorsService {
    * pour course/group, `${activityId}` pour activity, suffixé de `:${viz.id}` selon la vue) est
    * celui produit par computeView - voir sa construction de `cacheContextId`.
    */
-  async refreshActivityViews(indicatorId: string, activityId: string): Promise<void> {
+  async refreshActivityViews(indicatorId: string, activityId: string, deltaEvent?: DeltaEvent): Promise<void> {
     const indicator = await this.indicatorModel.findOne({ where: { id: indicatorId } });
     if (!indicator) return;
 
@@ -471,7 +691,12 @@ export class IndicatorsService {
     for (const { contextType, contextId } of targets.values()) {
       for (const vizId of (vizList.length ? vizList.map(v => v.id) : [undefined])) {
         try {
-          await this.computeView(indicatorId, contextType, contextId, activityId, vizId, true);
+          const result = deltaEvent
+            ? await this.computeViewIncremental(indicatorId, contextType, contextId, activityId, vizId, deltaEvent)
+            : await this.computeView(indicatorId, contextType, contextId, activityId, vizId, true);
+          if (result) {
+            this.emitUpdated(indicatorId, indicator.name, contextType, contextId, result.value);
+          }
         } catch (err) {
           this.logger.warn(
             `Refresh vue échoué - indicatorId=${indicatorId} contextType=${contextType} contextId=${contextId} viz=${vizId}: ${(err as Error).message}`,
@@ -481,15 +706,93 @@ export class IndicatorsService {
     }
   }
 
+  /**
+   * Rafraîchit tous les contextes (teacher, admin, ou tout contextType futur) dont
+   * les valeurs sont déjà en cache dans indicator_values. Utilisé quand on ne connaît
+   * pas à l'avance les contextIds pertinents (ex: admin = 1 contexte "global" inconnu).
+   */
+  async refreshCachedContextValues(indicatorId: string, contextType: string): Promise<void> {
+    const indicator = await this.indicatorModel.findOne({ where: { id: indicatorId } });
+    if (!indicator) return;
+
+    const rows = await this.indicatorValueModel.find({ where: { indicatorId, contextType } });
+    if (!rows.length) return;
+
+    const vizList = indicator.visualizations ?? [];
+    const uniqueContextIds = [...new Set(rows.map(r => r.contextId.split(':')[0]))];
+
+    for (const contextId of uniqueContextIds) {
+      for (const vizId of (vizList.length ? vizList.map(v => v.id) : [undefined])) {
+        try {
+          const result = await this.computeView(indicatorId, contextType, contextId, undefined, vizId, true);
+          if (result) {
+            this.emitUpdated(indicatorId, indicator.name, contextType, contextId, result.value);
+          }
+        } catch (err) {
+          this.logger.warn(
+            `refreshCachedContextValues échoué - indicatorId=${indicatorId} contextType=${contextType} contextId=${contextId}: ${(err as Error).message}`,
+          );
+        }
+      }
+    }
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  private calculateTrend(history: any[]): 'up' | 'down' | 'stable' {
-    if (!history || history.length < 2) return 'stable';
+  private calculateTrend(history: any[]): 'up' | 'down' | 'stable' | undefined {
+    if (!history || history.length < 2) return undefined;
     const last = history[history.length - 1].value;
     const previous = history.slice(-6, -1).map(h => h.value);
     const avg = previous.reduce((a, b) => a + b, 0) / previous.length;
     if (last > avg * 1.05) return 'up';
     if (last < avg * 0.95) return 'down';
     return 'stable';
+  }
+
+  // ── Feedbacks ────────────────────────────────────────────────────────────────
+
+  async submitFeedback(indicatorId: string, userId: string, rating: number, comment?: string): Promise<IndicatorFeedback> {
+    if (!indicatorId || !userId) throw new BadRequestException('indicatorId et userId sont requis.');
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5)
+      throw new BadRequestException('rating doit être un entier entre 1 et 5.');
+
+    const feedback = this.feedbackModel.create({ indicatorId, userId, rating, comment: comment ?? null });
+    return this.feedbackModel.save(feedback);
+  }
+
+  async getFeedbacks(indicatorId: string): Promise<{
+    feedbacks: (IndicatorFeedback & { userName: string })[];
+    count: number;
+    averageRating: number;
+  }> {
+    const feedbacks = await this.feedbackModel.find({
+      where: { indicatorId },
+      order: { createdAt: 'DESC' },
+    });
+    const count = feedbacks.length;
+    const averageRating = count > 0
+      ? Math.round((feedbacks.reduce((s, f) => s + f.rating, 0) / count) * 10) / 10
+      : 0;
+    const userIds = [...new Set(feedbacks.map(f => f.userId))];
+    const nameMap = await this.platonService.getUserNameMap(userIds);
+    const enriched = feedbacks.map(f => ({ ...f, userName: nameMap[f.userId] ?? f.userId }));
+    return { feedbacks: enriched, count, averageRating };
+  }
+
+  async sendNotification(indicatorId: string, title: string, message: string): Promise<IndicatorNotification> {
+    if (!title?.trim() || !message?.trim())
+      throw new BadRequestException('Le titre et le message sont requis.');
+    const notif = this.notificationModel.create({ indicatorId, title: title.trim(), message: message.trim() });
+    return this.notificationModel.save(notif);
+  }
+
+  async getNotifications(): Promise<IndicatorNotification[]> {
+    return this.notificationModel.find({ order: { createdAt: 'DESC' } });
+  }
+
+  async deleteFeedback(indicatorId: string, feedbackId: string): Promise<void> {
+    const feedback = await this.feedbackModel.findOne({ where: { id: feedbackId, indicatorId } });
+    if (!feedback) throw new NotFoundException('Feedback introuvable.');
+    await this.feedbackModel.remove(feedback);
   }
 }

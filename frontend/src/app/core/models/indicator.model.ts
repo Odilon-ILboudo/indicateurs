@@ -33,8 +33,8 @@ export interface IndicatorDefinition {
   name: string;
   description: string;
   contextType: IndicatorScope;
-  /** Regroupement nominal de plusieurs indicateurs créés ensemble (ex: "Tentatives avant réussite"). */
-  familyName?: string | null;
+  /** Regroupement nominal de plusieurs indicateurs créés ensemble sous un même cercle. */
+  circleName?: string | null;
   formula?: IndicatorFormula | null;
   requiredEvents: string[];
   /** Tableau de visualisations (min. 1). La première est la vue "carte" par défaut. */
@@ -107,3 +107,28 @@ export interface UserDashboardSettings {
     columns: number;
   };
 }
+
+export interface IndicatorFeedback {
+  id: string;
+  indicatorId: string;
+  userId: string;
+  userName: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+}
+
+export interface IndicatorNotification {
+  id: string;
+  indicatorId: string;
+  title: string;
+  message: string;
+  createdAt: string;
+}
+
+export interface IndicatorFeedbacksResult {
+  feedbacks: IndicatorFeedback[];
+  count: number;
+  averageRating: number;
+}
+

@@ -22,9 +22,45 @@
         <nz-tag [nzColor]="isTeacher ? 'blue' : 'green'">
           {{ getContextLabel(activeContextType) }}
         </nz-tag>
+        <button nz-button nzType="default" nzSize="small"
+          class="feedback-btn"
+          nz-tooltip="Donner un retour d'expérience"
+          (click)="openFeedbackModal()">
+          <mat-icon style="font-size:16px;width:16px;height:16px;line-height:1;vertical-align:middle">rate_review</mat-icon>
+          <span style="margin-left:4px">Donner un avis</span>
+        </button>
       </div>
       <p class="description">{{ indicator.description }}</p>
     </div>
+
+    <!-- Modal retour d'expérience -->
+    <nz-modal
+      [(nzVisible)]="feedbackModalVisible"
+      nzTitle="Retour d'expérience"
+      [nzFooter]="feedbackFooter"
+      (nzOnCancel)="feedbackModalVisible = false">
+      <ng-container *nzModalContent>
+        <div class="feedback-modal-body">
+          <p class="feedback-modal-label">Note globale <span style="color:#ff4d4f">*</span></p>
+          <nz-rate [(ngModel)]="feedbackRating"></nz-rate>
+          <p class="feedback-modal-label" style="margin-top:16px">Commentaire <span style="color:#8c8c8c;font-weight:400">(optionnel)</span></p>
+          <textarea nz-input
+            [(ngModel)]="feedbackComment"
+            [nzAutosize]="{ minRows: 3, maxRows: 6 }"
+            placeholder="Partagez votre expérience avec cet indicateur...">
+          </textarea>
+        </div>
+      </ng-container>
+      <ng-template #feedbackFooter>
+        <button nz-button (click)="feedbackModalVisible = false">Annuler</button>
+        <button nz-button nzType="primary"
+          [disabled]="feedbackRating === 0"
+          [nzLoading]="feedbackSubmitting"
+          (click)="submitFeedback()">
+          Envoyer
+        </button>
+      </ng-template>
+    </nz-modal>
 
     <!-- Bannière groupe-snapshot -->
     <div class="context-banner" *ngIf="hasGroupSnapshotContext">

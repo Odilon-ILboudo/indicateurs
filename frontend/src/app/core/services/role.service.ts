@@ -1,5 +1,7 @@
 // web/src/app/core/services/role.service.ts
 import { Injectable, signal, computed } from '@angular/core';
+import { toObservable } from '@angular/core/rxjs-interop';
+import { Observable } from 'rxjs';
 import { IndicatorScope } from '../models/indicator.model';
 
 export type UserRole = 'student' | 'teacher' | 'admin' | 'demo';
@@ -18,6 +20,9 @@ const INDICATOR_VISIBILITY: Record<IndicatorScope, UserRole[]> = {
 @Injectable({ providedIn: 'root' })
 export class RoleService {
   private currentRole = signal<UserRole>('student');
+
+  /** Observable du rôle courant - émet à chaque changement (utile pour combineLatest). */
+  readonly role$: Observable<UserRole> = toObservable(this.currentRole);
 
   // Computed values for UI
   isAdmin = computed(() => this.currentRole() === 'admin');

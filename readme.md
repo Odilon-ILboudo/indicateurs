@@ -21,7 +21,7 @@ fonctionnement global du projet sans avoir à parcourir tout le code source.
 5. [Modèle de données - entités `indicators`](#5-modèle-de-données--entités-indicators)
 6. [Moteur DSL - calcul des indicateurs](#6-moteur-dsl--calcul-des-indicateurs)
 7. [Modèle - contextType + visualizations](#7-modèle-option-b--contexttype--visualizations)
-8. [Familles d'indicateurs et visibilité par rôle](#8-familles-dindicateurs-et-visibilité-par-rôle)
+8. [Cercles d'indicateurs et visibilité par rôle](#8-familles-dindicateurs-et-visibilité-par-rôle)
 9. [Routes API](#9-routes-api)
 10. [Frontend](#10-frontend)
 11. [Flux métier de bout en bout](#11-flux-métier-de-bout-en-bout)
@@ -159,7 +159,7 @@ features/
 shared/
   ui/indicator-card/ + statistic-card/ + layout-block/
   pipes/duration.pipe.ts
-  utils/indicator-family-grouping.ts  - regroupement par famille (section 8)
+  utils/indicator-family-grouping.ts  - regroupement par cercle (section 8)
   styles/                 - SCSS, thèmes Material clair/sombre, ng-zorro
 ```
 
@@ -231,9 +231,10 @@ Tables principales :
 - `Activities` n'a **pas** de colonne `name` : le titre est dans
   `source->'variables'->>'title'`, avec fallback sur `Resources.name` via
   `LEFT JOIN "Resources" r ON r.id = (a.source->>'resource')::uuid`.
-- Aucune contrainte de clé étrangère n'est déclarée dans `information_schema` -
-  les relations entre tables (ex. `SessionData.resource_id` → `Resources.id`) ne
-  sont **pas** dérivables automatiquement du schéma.
+- 99 FK sont déclarées dans PLaTon (visibles via `pg_constraint`) mais masquées
+  dans `information_schema` car les tables appartiennent à un user PostgreSQL
+  différent de celui utilisé par ce microservice. DBeaver les voit car il requête
+  `pg_constraint` directement. Le builder n'en tire pas parti automatiquement.
 
 ### 4.2 Base `indicators` (lecture/écriture)
 
@@ -254,7 +255,7 @@ La définition d'un indicateur.
 | `name` | string (unique) | nom affiché |
 | `description` | text | description |
 | `contextType` | `'learner'\|'teacher'\|'admin'\|'course'\|'activity'\|'group'` | contexte unique de cet indicateur (voir section 7) |
-| `familyName` | string \| null | regroupement nominal de plusieurs indicateurs créés ensemble (section 8) |
+| `circleName` | string \| null | regroupement nominal de plusieurs indicateurs créés ensemble (section 8) |
 | `requiredEvents` | jsonb (string[]) | événements PLaTon qui déclenchent un recalcul |
 | `visualizations` | jsonb (`IndicatorVisualization[]`) | une ou plusieurs visualisations - représentations visuelles différentes d'une même formule (section 7) |
 | `formula` | jsonb \| null | **formule unique partagée par toutes les visualisations** (1 indicateur = 1 formule) |
@@ -529,22 +530,22 @@ réussite, Note moyenne, Taux de réussite, Notes moyennes par ressource - avec
 
 ---
 
-## 8. Familles d'indicateurs et visibilité par rôle
+## 8. Cercles d'indicateurs et visibilité par rôle
 
-### Familles (`familyName`)
+### Cercles (`circleName`)
 
 Le modèle Option B+ impose 1 indicateur = 1 `contextType`. Pour couvrir un même
 "thème" (ex. *Tentatives avant réussite*) sur plusieurs contextes
 (`learner`/`course`/`group`/`activity`), on crée **plusieurs indicateurs
-partageant le même `familyName`**, créés/édités ensemble depuis le wizard.
+partageant le même `circleName`**, créés/édités ensemble depuis le wizard.
 
 `buildIndicatorDisplayRows(indicators, expandedFamilies)`
 (`shared/utils/indicator-family-grouping.ts`) regroupe la liste affichée :
-les membres d'une famille apparaissent sous une **ligne d'en-tête repliable**
+les membres d'un cercle apparaissent sous une **ligne d'en-tête repliable**
 (chevron, badge "N indicateurs"), insérée à la première occurrence du nom de
-famille ; les indicateurs sans famille restent à leur place. Réutilisé dans
+cercle ; les indicateurs sans cercle restent à leur place. Réutilisé dans
 `IndicatorSelectorComponent` et `AdminIndicatorManagerComponent`, avec un filtre
-"Familles / indicateurs uniques / tous".
+"Cercles / indicateurs uniques / tous".
 
 ### Visibilité par rôle (`RoleService.canSeeIndicatorContext`)
 

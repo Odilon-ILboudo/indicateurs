@@ -19,6 +19,10 @@ import type { EChartsOption } from 'echarts';
 import { IndicatorService } from '../../core/services/indicator.service';
 import { RoleService } from '../../core/services/role.service';
 import { IndicatorDefinition, IndicatorVisualization, ViewResult } from '../../core/models/indicator.model';
+import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
+import { NzRateModule } from 'ng-zorro-antd/rate';
+import { NzButtonModule } from 'ng-zorro-antd/button';
+import { NzInputModule } from 'ng-zorro-antd/input';
 import { environment } from '../../../environments/environment';
 
 @Component({
@@ -29,6 +33,7 @@ import { environment } from '../../../environments/environment';
     MatIconModule, MatCardModule, MatTooltipModule,
     NzBreadCrumbModule, NzTabsModule,
     NzSpinModule, NzTagModule, NzEmptyModule, NzDatePickerModule, NzRadioModule,
+    NzModalModule, NzRateModule, NzButtonModule, NzInputModule,
     NgxEchartsModule,
   ],
   providers: [
@@ -45,7 +50,14 @@ export class IndicatorDetailComponent implements OnInit {
   private readonly indicatorService = inject(IndicatorService);
   private readonly roleService = inject(RoleService);
   private readonly messageService = inject(NzMessageService);
+  private readonly modalService = inject(NzModalService);
   private readonly cdr = inject(ChangeDetectorRef);
+
+  // ── Feedback ──────────────────────────────────────────────────────────────
+  feedbackModalVisible = false;
+  feedbackRating = 0;
+  feedbackComment = '';
+  feedbackSubmitting = false;
 
   indicator: IndicatorDefinition | null = null;
 
@@ -337,5 +349,31 @@ export class IndicatorDetailComponent implements OnInit {
       course: 'Cours', activity: 'Activité', group: 'Groupe de TP',
     };
     return labels[contextType] ?? contextType;
+  }
+
+  openFeedbackModal(): void {
+    this.feedbackRating = 0;
+    this.feedbackComment = '';
+    this.feedbackModalVisible = true;
+  }
+
+  submitFeedback(): void {
+    if (!this.indicator || this.feedbackRating === 0) return;
+    this.feedbackSubmitting = true;
+    this.indicatorService
+      .submitFeedback(this.indicator.id, environment.defaultUserId, this.feedbackRating, this.feedbackComment.trim() || undefined)
+      .subscribe({
+        next: () => {
+          this.feedbackSubmitting = false;
+          this.feedbackModalVisible = false;
+          this.messageService.success('Merci pour votre retour !');
+          this.cdr.markForCheck();
+        },
+        error: () => {
+          this.feedbackSubmitting = false;
+          this.messageService.error('Erreur lors de l\'envoi du retour.');
+          this.cdr.markForCheck();
+        },
+      });
   }
 }

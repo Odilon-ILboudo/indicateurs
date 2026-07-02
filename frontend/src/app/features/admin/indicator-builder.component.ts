@@ -19,8 +19,11 @@ import { NzIconModule } from 'ng-zorro-antd/icon';
 import { NzSpinModule } from 'ng-zorro-antd/spin';
 import { NzSwitchModule } from 'ng-zorro-antd/switch';
 import { NzTabsModule } from 'ng-zorro-antd/tabs';
-import { NzModalRef, NzModalService, NZ_MODAL_DATA } from 'ng-zorro-antd/modal';
+import { NzModalModule, NzModalRef, NzModalService, NZ_MODAL_DATA } from 'ng-zorro-antd/modal';
+import { NzBadgeModule } from 'ng-zorro-antd/badge';
 import { NzMessageService } from 'ng-zorro-antd/message';
+import { Subject } from 'rxjs';
+import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import * as yaml from 'js-yaml';
 import { IndicatorService } from '../../core/services/indicator.service';
 import { IndicatorDefinition, IndicatorScope, ViewVisualizationType, TeacherCourse, CourseActivity } from '../../core/models/indicator.model';
@@ -62,9 +65,9 @@ interface FlatViz {
 
 interface PlatonTable { name: string; columns: { name: string; type: string }[]; }
 
-/** Données partagées par les membres d'une famille, transmises de builder en builder. */
-export interface IndicatorFamilyPreset {
-  familyName: string;
+/** Données partagées par les membres d'un cercle, transmis de builder en builder. */
+export interface IndicatorCirclePreset {
+  circleName: string;
   description: string;
   requiredEvents: string[];
   contextType: IndicatorScope;
@@ -195,6 +198,26 @@ return totals;` },
   },
 ];
 
+// ── Erreur de parsing structurée ─────────────────────────────────────────────
+
+class PipelineError extends Error {
+  constructor(
+    message: string,
+    readonly available?: string[],
+    readonly availableLabel?: string,
+    readonly wrongValue?: string,
+    readonly availableDisplay?: string[], // étiquettes d'affichage (si différentes de available)
+  ) { super(message); }
+}
+
+interface ImportErrorDisplay {
+  main: string;
+  available?: string[];           // valeurs à insérer au clic
+  availableDisplay?: string[];    // étiquettes affichées (si différentes de available)
+  availableLabel?: string;
+  wrongValue?: string;
+}
+
 // ── Composant ────────────────────────────────────────────────────────────────
 
 @Component({
@@ -207,19 +230,20 @@ return totals;` },
     NzSelectModule, NzButtonModule, NzTagModule, NzDividerModule,
     NzAlertModule, NzColorPickerModule,
     NzIconModule, NzTooltipModule, NzSpinModule, NzSwitchModule, NzTabsModule,
+    NzModalModule, NzBadgeModule,
   ],
   template: `
 <div class="builder">
 
   <nz-steps [nzCurrent]="step" nzSize="small" class="steps">
-    <nz-step nzTitle="Définition"  nzDescription="Nom et événements"></nz-step>
-    <nz-step nzTitle="Contexte"    nzDescription="Contexte et visualisations"></nz-step>
-    <nz-step nzTitle="Formules"    nzDescription="Pipeline par visualisation"></nz-step>
+    <nz-step nzTitle="Définition"  nzDescription="Nom et événements"           class="step-clickable" (click)="goToStep(0)"></nz-step>
+    <nz-step nzTitle="Contexte"    nzDescription="Contexte et visualisations"  class="step-clickable" (click)="goToStep(1)"></nz-step>
+    <nz-step nzTitle="Formules"    nzDescription="Pipeline par visualisation"  class="step-clickable" (click)="goToStep(2)"></nz-step>
   </nz-steps>
 
   <div class="indicator-header" *ngIf="def.name">
     {{ isEditMode ? 'Édition : ' : 'Nouvel indicateur : ' }}{{ def.name }}
-    <span *ngIf="familyProgress"> - {{ familyProgress }}</span>
+    <span *ngIf="circleProgress"> - {{ circleProgress }}</span>
   </div>
 
   <nz-divider></nz-divider>
@@ -229,9 +253,122 @@ return totals;` },
     <nz-form-item>
       <nz-form-label [nzRequired]="true">Nom de l'indicateur <mat-icon class="info-icon" nz-tooltip="Nom unique affiché dans le tableau de bord et les listes. Doit être court et descriptif. Ex : 'Tentatives avant réussite'." nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
       <nz-form-control>
-        <input #nameInput nz-input [(ngModel)]="def.name" placeholder="ex: Tentatives avant réussite" />
+        <input #nameInput nz-input [(ngModel)]="def.name" placeholder="ex: Tentatives avant réussite"
+          (ngModelChange)="onNameInput($event)" />
+        <!-- Bandeau indicateurs similaires -->
+        <div *ngIf="similarSearching" class="similar-searching">
+          <nz-spin nzSimple [nzSize]="'small'"></nz-spin>
+          <span>Vérification des doublons…</span>
+        </div>
+        <div *ngIf="!similarSearching && similarIndicators.length > 0" class="similar-banner">
+          <div class="similar-banner-header">
+            <mat-icon class="similar-banner-icon">warning_amber</mat-icon>
+            <span>{{ similarIndicators.length }} indicateur{{ similarIndicators.length > 1 ? 's similaires existants' : ' similaire existant' }} — vérifiez avant de créer.</span>
+          </div>
+          <div class="similar-list">
+            <div *ngFor="let ind of similarIndicators" class="similar-item">
+              <div class="similar-item-info">
+                <mat-icon [style.color]="ind.visualizations?.[0]?.color || '#8c8c8c'" style="font-size:16px;width:16px;height:16px;line-height:1">{{ ind.visualizations?.[0]?.icon || 'analytics' }}</mat-icon>
+                <span class="similar-item-name">{{ ind.name }}</span>
+                <nz-tag [nzColor]="ind.isActive ? 'green' : 'default'" style="margin:0">{{ ind.isActive ? 'Actif' : 'Inactif' }}</nz-tag>
+              </div>
+              <button nz-button nzType="link" nzSize="small" class="similar-voir-btn" (click)="openPreview(ind)">
+                <mat-icon>visibility</mat-icon>Voir
+              </button>
+            </div>
+          </div>
+        </div>
       </nz-form-control>
     </nz-form-item>
+
+    <!-- Modal prévisualisation indicateur existant -->
+    <nz-modal
+      [(nzVisible)]="previewModalVisible"
+      [nzTitle]="previewIndicator?.name || ''"
+      [nzWidth]="560"
+      [nzFooter]="null"
+      (nzOnCancel)="previewModalVisible = false">
+      <ng-container *nzModalContent>
+        <ng-container *ngIf="previewIndicator as ind">
+          <div class="prev-card">
+
+            <!-- Description -->
+            <div class="prev-row">
+              <span class="prev-label">Description</span>
+              <p class="prev-value">{{ ind.description || '—' }}</p>
+            </div>
+
+            <!-- Métadonnées : 3 colonnes -->
+            <div class="prev-row prev-meta">
+              <div class="prev-meta-cell">
+                <span class="prev-label">Contexte</span>
+                <p class="prev-value">{{ ind.contextType }}</p>
+              </div>
+              <div class="prev-meta-cell prev-meta-sep">
+                <span class="prev-label">Cercle</span>
+                <p class="prev-value">{{ ind.circleName || '—' }}</p>
+              </div>
+              <div class="prev-meta-cell prev-meta-sep">
+                <span class="prev-label">Statut</span>
+                <nz-tag [nzColor]="ind.isActive ? 'green' : 'default'" style="margin-top:2px">
+                  {{ ind.isActive ? 'Actif' : 'Inactif' }}
+                </nz-tag>
+              </div>
+            </div>
+
+            <!-- Aide à l'analyse -->
+            <div class="prev-row" *ngIf="ind.interpretationHint">
+              <span class="prev-label">Aide à l'analyse</span>
+              <p class="prev-value prev-hint">{{ ind.interpretationHint }}</p>
+            </div>
+
+            <!-- Visualisations -->
+            <div class="prev-row" *ngIf="ind.visualizations?.length">
+              <span class="prev-label">Visualisations</span>
+              <div class="prev-vizs">
+                <div *ngFor="let v of ind.visualizations" class="prev-viz-chip">
+                  <mat-icon [style.color]="v.color || '#8c8c8c'">{{ v.icon || 'bar_chart' }}</mat-icon>
+                  {{ v.label }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Événements déclencheurs -->
+            <div class="prev-row">
+              <span class="prev-label">Événements déclencheurs</span>
+              <div class="prev-tags">
+                <ng-container *ngIf="ind.requiredEvents?.length; else noEvt">
+                  <nz-tag *ngFor="let e of ind.requiredEvents" nzColor="blue">{{ e }}</nz-tag>
+                </ng-container>
+                <ng-template #noEvt>
+                  <span class="prev-empty">Aucun événement configuré</span>
+                </ng-template>
+              </div>
+            </div>
+
+            <!-- Seuils -->
+            <div class="prev-row prev-row--last" *ngIf="ind.thresholds?.good != null || ind.thresholds?.warning != null">
+              <span class="prev-label">Seuils de performance</span>
+              <div class="prev-thresholds">
+                <div *ngIf="ind.thresholds?.good != null" class="prev-threshold prev-threshold--good">
+                  <mat-icon>check_circle</mat-icon>
+                  <span>Bon <strong>≤ {{ ind.thresholds!.good }}</strong></span>
+                </div>
+                <div *ngIf="ind.thresholds?.warning != null" class="prev-threshold prev-threshold--warn">
+                  <mat-icon>warning</mat-icon>
+                  <span>Moyen <strong>≤ {{ ind.thresholds!.warning }}</strong></span>
+                </div>
+                <div class="prev-threshold prev-threshold--danger">
+                  <mat-icon>cancel</mat-icon>
+                  <span>Critique <strong>&gt; {{ ind.thresholds!.warning ?? ind.thresholds!.good }}</strong></span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </ng-container>
+      </ng-container>
+    </nz-modal>
     <nz-form-item>
       <nz-form-label>Description <mat-icon class="info-icon" nz-tooltip="Explication de ce que mesure cet indicateur, visible par les utilisateurs dans la page de sélection." nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
       <nz-form-control>
@@ -250,11 +387,10 @@ return totals;` },
       <nz-form-label [nzRequired]="true">Événements déclencheurs <mat-icon class="info-icon" nz-tooltip="Événements PLaTon qui déclenchent l'ingestion de nouvelles données. L'indicateur est recalculé automatiquement quand ces événements surviennent." nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
       <nz-form-control>
         <nz-select [(ngModel)]="def.requiredEvents" nzMode="tags"
-          nzPlaceHolder="ex: exercise.answered" style="width:100%">
-          <nz-option nzValue="exercise.answered"  nzLabel="exercise.answered"></nz-option>
-          <nz-option nzValue="exercise.viewed"    nzLabel="exercise.viewed"></nz-option>
-          <nz-option nzValue="activity.completed" nzLabel="activity.completed"></nz-option>
-          <nz-option nzValue="activity.started"   nzLabel="activity.started"></nz-option>
+          nzPlaceHolder="Sélectionner ou saisir un événement" style="width:100%">
+          <nz-option *ngFor="let evt of availableEventTypes"
+            [nzValue]="evt.name" [nzLabel]="evt.name + ' — ' + evt.label">
+          </nz-option>
         </nz-select>
       </nz-form-control>
     </nz-form-item>
@@ -375,6 +511,14 @@ return totals;` },
   <!-- ── ÉTAPE 3 ─────────────────────────────────────────────────────── -->
   <div *ngIf="step === 2" class="step-content">
 
+    <!-- Bouton explorateur de schéma -->
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+      <button nz-button nzType="default" nzSize="small" (click)="openSchemaExplorer()">
+        <span nz-icon nzType="database"></span>
+        Explorer le schéma PLaTon
+      </button>
+    </div>
+
     <!-- Recettes -->
     <div class="recipes">
       <div *ngFor="let r of recipes" class="recipe-wrapper">
@@ -426,12 +570,31 @@ return totals;` },
         </div>
         <div *ngIf="importDocsOpen" class="import-docs"><pre>{{ importDocsText }}</pre></div>
         <textarea class="json-editor" [(ngModel)]="importText" rows="12" spellcheck="false" [placeholder]="importPlaceholder" (keydown)="onImportKeydown($event)"></textarea>
-        <div *ngIf="importError" class="json-error">{{ importError }}</div>
+        <div *ngIf="importError" class="parse-error">
+          <div class="parse-error-header">
+            <mat-icon class="parse-error-icon">error_outline</mat-icon>
+            <span class="parse-error-main">{{ importError.main }}</span>
+          </div>
+          <div *ngIf="importError.available?.length" class="parse-error-available">
+            <span class="parse-error-label">
+              {{ importError.availableLabel ?? 'Valeurs disponibles' }}
+              <span *ngIf="importError.wrongValue" class="parse-error-clickable-hint">(cliquer pour corriger)</span>
+              :
+            </span>
+            <div class="parse-error-tags">
+              <button *ngFor="let v of importError.available; let i = index"
+                [class.parse-error-tag]="true"
+                [class.parse-error-tag--clickable]="!!importError.wrongValue"
+                [disabled]="!importError.wrongValue"
+                (click)="applySuggestion(v)">{{ (importError.availableDisplay?.[i]) ?? v }}</button>
+            </div>
+          </div>
+        </div>
         <div class="import-actions">
           <button nz-button nzType="primary" nzSize="small" (click)="applyImport()">
             <span nz-icon nzType="check"></span> Appliquer
           </button>
-          <button nz-button nzSize="small" (click)="showImport = false; importError = ''">Annuler</button>
+          <button nz-button nzSize="small" (click)="showImport = false; importError = null">Annuler</button>
         </div>
       </div>
     </ng-container>
@@ -797,10 +960,258 @@ return totals;` },
 
   </div>
 </ng-template>
+
+<!-- ── Modal explorateur de schéma PLaTon ───────────────────────────────── -->
+<ng-template #schemaExplorerTpl>
+  <div class="schema-explorer">
+
+    <!-- Sidebar gauche : liste des tables -->
+    <aside class="schema-sidebar">
+      <div class="schema-search">
+        <input nz-input [(ngModel)]="schemaSearch" placeholder="Rechercher une table…" nzSize="small" />
+      </div>
+      <ul class="schema-table-list">
+        <li *ngFor="let t of filteredSchemaTables"
+            class="schema-table-item"
+            [class.schema-table-active]="t.name === schemaSelected?.name"
+            (click)="selectSchemaTable(t.name)">
+          <span nz-icon nzType="table" style="margin-right:6px;opacity:.6"></span>
+          {{ t.name }}
+          <nz-badge *ngIf="schemaRelationsFor(t.name).length > 0"
+            [nzCount]="schemaRelationsFor(t.name).length"
+            nzSize="small"
+            style="margin-left:auto">
+          </nz-badge>
+        </li>
+      </ul>
+    </aside>
+
+    <!-- Zone principale -->
+    <div class="schema-main" *ngIf="schemaSelected; else noTableSelected">
+
+      <!-- En-tête table -->
+      <div class="schema-table-header">
+        <span nz-icon nzType="database" style="font-size:20px;color:#1890ff"></span>
+        <h3>{{ schemaSelected.name }}</h3>
+        <nz-tag nzColor="blue">{{ schemaSelected.columns.length }} colonnes</nz-tag>
+        <nz-tag *ngIf="schemaFkOut(schemaSelected.name).length > 0" nzColor="orange">
+          {{ schemaFkOut(schemaSelected.name).length }} FK sortantes
+        </nz-tag>
+        <nz-tag *ngIf="schemaFkIn(schemaSelected.name).length > 0" nzColor="green">
+          {{ schemaFkIn(schemaSelected.name).length }} FK entrantes
+        </nz-tag>
+      </div>
+
+      <!-- Onglets Vue graphique / Colonnes & relations -->
+      <nz-tabs [(nzSelectedIndex)]="schemaViewTab" nzSize="small" style="margin-top:4px">
+
+        <!-- ── Onglet 1 : Colonnes & relations ─────────── -->
+        <nz-tab nzTitle="Colonnes & relations">
+          <div class="schema-section">
+            <table class="schema-col-table">
+              <thead>
+                <tr><th>Nom</th><th>Type</th><th>Nullable</th><th>Lien FK</th></tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let col of schemaSelected.columns">
+                  <td class="col-name">
+                    <span *ngIf="isSchemaFkCol(schemaSelected.name, col.name)" class="fk-dot" nz-tooltip="Clé étrangère">🔗</span>
+                    {{ col.name }}
+                  </td>
+                  <td class="col-type">{{ col.type }}</td>
+                  <td class="col-null">
+                    <span *ngIf="col.nullable" style="color:#fa8c16">nullable</span>
+                    <span *ngIf="!col.nullable" style="color:#52c41a">NOT NULL</span>
+                  </td>
+                  <td class="col-fk">
+                    <ng-container *ngFor="let rel of schemaFkForCol(schemaSelected.name, col.name)">
+                      <span class="fk-link" (click)="selectSchemaTable(rel.targetTable)">
+                        → {{ rel.targetTable }}.{{ rel.targetColumn }}
+                      </span>
+                    </ng-container>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="schema-section" *ngIf="schemaFkOut(schemaSelected.name).length > 0">
+            <div class="schema-section-title"><span nz-icon nzType="arrow-right"></span> Références vers</div>
+            <div class="schema-rel-list">
+              <div *ngFor="let rel of schemaFkOut(schemaSelected.name)" class="schema-rel-item">
+                <span class="rel-col">{{ rel.sourceColumn }}</span>
+                <span class="rel-arrow">→</span>
+                <span class="rel-table" (click)="selectSchemaTable(rel.targetTable)">{{ rel.targetTable }}</span>
+                <span class="rel-col-target">.{{ rel.targetColumn }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="schema-section" *ngIf="schemaFkIn(schemaSelected.name).length > 0">
+            <div class="schema-section-title"><span nz-icon nzType="arrow-left"></span> Référencée par</div>
+            <div class="schema-rel-list">
+              <div *ngFor="let rel of schemaFkIn(schemaSelected.name)" class="schema-rel-item">
+                <span class="rel-table" (click)="selectSchemaTable(rel.sourceTable)">{{ rel.sourceTable }}</span>
+                <span class="rel-col-target">.{{ rel.sourceColumn }}</span>
+                <span class="rel-arrow">→</span>
+                <span class="rel-col">{{ rel.targetColumn }}</span>
+              </div>
+            </div>
+          </div>
+        </nz-tab>
+
+        <!-- ── Onglet 2 : Vue graphique ────────────────── -->
+        <nz-tab nzTitle="Vue graphique">
+          <ng-container *ngIf="schemaDiagram as diag; else noRelations">
+            <div class="diagram-container">
+              <svg [attr.width]="diag.width" [attr.height]="diag.height" [attr.viewBox]="diag.viewBox">
+                <defs>
+                  <marker id="arrow-out" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L8,3 z" fill="#1890ff"/>
+                  </marker>
+                  <marker id="arrow-in" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L8,3 z" fill="#52c41a"/>
+                  </marker>
+                </defs>
+                <g class="diag-edges">
+                  <path *ngFor="let edge of diag.edges"
+                    [attr.d]="edge.path"
+                    [attr.stroke]="edge.isIncoming ? '#52c41a' : '#1890ff'"
+                    stroke-width="1.5" fill="none" stroke-dasharray="5,3"
+                    [attr.marker-end]="edge.isIncoming ? 'url(#arrow-in)' : 'url(#arrow-out)'">
+                  </path>
+                </g>
+                <g *ngFor="let node of diag.nodes" class="diag-node"
+                   [style.transform]="'translate(' + node.x + 'px,' + node.y + 'px)' + (hoveredDiagNode === node.name ? ' scale(1.03)' : '')"
+                   (mouseenter)="hoveredDiagNode = node.name"
+                   (mouseleave)="hoveredDiagNode = null"
+                   (click)="selectSchemaTable(node.name)" style="cursor:pointer">
+                  <rect [attr.width]="node.width" [attr.height]="node.height"
+                    rx="6" ry="6"
+                    [attr.fill]="node.isCenter ? '#e6f7ff' : '#fafafa'"
+                    [attr.stroke]="node.isCenter ? '#1890ff' : '#d9d9d9'"
+                    [attr.stroke-width]="node.isCenter ? 2 : 1">
+                  </rect>
+                  <rect [attr.width]="node.width" height="30" rx="6" ry="6"
+                    [attr.fill]="node.isCenter ? '#1890ff' : (node.isIncoming ? '#52c41a' : '#8c8c8c')">
+                  </rect>
+                  <rect [attr.width]="node.width" y="16" height="14"
+                    [attr.fill]="node.isCenter ? '#1890ff' : (node.isIncoming ? '#52c41a' : '#8c8c8c')">
+                  </rect>
+                  <text x="8" y="20" font-size="12" font-weight="700" fill="white" font-family="monospace">
+                    {{ node.name.length > 22 ? node.name.slice(0, 21) + '…' : node.name }}
+                  </text>
+                  <g *ngFor="let col of node.columns; let ci = index">
+                    <line x1="0" [attr.y1]="34 + ci * 22"
+                          [attr.x2]="node.width" [attr.y2]="34 + ci * 22"
+                          stroke="#f0f0f0" stroke-width="1">
+                    </line>
+                    <rect *ngIf="col.isFK" x="0" [attr.y]="34 + ci * 22"
+                          [attr.width]="node.width" height="22" fill="#fff7e6" opacity="0.8">
+                    </rect>
+                    <text x="6" [attr.y]="34 + ci * 22 + 15" font-size="10"
+                          [attr.fill]="col.isPK ? '#722ed1' : col.isFK ? '#fa8c16' : '#8c8c8c'">
+                      {{ col.isPK ? '🔑' : col.isFK ? '🔗' : '·' }}
+                    </text>
+                    <text x="24" [attr.y]="34 + ci * 22 + 15" font-size="11" font-family="monospace"
+                          [attr.fill]="col.isFK ? '#fa8c16' : '#262626'"
+                          [attr.font-weight]="col.isPK ? '700' : '400'">
+                      {{ col.name.length > 18 ? col.name.slice(0, 17) + '…' : col.name }}
+                    </text>
+                    <text [attr.x]="node.width - 4" [attr.y]="34 + ci * 22 + 15"
+                          font-size="10" font-family="monospace" fill="#bbb" text-anchor="end">
+                      {{ col.shortType }}
+                    </text>
+                  </g>
+                </g>
+              </svg>
+            </div>
+          </ng-container>
+          <ng-template #noRelations>
+            <div style="padding:24px;text-align:center;color:#bbb">
+              <span nz-icon nzType="deployment-unit" style="font-size:32px"></span>
+              <p style="margin-top:8px">Aucune relation FK pour cette table</p>
+            </div>
+          </ng-template>
+        </nz-tab>
+
+      </nz-tabs>
+
+    </div>
+
+    <ng-template #noTableSelected>
+      <div class="schema-main schema-empty">
+        <span nz-icon nzType="database" style="font-size:48px;color:#d9d9d9"></span>
+        <p>Sélectionnez une table dans la liste</p>
+      </div>
+    </ng-template>
+
+    <!-- Spinner chargement -->
+    <div *ngIf="schemaLoading" class="schema-loading">
+      <nz-spin nzSimple></nz-spin>
+    </div>
+
+  </div>
+</ng-template>
   `,
   styles: [`
     .builder { padding: 4px 0; }
     .steps { margin-bottom: 8px; }
+    .similar-searching { display:flex;align-items:center;gap:6px;font-size:12px;color:#8c8c8c;margin-top:6px; }
+    .similar-banner {
+      margin-top: 8px; border: 1px solid #faad14; border-radius: 6px;
+      background: #fffbe6; overflow: hidden;
+    }
+    .similar-banner-header {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 12px; border-bottom: 1px solid #ffe58f;
+      font-size: 13px; font-weight: 500; color: #ad6800;
+    }
+    .similar-banner-icon { font-size:16px;width:16px;height:16px;line-height:1;color:#faad14; }
+    .similar-list { display:flex;flex-direction:column; }
+    .similar-item {
+      display:flex;align-items:center;justify-content:space-between;
+      padding:6px 12px; border-bottom:1px solid #fff1b8; background:#fff;
+    }
+    .similar-item:last-child { border-bottom:none; }
+    .similar-item-info { display:flex;align-items:center;gap:6px; }
+    .similar-item-name { font-size:13px;font-weight:500;color:#262626; }
+    .similar-voir-btn { display:inline-flex !important;align-items:center;gap:3px;padding:0 4px; }
+    .similar-voir-btn mat-icon { font-size:14px;width:14px;height:14px;line-height:1; }
+    .prev-card { border:1px solid #f0f0f0;border-radius:8px;overflow:hidden; }
+    .prev-row {
+      padding: 14px 16px;
+      border-bottom: 1px solid #f0f0f0;
+      background: #fff;
+    }
+    .prev-row--last { border-bottom: none; }
+    .prev-row:nth-child(even) { background: #fafafa; }
+    .prev-label {
+      display: block; margin-bottom: 6px;
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .6px; color: #8c8c8c;
+    }
+    .prev-value { margin: 0; font-size: 13px; color: #262626; line-height: 1.5; }
+    .prev-hint { font-style: italic; color: #595959; }
+    .prev-empty { font-size: 13px; color: #8c8c8c; font-style: italic; }
+    .prev-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+    .prev-meta { display: flex; gap: 0; padding: 0; }
+    .prev-meta-cell { flex: 1; padding: 14px 16px; }
+    .prev-meta-sep { border-left: 1px solid #f0f0f0; }
+    .prev-vizs { display: flex; flex-wrap: wrap; gap: 6px; }
+    .prev-viz-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; background: #f5f5f5; border-radius: 4px;
+      font-size: 12px; color: #262626; border: 1px solid #e8e8e8;
+    }
+    .prev-viz-chip mat-icon { font-size: 14px; width: 14px; height: 14px; line-height: 1; }
+    .prev-thresholds { display: flex; gap: 12px; flex-wrap: wrap; }
+    .prev-threshold { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; padding: 4px 10px; border-radius: 4px; }
+    .prev-threshold mat-icon { font-size: 15px; width: 15px; height: 15px; line-height: 1; }
+    .prev-threshold--good  { background: #f6ffed; color: #389e0d; }
+    .prev-threshold--warn  { background: #fffbe6; color: #d48806; }
+    .prev-threshold--danger{ background: #fff2f0; color: #cf1322; }
+    .step-clickable { cursor: pointer; }
+    .step-clickable:hover ::ng-deep .ant-steps-item-icon { border-color: #1890ff; }
+    .step-clickable:hover ::ng-deep .ant-steps-item-title { color: #1890ff; }
     .indicator-header {
       margin-top: 8px; padding: 6px 12px; border-radius: 4px;
       background: #f0f5ff; color: #2f54eb; font-weight: 500; font-size: 13px;
@@ -1029,7 +1440,80 @@ return totals;` },
       border-radius: 6px; background: #1e1e1e; color: #d4d4d4;
       border: 1px solid #333; padding: 12px; resize: vertical;
     }
-    .json-error { color: #ff4d4f; font-size: 12px; margin-top: 6px; }
+    .parse-error {
+      margin-top: 8px;
+      padding: 10px 12px;
+      background: #fff2f0;
+      border: 1px solid #ffccc7;
+      border-radius: 6px;
+    }
+    .parse-error-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+    .parse-error-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+      line-height: 1;
+      color: #ff4d4f;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .parse-error-main {
+      font-size: 12px;
+      color: #a8071a;
+      line-height: 1.5;
+    }
+    .parse-error-available {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #ffccc7;
+    }
+    .parse-error-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #8c8c8c;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      display: block;
+      margin-bottom: 6px;
+    }
+    .parse-error-clickable-hint {
+      font-weight: 400;
+      font-size: 10px;
+      color: #aaa;
+      text-transform: none;
+      letter-spacing: 0;
+      margin-left: 4px;
+    }
+    .parse-error-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .parse-error-tag {
+      font-size: 11px;
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      background: #fff;
+      border: 1px solid #ffa39e;
+      border-radius: 3px;
+      padding: 2px 7px;
+      color: #cf1322;
+      white-space: nowrap;
+      cursor: default;
+      line-height: 1.4;
+    }
+    .parse-error-tag--clickable {
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .parse-error-tag--clickable:hover {
+      background: #cf1322;
+      border-color: #cf1322;
+      color: #fff;
+    }
 
     .pipeline { display: flex; flex-direction: column; }
     .pipeline-empty { text-align: center; color: #aaa; padding: 24px; border: 1px dashed #d9d9d9; border-radius: 8px; }
@@ -1128,17 +1612,162 @@ return totals;` },
     .import-docs pre { margin: 0; white-space: pre; }
     .import-actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
     .import-hint { font-size: 11px; color: #8c8c8c; }
+
+    /* ── Explorateur de schéma ────────────────────────────────────────────── */
+    .schema-explorer {
+      display: flex;
+      height: calc(95vh - 55px);
+      overflow: hidden;
+      position: relative;
+    }
+    .schema-sidebar {
+      width: 220px;
+      flex-shrink: 0;
+      border-right: 1px solid #f0f0f0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .schema-search {
+      padding: 8px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .schema-table-list {
+      list-style: none;
+      margin: 0;
+      padding: 4px 0;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .schema-table-item {
+      display: flex;
+      align-items: center;
+      padding: 6px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: all 0.15s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .schema-table-item:hover { background: #f5f5f5; }
+    .schema-table-active {
+      background: #e6f7ff !important;
+      border-left-color: #1890ff !important;
+      color: #1890ff;
+      font-weight: 600;
+    }
+    .schema-main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+    }
+    .schema-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #bbb;
+      gap: 12px;
+    }
+    .schema-table-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .schema-table-header h3 { margin: 0; font-size: 18px; font-weight: 700; }
+    .schema-section { margin-bottom: 20px; }
+    .schema-section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #8c8c8c;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .schema-col-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .schema-col-table th {
+      padding: 6px 8px;
+      background: #fafafa;
+      border: 1px solid #f0f0f0;
+      font-weight: 600;
+      color: #666;
+      text-align: left;
+    }
+    .schema-col-table td {
+      padding: 5px 8px;
+      border: 1px solid #f0f0f0;
+      vertical-align: middle;
+    }
+    .col-name { font-family: monospace; font-weight: 500; }
+    .col-type { font-family: monospace; color: #722ed1; font-size: 11px; }
+    .fk-dot { margin-right: 4px; cursor: help; }
+    .fk-link {
+      display: inline-block;
+      font-size: 11px;
+      color: #1890ff;
+      cursor: pointer;
+      background: #e6f7ff;
+      padding: 1px 6px;
+      border-radius: 3px;
+    }
+    .fk-link:hover { background: #bae7ff; }
+    .schema-rel-list { display: flex; flex-direction: column; gap: 4px; }
+    .schema-rel-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      padding: 4px 8px;
+      background: #fafafa;
+      border-radius: 4px;
+      border: 1px solid #f0f0f0;
+    }
+    .rel-col { font-family: monospace; font-weight: 600; color: #262626; }
+    .rel-col-target { font-family: monospace; color: #595959; }
+    .rel-arrow { color: #8c8c8c; }
+    .rel-table {
+      font-family: monospace;
+      font-weight: 600;
+      color: #1890ff;
+      cursor: pointer;
+      text-decoration: underline dotted;
+    }
+    .rel-table:hover { color: #096dd9; }
+    .schema-loading {
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .diagram-container {
+      overflow: auto;
+      border: 1px solid #f0f0f0;
+      border-radius: 6px;
+      background: #fafafa;
+      max-height: calc(90vh - 160px);
+    }
+    .diagram-container svg { display: block; overflow: visible; }
+    .diag-node { transition: transform 0.2s ease; transform-box: fill-box; transform-origin: 50% 50%; }
   `],
 })
 export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
   private readonly modalRef     = inject(NzModalRef);
   private readonly modalSvc     = inject(NzModalService);
-  @ViewChild('recipeDetailTpl') private recipeDetailTplRef!: TemplateRef<any>;
+  @ViewChild('recipeDetailTpl')   private recipeDetailTplRef!: TemplateRef<any>;
+  @ViewChild('schemaExplorerTpl') private schemaExplorerTplRef!: TemplateRef<any>;
   private readonly hostEl = inject(ElementRef);
   private readonly modalData    = inject(NZ_MODAL_DATA, { optional: true }) as {
     indicator?: IndicatorDefinition;
-    familyPreset?: IndicatorFamilyPreset;
-    familyQueue?: IndicatorScope[];
+    circlePreset?: IndicatorCirclePreset;
+    circleQueue?: IndicatorScope[];
   } | null;
   private readonly indicatorSvc = inject(IndicatorService);
   private readonly messageSvc   = inject(NzMessageService);
@@ -1146,19 +1775,26 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
 
   get isEditMode(): boolean { return !!this.modalData?.indicator; }
 
-  /** Texte de progression affiché dans le header quand ce builder fait partie d'une famille. */
-  get familyProgress(): string | null {
-    const preset = this.modalData?.familyPreset;
+  /** Texte de progression affiché dans le header quand ce builder fait partie d'un cercle. */
+  get circleProgress(): string | null {
+    const preset = this.modalData?.circlePreset;
     if (!preset) return null;
-    const remaining = this.modalData?.familyQueue?.length ?? 0;
+    const remaining = this.modalData?.circleQueue?.length ?? 0;
     const total = remaining + 1;
     const current = total - remaining;
-    return `Famille « ${preset.familyName} » - contexte ${current}/${total} (${CONTEXT_LABELS[preset.contextType]})`;
+    return `Cercle « ${preset.circleName} » - contexte ${current}/${total} (${CONTEXT_LABELS[preset.contextType]})`;
   }
 
   step = 0;
   saving = false;
   activeVizIndex = 0;
+
+  // ── Détection de doublons ─────────────────────────────────────────────────
+  private readonly nameSearch$ = new Subject<string>();
+  similarIndicators: IndicatorDefinition[] = [];
+  similarSearching = false;
+  previewIndicator: IndicatorDefinition | null = null;
+  previewModalVisible = false;
 
   // Pipeline unique de l'indicateur
   pipeline: PipelineStep[] = [];
@@ -1181,7 +1817,7 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
   showImport = false;
   importMode: 'yaml' | 'json' = 'yaml';
   importText = '';
-  importError = '';
+  importError: ImportErrorDisplay | null = null;
   importDocsOpen = false;
 
   get importPlaceholder(): string {
@@ -1340,30 +1976,6 @@ ${this.importMode === 'yaml' ? `│
 │  }`}
 
 ══════════════════════════════════════════════════════════════════
-  ÉTAPES PERSONNALISÉES (type non listé ci-dessus)
-══════════════════════════════════════════════════════════════════
-
-Si "type" est absent ou ne correspond à aucun type ci-dessus, MAIS que
-"params.code" contient du JavaScript, l'étape est automatiquement
-importée comme une étape "Code JS" (votre code est repris tel quel).
-Un avertissement liste les étapes converties après l'import - vérifiez-
-les dans l'éditeur visuel.
-
-${this.importMode === 'yaml' ? `  - label: "Mon étape personnalisée"
-    type: monTypeMaison       # non reconnu → converti en "js"
-    params:
-      code: |
-        return input.filter(r => r.grade >= 100).length;` : `  {
-    "label": "Mon étape personnalisée",
-    "type": "monTypeMaison",
-    "params": { "code": "return input.filter(r => r.grade >= 100).length;" }
-  }`}
-
-Si "params.code" est absent, l'import est refusé avec un message
-listant les types valides (pour ne pas confondre un type custom
-volontaire avec une simple faute de frappe sur un type connu).
-
-══════════════════════════════════════════════════════════════════
   EXEMPLE COMPLET - Note moyenne d'un apprenant
 ══════════════════════════════════════════════════════════════════
 ${this.importMode === 'yaml' ? `pipeline:
@@ -1394,6 +2006,8 @@ ${this.importMode === 'yaml' ? `pipeline:
     activityId: '',
   };
 
+  availableEventTypes: { name: string; label: string }[] = [];
+
   // Label-picker du panneau de test : sélection en cascade Cours → Groupe/Activité/Utilisateur
   previewCourseId: string | null = null;
   previewCourses: TeacherCourse[] = [];
@@ -1402,6 +2016,206 @@ ${this.importMode === 'yaml' ? `pipeline:
   previewActivitiesLoading = false;
   previewStudents: { id: string; name: string }[] = [];
   previewStudentsLoading = false;
+
+  // ── Explorateur de schéma PLaTon ─────────────────────────────────────────
+  private schemaFull: {
+    tables: { name: string; columns: { name: string; type: string; nullable: boolean }[] }[];
+    relations: { sourceTable: string; sourceColumn: string; targetTable: string; targetColumn: string }[];
+  } | null = null;
+
+  schemaSearch = '';
+  schemaSelected: { name: string; columns: { name: string; type: string; nullable: boolean }[] } | null = null;
+
+  get filteredSchemaTables() {
+    const q = this.schemaSearch.toLowerCase();
+    return (this.schemaFull?.tables ?? []).filter(t => t.name.toLowerCase().includes(q));
+  }
+
+  selectSchemaTable(name: string): void {
+    this.schemaSelected = this.schemaFull?.tables.find(t => t.name === name) ?? null;
+  }
+
+  schemaRelationsFor(tableName: string) {
+    if (!this.schemaFull) return [];
+    return this.schemaFull.relations.filter(
+      r => r.sourceTable === tableName || r.targetTable === tableName,
+    );
+  }
+
+  schemaFkOut(tableName: string) {
+    return this.schemaFull?.relations.filter(r => r.sourceTable === tableName) ?? [];
+  }
+
+  schemaFkIn(tableName: string) {
+    return this.schemaFull?.relations.filter(r => r.targetTable === tableName) ?? [];
+  }
+
+  schemaFkForCol(tableName: string, colName: string) {
+    return this.schemaFull?.relations.filter(
+      r => r.sourceTable === tableName && r.sourceColumn === colName,
+    ) ?? [];
+  }
+
+  isSchemaFkCol(tableName: string, colName: string): boolean {
+    return this.schemaFkForCol(tableName, colName).length > 0;
+  }
+
+  schemaViewTab = 0;
+  hoveredDiagNode: string | null = null;
+
+  get schemaDiagram() {
+    if (!this.schemaSelected || !this.schemaFull) return null;
+
+    const NODE_W   = 210;
+    const ROW_H    = 22;
+    const HEADER_H = 32;
+    const GAP_X    = 130;
+    const GAP_Y    = 16;
+    const PAD      = 24;
+    const MAX_COLS = 12;
+
+    type DiagCol  = { name: string; isFK: boolean; isPK: boolean; shortType: string };
+    type DiagNode = { name: string; x: number; y: number; width: number; height: number; columns: DiagCol[]; isCenter: boolean; isIncoming: boolean };
+    type DiagEdge = { path: string; isIncoming: boolean };
+
+    const fkOut = this.schemaFkOut(this.schemaSelected.name);
+    const fkIn  = this.schemaFkIn(this.schemaSelected.name);
+
+    const center = this.schemaSelected.name;
+    const outTables = [...new Set(fkOut.map(r => r.targetTable))].filter(t => t !== center);
+    const inTables  = [...new Set(fkIn.map(r => r.sourceTable))].filter(t => t !== center);
+    const selfRels  = fkOut.filter(r => r.targetTable === center);
+
+    const shortType = (t: string) => {
+      if (t.includes('character') || t === 'text') return 'varchar';
+      if (t.includes('timestamp')) return 'ts';
+      if (t === 'double precision') return 'float';
+      if (t === 'boolean') return 'bool';
+      return t.slice(0, 7);
+    };
+
+    const getTableCols = (name: string): DiagCol[] => {
+      const raw = this.schemaFull!.tables.find(t => t.name === name)?.columns ?? [];
+      return raw.slice(0, MAX_COLS).map(c => ({
+        name: c.name,
+        isFK: this.isSchemaFkCol(name, c.name),
+        isPK: c.name === 'id',
+        shortType: shortType(c.type),
+      }));
+    };
+
+    const nodeH = (cols: DiagCol[]) => HEADER_H + cols.length * ROW_H + 6;
+
+    const centerCols = getTableCols(this.schemaSelected.name);
+    const centerH    = nodeH(centerCols);
+
+    const outColSets = outTables.map(t => getTableCols(t));
+    const inColSets  = inTables.map(t => getTableCols(t));
+    const outHeights = outColSets.map(c => nodeH(c));
+    const inHeights  = inColSets.map(c => nodeH(c));
+
+    const totalOutH = outHeights.reduce((s, h) => s + h + GAP_Y, -GAP_Y);
+    const totalInH  = inHeights.reduce((s, h) => s + h + GAP_Y, -GAP_Y);
+    const totalH    = Math.max(centerH, totalOutH, totalInH, 50);
+
+    const hasLeft = inTables.length > 0;
+    const hasRight = outTables.length > 0;
+
+    const centerX = PAD + (hasLeft ? NODE_W + GAP_X : 0);
+    const centerY = PAD + Math.max(0, (totalH - centerH) / 2);
+
+    const nodes: DiagNode[] = [];
+    const edges: DiagEdge[] = [];
+
+    // Centre
+    nodes.push({ name: this.schemaSelected.name, x: centerX, y: centerY, width: NODE_W, height: centerH, columns: centerCols, isCenter: true, isIncoming: false });
+
+    // Boucles auto-référentielles (ex: Sessions.parent_id → Sessions.id)
+    const LOOP = 60;
+    selfRels.forEach(rel => {
+      const si = centerCols.findIndex(c => c.name === rel.sourceColumn);
+      const ti = centerCols.findIndex(c => c.name === rel.targetColumn);
+      if (si < 0 || ti < 0) return;
+      const sx = centerX + NODE_W, sy = centerY + HEADER_H + si * ROW_H + ROW_H / 2;
+      const tx = centerX + NODE_W, ty = centerY + HEADER_H + ti * ROW_H + ROW_H / 2;
+      edges.push({
+        path: `M ${sx} ${sy} C ${sx + LOOP} ${sy}, ${sx + LOOP} ${ty}, ${tx} ${ty}`,
+        isIncoming: false,
+      });
+    });
+
+    // Tables à droite (FK sortantes)
+    const rightX = centerX + NODE_W + GAP_X;
+    let ry = PAD + Math.max(0, (totalH - totalOutH) / 2);
+    outTables.forEach((tname, i) => {
+      const cols = outColSets[i];
+      const h    = outHeights[i];
+      nodes.push({ name: tname, x: rightX, y: ry, width: NODE_W, height: h, columns: cols, isCenter: false, isIncoming: false });
+
+      fkOut.filter(r => r.targetTable === tname).forEach(rel => {
+        const si = centerCols.findIndex(c => c.name === rel.sourceColumn);
+        const ti = cols.findIndex(c => c.name === rel.targetColumn);
+        if (si < 0 || ti < 0) return;
+        const sx = centerX + NODE_W, sy = centerY + HEADER_H + si * ROW_H + ROW_H / 2;
+        const tx = rightX,           ty = ry    + HEADER_H + ti * ROW_H + ROW_H / 2;
+        const cx = sx + GAP_X * 0.45, dx = tx - GAP_X * 0.45;
+        edges.push({ path: `M ${sx} ${sy} C ${cx} ${sy}, ${dx} ${ty}, ${tx} ${ty}`, isIncoming: false });
+      });
+      ry += h + GAP_Y;
+    });
+
+    // Tables à gauche (FK entrantes)
+    const leftX = PAD;
+    let ly = PAD + Math.max(0, (totalH - totalInH) / 2);
+    inTables.forEach((tname, i) => {
+      const cols = inColSets[i];
+      const h    = inHeights[i];
+      nodes.push({ name: tname, x: leftX, y: ly, width: NODE_W, height: h, columns: cols, isCenter: false, isIncoming: true });
+
+      fkIn.filter(r => r.sourceTable === tname).forEach(rel => {
+        const si = cols.findIndex(c => c.name === rel.sourceColumn);
+        const ti = centerCols.findIndex(c => c.name === rel.targetColumn);
+        if (si < 0 || ti < 0) return;
+        const sx = leftX + NODE_W, sy = ly      + HEADER_H + si * ROW_H + ROW_H / 2;
+        const tx = centerX,        ty = centerY + HEADER_H + ti * ROW_H + ROW_H / 2;
+        const cx = sx + GAP_X * 0.45, dx = tx - GAP_X * 0.45;
+        edges.push({ path: `M ${sx} ${sy} C ${cx} ${sy}, ${dx} ${ty}, ${tx} ${ty}`, isIncoming: true });
+      });
+      ly += h + GAP_Y;
+    });
+
+    const totalW = PAD + (hasLeft ? NODE_W + GAP_X : 0) + NODE_W + (hasRight ? GAP_X + NODE_W : 0) + PAD;
+    const svgH   = totalH + PAD * 2;
+
+    return { nodes, edges, width: totalW, height: svgH, viewBox: `0 0 ${totalW} ${svgH}` };
+  }
+
+  openSchemaExplorer(): void {
+    const openModal = () => {
+      this.modalSvc.create({
+        nzTitle: 'Schéma PLaTon - Tables et relations',
+        nzContent: this.schemaExplorerTplRef,
+        nzWidth: '95vw',
+        nzFooter: null,
+        nzCentered: true,
+        nzStyle: { 'max-height': '95vh', 'overflow': 'hidden' },
+        nzBodyStyle: { padding: '0', overflow: 'hidden' },
+      });
+    };
+
+    if (this.schemaFull) { openModal(); return; }
+
+    this.schemaLoading = true;
+    this.indicatorSvc.getFullSchema().subscribe({
+      next: data => {
+        this.schemaFull = data;
+        this.schemaLoading = false;
+        this.cdr.detectChanges();
+        openModal();
+      },
+      error: () => { this.schemaLoading = false; },
+    });
+  }
 
   get previewGroups(): { id: string; name: string }[] {
     return this.previewCourses.find(c => c.id === this.previewCourseId)?.groups ?? [];
@@ -1430,6 +2244,12 @@ ${this.importMode === 'yaml' ? `pipeline:
   schemaLoading = false;
 
   private readonly _colsCache = new Map<string, { value: string; label: string }[]>();
+
+  private readonly STEP_TYPE_LABELS: Record<StepType, string> = {
+    fetch: 'Récupérer données', join: 'Jointure', filter: 'Filtrer',
+    groupBy: 'Grouper par', findFirst: 'Premier résultat', extract: 'Extraire champ',
+    aggregate: 'Agréger', round: 'Arrondir', divide: 'Diviser', js: 'Code JS',
+  };
 
   // ── Modèle du formulaire ─────────────────────────────────────────────────
 
@@ -1460,14 +2280,47 @@ ${this.importMode === 'yaml' ? `pipeline:
       next: s  => { this.platonSchema = s; this._colsCache.clear(); this.schemaLoading = false; this.cdr.detectChanges(); },
       error: () => { this.schemaLoading = false; },
     });
+
+    this.indicatorSvc.getEventTypes().subscribe({
+      next: types => { this.availableEventTypes = types.filter(t => t.isActive); this.cdr.detectChanges(); },
+      error: () => { this.availableEventTypes = [{ name: 'exercise.answered', label: 'Exercice répondu' }]; },
+    });
     if (this.modalData?.indicator) this.hydrate(this.modalData.indicator);
-    else if (this.modalData?.familyPreset) this.applyFamilyPreset(this.modalData.familyPreset);
+    else if (this.modalData?.circlePreset) this.applyCirclePreset(this.modalData.circlePreset);
 
     this.previewCoursesLoading = true;
     this.indicatorSvc.getTeacherContext(environment.defaultUserId).subscribe({
       next: courses => { this.previewCourses = courses; this.previewCoursesLoading = false; this.cdr.detectChanges(); },
       error: () => { this.previewCoursesLoading = false; },
     });
+
+    // Détection de doublons : debounce 500ms sur le nom
+    this.nameSearch$.pipe(
+      debounceTime(500),
+      distinctUntilChanged(),
+      switchMap(term => {
+        if (term.trim().length < 3) { this.similarIndicators = []; return []; }
+        this.similarSearching = true;
+        this.cdr.markForCheck();
+        return this.indicatorSvc.searchSimilar(term, this.modalData?.indicator?.id);
+      }),
+    ).subscribe({
+      next: results => {
+        this.similarIndicators = results;
+        this.similarSearching = false;
+        this.cdr.markForCheck();
+      },
+      error: () => { this.similarSearching = false; this.cdr.markForCheck(); },
+    });
+  }
+
+  onNameInput(value: string): void {
+    this.nameSearch$.next(value);
+  }
+
+  openPreview(ind: IndicatorDefinition): void {
+    this.previewIndicator = ind;
+    this.previewModalVisible = true;
   }
 
   // ── Label-picker du panneau de test ──────────────────────────────────────
@@ -1498,6 +2351,23 @@ ${this.importMode === 'yaml' ? `pipeline:
     if (this.step === 0) return !!this.def.name.trim() && this.def.requiredEvents.length > 0;
     if (this.step === 1) return !!this.def.contextType && this.vizList.length > 0;
     return true;
+  }
+
+  goToStep(target: number): void {
+    if (target === this.step) return;
+    // Retour en arrière : toujours permis
+    if (target < this.step) { this.step = target; return; }
+    // En mode édition : navigation libre vers l'avant
+    if (this.isEditMode) { this.step = target; return; }
+    // En mode création : valider chaque étape intermédiaire avant d'avancer
+    for (let i = this.step; i < target; i++) {
+      this.step = i;
+      if (!this.canProceed()) {
+        this.messageSvc.warning('Veuillez compléter cette étape avant de continuer.');
+        return;
+      }
+    }
+    this.step = target;
   }
 
   nextStep(): void { if (this.canProceed()) this.step++; }
@@ -1576,6 +2446,10 @@ ${this.importMode === 'yaml' ? `pipeline:
 
   applyRecipe(r: (typeof FORMULA_RECIPES)[0]): void {
     this.pipeline = r.pipeline.map(s => ({ ...s, id: crypto.randomUUID() })) as PipelineStep[];
+    if (this.showImport) {
+      this.importText = this.pipelineToText(this.pipeline, this.importMode);
+      this.importError = null;
+    }
   }
 
   openRecipeModal(r: (typeof FORMULA_RECIPES)[0]): void {
@@ -1699,18 +2573,18 @@ ${this.importMode === 'yaml' ? `pipeline:
 
   enterVisualMode(): void {
     this.showImport = false;
-    this.importError = '';
+    this.importError = null;
   }
 
   enterImportMode(): void {
     this.importText = this.pipelineToText(this.pipeline, this.importMode);
-    this.importError = '';
+    this.importError = null;
     this.showImport = true;
   }
 
   setImportMode(mode: 'yaml' | 'json'): void {
     this.importMode = mode;
-    this.importError = '';
+    this.importError = null;
     this.importText = this.pipelineToText(this.pipeline, mode);
   }
 
@@ -1728,24 +2602,36 @@ ${this.importMode === 'yaml' ? `pipeline:
   }
 
   applyImport(): void {
-    this.importError = '';
+    this.importError = null;
     try {
-      const { pipeline, convertedSteps } = this.parseStep3Text(this.importText, this.importMode);
+      const pipeline = this.parseStep3Text(this.importText, this.importMode);
       this.pipeline = pipeline;
       this.showImport = false;
-      if (convertedSteps.length) {
-        this.messageSvc.warning(
-          `Pipeline importé - étape(s) n°${convertedSteps.join(', ')} : type non reconnu, ` +
-          `converties en "Code JS". Vérifiez-les dans l'éditeur visuel.`,
-          { nzDuration: 8000 },
-        );
-      } else {
-        this.messageSvc.success('Pipeline importé');
-      }
+      this.messageSvc.success('Pipeline importé');
       this.cdr.detectChanges();
     } catch (e: any) {
-      this.importError = e.message;
+      this.importError = e instanceof PipelineError
+        ? { main: e.message, available: e.available, availableLabel: e.availableLabel, wrongValue: e.wrongValue, availableDisplay: e.availableDisplay }
+        : { main: e.message };
     }
+  }
+
+  applySuggestion(suggestion: string): void {
+    const wrong = this.importError?.wrongValue;
+    if (!wrong) return;
+    const escaped = wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(["']?)\\b${escaped}\\b\\1`);
+    this.importText = this.importText.replace(re, `$1${suggestion}$1`);
+    // Revalide sans fermer le panneau ni appliquer le pipeline
+    try {
+      this.parseStep3Text(this.importText, this.importMode);
+      this.importError = null;
+    } catch (e: any) {
+      this.importError = e instanceof PipelineError
+        ? { main: e.message, available: e.available, availableLabel: e.availableLabel, wrongValue: e.wrongValue, availableDisplay: e.availableDisplay }
+        : { main: e.message };
+    }
+    this.cdr.detectChanges();
   }
 
   onImportKeydown(event: KeyboardEvent): void {
@@ -1779,13 +2665,13 @@ ${this.importMode === 'yaml' ? `pipeline:
     const reader = new FileReader();
     reader.onload = (e) => {
       this.importText = (e.target?.result as string) ?? '';
-      this.importError = '';
+      this.importError = null;
       this.cdr.detectChanges();
     };
     reader.readAsText(file);
   }
 
-  private parseStep3Text(text: string, mode: 'yaml' | 'json'): { pipeline: PipelineStep[]; convertedSteps: number[] } {
+  private parseStep3Text(text: string, mode: 'yaml' | 'json'): PipelineStep[] {
     if (!text.trim()) throw new Error('Le champ est vide. Collez votre pipeline ci-dessus avant d\'appliquer.');
     let raw: any;
     try {
@@ -1801,82 +2687,258 @@ ${this.importMode === 'yaml' ? `pipeline:
       throw new Error('Le document doit commencer par "pipeline:" (YAML) ou { "pipeline": [...] } (JSON).');
     }
     if (!Array.isArray(raw.pipeline)) {
+      const wrongKey = Object.keys(raw).find(k => k !== 'pipeline');
+      if (wrongKey) {
+        throw new PipelineError(
+          `Clé racine "${wrongKey}" inconnue — le document doit commencer par "pipeline".`,
+          ['pipeline'], 'Clé attendue', wrongKey,
+        );
+      }
       throw new Error('Clé "pipeline" introuvable ou invalide. Elle doit contenir une liste d\'étapes.');
     }
-    const convertedSteps: number[] = [];
-    const pipeline = raw.pipeline.map((s: any, j: number) => this.validateAndDehydrate(s, j + 1, convertedSteps));
-    return { pipeline, convertedSteps };
+    if (raw.pipeline.length === 0) {
+      throw new Error('Le pipeline est vide. Ajoutez au moins une étape.');
+    }
+    const pipeline = raw.pipeline.map((s: any, j: number) => this.validateAndDehydrate(s, j + 1));
+    this.validatePipelineColumns(pipeline);
+    return pipeline;
   }
 
-  private validateAndDehydrate(raw: any, stepNum: number, convertedSteps: number[]): PipelineStep {
+  private validateAndDehydrate(raw: any, stepNum: number): PipelineStep {
     const VALID_TYPES: StepType[] = ['fetch', 'join', 'filter', 'groupBy', 'findFirst', 'extract', 'aggregate', 'round', 'divide', 'js'];
-    const TYPE_LABELS: Record<string, string> = {
-      fetch: 'Récupérer données', join: 'Jointure', filter: 'Filtrer',
-      groupBy: 'Grouper par', findFirst: 'Premier résultat', extract: 'Extraire champ',
-      aggregate: 'Agréger', round: 'Arrondir', divide: 'Diviser', js: 'Code JS',
+    const VALID_AGGREGATE_FNS = ['avg', 'sum', 'count', 'min', 'max'];
+    const VALID_FILTER_OPERATORS = ['==', '!=', '>', '<', '>=', '<='];
+    const VALID_JOIN_TYPES = ['left', 'inner', 'right', 'full'];
+    const VALID_STEP_KEYS = ['type', 'label', 'params'];
+    const VALID_PARAMS: Record<StepType, string[]> = {
+      fetch:     ['table', 'contextFields'],
+      join:      ['table', 'contextFields', 'leftKey', 'rightKey', 'joinType'],
+      filter:    ['field', 'operator', 'value'],
+      groupBy:   ['groupField'],
+      findFirst: ['whereField', 'whereValue', 'sortField'],
+      extract:   ['extractField'],
+      aggregate: ['aggregateFn'],
+      round:     ['decimals'],
+      divide:    ['divideBy'],
+      js:        ['code'],
     };
+
     if (!raw || typeof raw !== 'object') {
-      throw new Error(`Étape ${stepNum} : doit être un objet avec les clés "type", "label" et "params".`);
+      throw new Error(`Étape ${stepNum} : doit être un objet avec au minimum les clés "type" et "params".`);
     }
-    if (!raw.type || !VALID_TYPES.includes(raw.type)) {
-      // Type non standard (custom) : si l'admin fournit son propre code JS via "params.code",
-      // l'étape est matérialisée comme "Code JS" (escape hatch) au lieu de bloquer tout l'import.
-      const code = raw.params?.code;
-      if (typeof code === 'string' && code.trim()) {
-        convertedSteps.push(stepNum);
-        return this.dehydrateStep({
-          id: crypto.randomUUID(),
-          type: 'js',
-          label: raw.label || (raw.type ? `${raw.type} (converti en JS)` : 'Étape personnalisée (JS)'),
-          params: { code },
-        });
+
+    // ── Niveau 1 : clés de l'étape (type / label / params) ──────────────────
+    const stepKeys = Object.keys(raw);
+    const wrongStepKey = stepKeys.find(k => !VALID_STEP_KEYS.includes(k));
+
+    if (!raw.type) {
+      if (wrongStepKey) {
+        throw new PipelineError(
+          `Étape ${stepNum} : clé "${wrongStepKey}" inconnue — le nom correct est "type".`,
+          ['type'], 'Clé attendue', wrongStepKey,
+        );
       }
-      if (!raw.type) {
-        throw new Error(`Étape ${stepNum} : la clé "type" est manquante. Types disponibles : ${VALID_TYPES.join(', ')}. Pour une étape personnalisée, utilisez "type: js" avec "params.code", ou fournissez directement "params.code".`);
-      }
-      throw new Error(`Étape ${stepNum} : type "${raw.type}" inconnu. Types valides : ${VALID_TYPES.map(t => `${t} (${TYPE_LABELS[t]})`).join(', ')}. Pour une étape personnalisée non standard, ajoutez "params.code" avec votre logique JS - elle sera importée comme étape "Code JS".`);
+      throw new PipelineError(
+        `Étape ${stepNum} : la clé "type" est manquante. Pour du code JavaScript personnalisé, utilisez "type: js" avec "params.code".`,
+        VALID_TYPES, 'Types disponibles',
+      );
     }
-    // label facultatif : on le génère depuis le catalogue si absent
-    if (!raw.label) raw.label = TYPE_LABELS[raw.type] ?? raw.type;
+    if (!VALID_TYPES.includes(raw.type)) {
+      throw new PipelineError(
+        `Étape ${stepNum} : type "${raw.type}" inconnu. Pour du code JavaScript personnalisé, utilisez "type: js" avec "params.code".`,
+        VALID_TYPES, 'Types valides', raw.type,
+        VALID_TYPES.map(t => `${t} — ${this.STEP_TYPE_LABELS[t]}`),
+      );
+    }
+    // Clé étrangère présente malgré un type valide (ex: prams, lable…)
+    if (wrongStepKey) {
+      throw new PipelineError(
+        `Étape ${stepNum} : clé "${wrongStepKey}" inconnue au niveau de l'étape.`,
+        VALID_STEP_KEYS, 'Clés valides d\'une étape', wrongStepKey,
+      );
+    }
+
+    if (!raw.label) raw.label = this.STEP_TYPE_LABELS[raw.type as StepType];
+    const ctx = `Étape ${stepNum} (${this.STEP_TYPE_LABELS[raw.type as StepType]})`;
+
+    // ── Niveau 2 : params doit être un objet plain ───────────────────────────
+    if (raw.params !== undefined && raw.params !== null) {
+      if (Array.isArray(raw.params))
+        throw new Error(`${ctx} : "params" doit être un objet clé:valeur, pas une liste.`);
+      if (typeof raw.params !== 'object')
+        throw new Error(`${ctx} : "params" doit être un objet clé:valeur (reçu : ${typeof raw.params}).`);
+    }
     const p = raw.params ?? {};
+
+    // ── Niveau 3 : clés à l'intérieur de params ──────────────────────────────
+    const validParamKeys = VALID_PARAMS[raw.type as StepType];
+    const wrongParamKey = Object.keys(p).find(k => !validParamKeys.includes(k));
+    if (wrongParamKey) {
+      throw new PipelineError(
+        `${ctx} : clé de paramètre "${wrongParamKey}" inconnue.`,
+        validParamKeys, 'Paramètres valides', wrongParamKey,
+      );
+    }
+
     switch (raw.type as StepType) {
-      case 'fetch':
-        if (!p.table) throw new Error(`Étape ${stepNum} (Récupérer données) : "params.table" est requis - indiquez le nom de la table PLaTon, ex: SessionData.`);
-        break;
-      case 'join': {
-        if (!p.table) throw new Error(`Étape ${stepNum} (Jointure) : "params.table" est requis - nom de la table à joindre.`);
-        if (!p.leftKey) throw new Error(`Étape ${stepNum} (Jointure) : "params.leftKey" est requis - colonne dans les données courantes servant de clé.`);
-        if (!p.rightKey) throw new Error(`Étape ${stepNum} (Jointure) : "params.rightKey" est requis - colonne correspondante dans la table à joindre.`);
-        const validJoinTypes = ['left', 'inner', 'right', 'full'];
-        if (p.joinType !== undefined && !validJoinTypes.includes(p.joinType)) {
-          throw new Error(`Étape ${stepNum} (Jointure) : "params.joinType" invalide ("${p.joinType}"). Valeurs possibles : ${validJoinTypes.join(', ')} (par défaut : left).`);
-        }
+      case 'fetch': {
+        if (!p.table || typeof p.table !== 'string' || !p.table.trim())
+          throw new Error(`${ctx} : "params.table" est requis - nom de la table PLaTon, ex: SessionData.`);
+        if (p.contextFields !== undefined && !Array.isArray(p.contextFields))
+          throw new Error(`${ctx} : "params.contextFields" doit être une liste, ex: [user_id, activity_id].`);
+        if (Array.isArray(p.contextFields) && p.contextFields.some((f: any) => typeof f !== 'string'))
+          throw new Error(`${ctx} : "params.contextFields" doit contenir uniquement des noms de colonnes (chaînes de caractères).`);
         break;
       }
-      case 'filter':
-        if (!p.field) throw new Error(`Étape ${stepNum} (Filtrer) : "params.field" est requis - nom de la colonne à tester.`);
-        if (!p.operator) throw new Error(`Étape ${stepNum} (Filtrer) : "params.operator" est requis. Opérateurs disponibles : == != > < >= <=`);
+      case 'join': {
+        if (!p.table || typeof p.table !== 'string' || !p.table.trim())
+          throw new Error(`${ctx} : "params.table" est requis - nom de la table à joindre.`);
+        if (!p.leftKey || typeof p.leftKey !== 'string')
+          throw new Error(`${ctx} : "params.leftKey" est requis - colonne dans les données courantes servant de clé de jointure.`);
+        if (!p.rightKey || typeof p.rightKey !== 'string')
+          throw new Error(`${ctx} : "params.rightKey" est requis - colonne correspondante dans la table à joindre.`);
+        if (p.contextFields !== undefined && !Array.isArray(p.contextFields))
+          throw new Error(`${ctx} : "params.contextFields" doit être une liste, ex: [user_id, activity_id].`);
+        if (Array.isArray(p.contextFields) && p.contextFields.some((f: any) => typeof f !== 'string'))
+          throw new Error(`${ctx} : "params.contextFields" doit contenir uniquement des noms de colonnes (chaînes de caractères).`);
+        if (p.joinType !== undefined && !VALID_JOIN_TYPES.includes(p.joinType))
+          throw new PipelineError(`${ctx} : "params.joinType" invalide ("${p.joinType}").`, VALID_JOIN_TYPES, 'Valeurs possibles (défaut : left)', p.joinType);
         break;
-      case 'groupBy':
-        if (!p.groupField) throw new Error(`Étape ${stepNum} (Grouper par) : "params.groupField" est requis - colonne de regroupement.`);
+      }
+      case 'filter': {
+        if (!p.field || typeof p.field !== 'string')
+          throw new Error(`${ctx} : "params.field" est requis - nom de la colonne à tester.`);
+        if (!p.operator)
+          throw new PipelineError(`${ctx} : "params.operator" est requis.`, VALID_FILTER_OPERATORS, 'Opérateurs valides');
+        if (!VALID_FILTER_OPERATORS.includes(p.operator))
+          throw new PipelineError(`${ctx} : opérateur "${p.operator}" inconnu.`, VALID_FILTER_OPERATORS, 'Opérateurs valides', p.operator);
+        if (p.value === undefined || p.value === null)
+          throw new Error(`${ctx} : "params.value" est requis - valeur à comparer avec "${p.field}".`);
+        if (typeof p.value !== 'string' && typeof p.value !== 'number')
+          throw new Error(`${ctx} : "params.value" doit être une chaîne ou un nombre (reçu : ${typeof p.value}).`);
         break;
-      case 'extract':
-        if (!p.extractField) throw new Error(`Étape ${stepNum} (Extraire champ) : "params.extractField" est requis - colonne dont on extrait la valeur.`);
+      }
+      case 'groupBy': {
+        if (!p.groupField || typeof p.groupField !== 'string')
+          throw new Error(`${ctx} : "params.groupField" est requis - nom de la colonne de regroupement.`);
         break;
-      case 'aggregate':
-        if (!p.aggregateFn) throw new Error(`Étape ${stepNum} (Agréger) : "params.aggregateFn" est requis. Fonctions disponibles : avg (moyenne), sum (somme), count (nombre), min, max.`);
+      }
+      case 'findFirst': {
+        if (p.whereField !== undefined && typeof p.whereField !== 'string')
+          throw new Error(`${ctx} : "params.whereField" doit être une chaîne (nom de colonne).`);
+        if (p.whereField && (p.whereValue === undefined || p.whereValue === null))
+          throw new Error(`${ctx} : "params.whereValue" est requis quand "params.whereField" est défini.`);
+        if (p.sortField !== undefined && typeof p.sortField !== 'string')
+          throw new Error(`${ctx} : "params.sortField" doit être une chaîne (nom de colonne).`);
         break;
-      case 'round':
-        if (p.decimals === undefined) throw new Error(`Étape ${stepNum} (Arrondir) : "params.decimals" est requis - nombre de décimales (ex: 0, 1, 2).`);
+      }
+      case 'extract': {
+        if (!p.extractField || typeof p.extractField !== 'string')
+          throw new Error(`${ctx} : "params.extractField" est requis - nom de la colonne dont extraire la valeur.`);
         break;
-      case 'divide':
-        if (p.divideBy === undefined) throw new Error(`Étape ${stepNum} (Diviser) : "params.divideBy" est requis - constante par laquelle diviser (ex: 60, 100).`);
+      }
+      case 'aggregate': {
+        if (!p.aggregateFn)
+          throw new PipelineError(`${ctx} : "params.aggregateFn" est requis.`, VALID_AGGREGATE_FNS, 'Fonctions valides');
+        if (!VALID_AGGREGATE_FNS.includes(p.aggregateFn))
+          throw new PipelineError(`${ctx} : fonction "${p.aggregateFn}" inconnue.`, VALID_AGGREGATE_FNS, 'Fonctions valides', p.aggregateFn);
         break;
-      case 'js':
-        if (!p.code) throw new Error(`Étape ${stepNum} (Code JS) : "params.code" est requis - le code JavaScript à exécuter. Utilisez "return", ex: return input.length;`);
+      }
+      case 'round': {
+        if (p.decimals === undefined || p.decimals === null)
+          throw new Error(`${ctx} : "params.decimals" est requis - nombre de décimales (ex: 0, 1, 2).`);
+        if (typeof p.decimals !== 'number' || !Number.isInteger(p.decimals) || p.decimals < 0)
+          throw new Error(`${ctx} : "params.decimals" doit être un entier positif ou nul (reçu : ${p.decimals}).`);
         break;
+      }
+      case 'divide': {
+        if (p.divideBy === undefined || p.divideBy === null)
+          throw new Error(`${ctx} : "params.divideBy" est requis - constante de division (ex: 60, 100).`);
+        if (typeof p.divideBy !== 'number')
+          throw new Error(`${ctx} : "params.divideBy" doit être un nombre (reçu : ${typeof p.divideBy}).`);
+        if (p.divideBy === 0)
+          throw new Error(`${ctx} : "params.divideBy" ne peut pas être 0 (division par zéro).`);
+        break;
+      }
+      case 'js': {
+        if (!p.code || typeof p.code !== 'string' || !p.code.trim())
+          throw new Error(`${ctx} : "params.code" est requis - le code JavaScript à exécuter. Utilisez "return", ex: return input.length;`);
+        break;
+      }
     }
     return this.dehydrateStep({ id: crypto.randomUUID(), type: raw.type, label: raw.label, params: p });
+  }
+
+  private validatePipelineColumns(pipeline: PipelineStep[]): void {
+    if (!this.platonSchema.length) return;
+
+    const tableNames = this.platonSchema.map(t => t.name);
+    const colsOf = (tableName: string): Set<string> =>
+      new Set(this.platonSchema.find(t => t.name === tableName)?.columns.map(c => c.name) ?? []);
+
+    let knownCols = new Set<string>();
+
+    for (let i = 0; i < pipeline.length; i++) {
+      const s = pipeline[i];
+      const n = i + 1;
+      const ctx = `Étape ${n} (${this.STEP_TYPE_LABELS[s.type]})`;
+
+      switch (s.type) {
+        case 'fetch': {
+          if (!tableNames.includes(s.table!))
+            throw new PipelineError(`${ctx} : table "${s.table}" introuvable dans le schéma PLaTon.`, tableNames, 'Tables disponibles', s.table);
+          const cols = colsOf(s.table!);
+          for (const f of s.contextFields ?? []) {
+            if (!cols.has(f))
+              throw new PipelineError(`${ctx} : colonne de contexte "${f}" introuvable dans "${s.table}".`, [...cols], 'Colonnes disponibles', f);
+          }
+          knownCols = cols;
+          break;
+        }
+        case 'join': {
+          if (!tableNames.includes(s.joinTable!))
+            throw new PipelineError(`${ctx} : table "${s.joinTable}" introuvable dans le schéma PLaTon.`, tableNames, 'Tables disponibles', s.joinTable);
+          const joinCols = colsOf(s.joinTable!);
+          if (knownCols.size && s.joinLeftKey && !knownCols.has(s.joinLeftKey))
+            throw new PipelineError(`${ctx} : colonne de jointure gauche "${s.joinLeftKey}" introuvable dans les données courantes.`, [...knownCols], 'Colonnes disponibles', s.joinLeftKey);
+          if (s.joinRightKey && !joinCols.has(s.joinRightKey))
+            throw new PipelineError(`${ctx} : colonne de jointure droite "${s.joinRightKey}" introuvable dans "${s.joinTable}".`, [...joinCols], 'Colonnes disponibles', s.joinRightKey);
+          for (const f of s.joinContextFields ?? []) {
+            if (!joinCols.has(f))
+              throw new PipelineError(`${ctx} : colonne de filtre "${f}" introuvable dans "${s.joinTable}".`, [...joinCols], 'Colonnes disponibles', f);
+          }
+          for (const col of joinCols) knownCols.add(col);
+          break;
+        }
+        case 'filter': {
+          if (knownCols.size && s.filterField && !knownCols.has(s.filterField))
+            throw new PipelineError(`${ctx} : colonne "${s.filterField}" introuvable dans les données courantes.`, [...knownCols], 'Colonnes disponibles', s.filterField);
+          break;
+        }
+        case 'groupBy': {
+          if (knownCols.size && s.groupField && !knownCols.has(s.groupField))
+            throw new PipelineError(`${ctx} : colonne de regroupement "${s.groupField}" introuvable dans les données courantes.`, [...knownCols], 'Colonnes disponibles', s.groupField);
+          break;
+        }
+        case 'findFirst': {
+          if (knownCols.size && s.whereField && !knownCols.has(s.whereField))
+            throw new PipelineError(`${ctx} : colonne de filtre "${s.whereField}" introuvable dans les données courantes.`, [...knownCols], 'Colonnes disponibles', s.whereField);
+          if (knownCols.size && s.sortField && !knownCols.has(s.sortField))
+            throw new PipelineError(`${ctx} : colonne de tri "${s.sortField}" introuvable dans les données courantes.`, [...knownCols], 'Colonnes disponibles', s.sortField);
+          break;
+        }
+        case 'extract': {
+          if (knownCols.size && s.extractField && !knownCols.has(s.extractField))
+            throw new PipelineError(`${ctx} : colonne "${s.extractField}" introuvable dans les données courantes.`, [...knownCols], 'Colonnes disponibles', s.extractField);
+          knownCols = new Set();
+          break;
+        }
+        case 'js':
+          knownCols = new Set();
+          break;
+        // aggregate, round, divide : ne changent pas le contexte de colonnes
+      }
+    }
   }
 
   stepTypeColor(type: string): string {
@@ -1901,10 +2963,10 @@ ${this.importMode === 'yaml' ? `pipeline:
       interpretationHint: this.def.interpretationHint.trim() || null,
       contextType: this.def.contextType,
       requiredEvents: this.def.requiredEvents,
-      // En édition normale (hors wizard famille), on conserve le familyName existant de l'indicateur
+      // En édition normale (hors wizard cercle), on conserve le circleName existant de l'indicateur
       // pour ne pas l'effacer accidentellement à chaque sauvegarde.
-      familyName: this.modalData?.familyPreset?.familyName
-        ?? this.modalData?.indicator?.familyName
+      circleName: this.modalData?.circlePreset?.circleName
+        ?? this.modalData?.indicator?.circleName
         ?? null,
       formula: this.buildFormula(),
       thresholds: this.def.thresholds?.good != null || this.def.thresholds?.warning != null
@@ -1918,7 +2980,7 @@ ${this.importMode === 'yaml' ? `pipeline:
         color: v.color,
         unit: v.unit,
       })),
-      isActive: true,
+      isActive: false,
     };
 
     const save$ = this.isEditMode
@@ -2002,8 +3064,8 @@ ${this.importMode === 'yaml' ? `pipeline:
     };
   }
 
-  /** Pré-remplit le formulaire à partir des données partagées d'une famille en cours de création. */
-  private applyFamilyPreset(preset: IndicatorFamilyPreset): void {
+  /** Pré-remplit le formulaire à partir des données partagées d'un cercle en cours de création. */
+  private applyCirclePreset(preset: IndicatorCirclePreset): void {
     this.def.name           = preset.name;
     this.def.description    = preset.description;
     this.def.requiredEvents = [...preset.requiredEvents];

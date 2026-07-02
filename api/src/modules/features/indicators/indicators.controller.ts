@@ -26,10 +26,25 @@ export class IndicatorsController {
     return this.indicatorsService.findAllForAdmin();
   }
 
+  /** Recherche d'indicateurs similaires par nom/description (pour la détection de doublons). */
+  @Get('search')
+  async searchSimilar(
+    @Query('q') q: string,
+    @Query('excludeId') excludeId?: string,
+  ) {
+    if (!q?.trim()) return [];
+    return this.indicatorsService.searchSimilar(q, excludeId);
+  }
+
   /** Retourne les tables PLaTon disponibles et leurs colonnes pour le builder. */
   @Get('schema')
   async getPlatonSchema() {
     return this.indicatorsService.getPlatonSchema();
+  }
+
+  @Get('schema/full')
+  async getFullSchema() {
+    return this.indicatorsService.getFullSchema();
   }
 
   /** Retourne les cours + groupes d'un enseignant pour le sélecteur de contexte. */
@@ -221,6 +236,50 @@ export class IndicatorsController {
     @Param('snapshotId') snapshotId: string,
   ) {
     await this.indicatorsService.deleteSnapshot(id, snapshotId);
+    return { success: true };
+  }
+
+  // ── Notifications ─────────────────────────────────────────────────────────
+
+  /** Envoie une notification liée à un indicateur. */
+  @Post(':id/notify')
+  async sendNotification(
+    @Param('id') id: string,
+    @Body() body: { title: string; message: string },
+  ) {
+    return this.indicatorsService.sendNotification(id, body.title, body.message);
+  }
+
+  /** Liste toutes les notifications (onglet utilisateur à venir). */
+  @Get('notifications/all')
+  async getNotifications() {
+    return this.indicatorsService.getNotifications();
+  }
+
+  // ── Feedbacks ──────────────────────────────────────────────────────────────
+
+  /** Soumet (ou met à jour) un retour d'expérience pour un indicateur. */
+  @Post(':id/feedback')
+  async submitFeedback(
+    @Param('id') id: string,
+    @Body() body: { userId: string; rating: number; comment?: string },
+  ) {
+    return this.indicatorsService.submitFeedback(id, body.userId, body.rating, body.comment);
+  }
+
+  /** Liste tous les retours d'expérience d'un indicateur (admin). */
+  @Get(':id/feedback')
+  async getFeedbacks(@Param('id') id: string) {
+    return this.indicatorsService.getFeedbacks(id);
+  }
+
+  /** Supprime un retour d'expérience (admin). */
+  @Delete(':id/feedback/:feedbackId')
+  async deleteFeedback(
+    @Param('id') id: string,
+    @Param('feedbackId') feedbackId: string,
+  ) {
+    await this.indicatorsService.deleteFeedback(id, feedbackId);
     return { success: true };
   }
 }

@@ -168,6 +168,33 @@
     color: #262626;
     line-height: 1.4;
   }
+
+  .title--editable {
+    cursor: text;
+    border-radius: 3px;
+    padding: 1px 3px;
+    margin: -1px -3px;
+    transition: background 0.15s;
+
+    &:hover {
+      background: rgba(114, 46, 209, 0.07);
+    }
+  }
+
+  .title-edit-input {
+    font-size: 14px;
+    font-weight: 600;
+    color: #262626;
+    line-height: 1.4;
+    width: 100%;
+    border: none;
+    border-bottom: 2px solid #722ed1;
+    background: transparent;
+    padding: 0 2px;
+    outline: none;
+    font-family: inherit;
+    display: block;
+  }
   
   .viz-badge {
     display: inline-flex;
@@ -225,13 +252,18 @@
       height: 12px;
     }
 
-    .edit-button {
+    .card-actions {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .edit-button, .delete-button {
       opacity: 1;
       transition: all 0.2s ease;
       padding: 0;
       height: 24px;
       width: 24px;
-      color: #1890ff;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -240,13 +272,19 @@
         font-size: 16px;
         width: 16px;
         height: 16px;
-        color: #1890ff;
       }
+    }
 
-      &:hover {
-        background: rgba(24, 144, 255, 0.1);
-        border-radius: 4px;
-      }
+    .edit-button {
+      color: #1890ff;
+      mat-icon { color: #1890ff; }
+      &:hover { background: rgba(24, 144, 255, 0.1); border-radius: 4px; }
+    }
+
+    .delete-button {
+      color: #ff4d4f;
+      mat-icon { color: #ff4d4f; }
+      &:hover { background: rgba(255, 77, 79, 0.1); border-radius: 4px; }
     }
   }
 

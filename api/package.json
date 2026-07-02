@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@casl/ability": "^6.5.0",
+    "@golevelup/nestjs-rabbitmq": "^9.0.2",
     "@googlemaps/google-maps-services-js": "^3.4.0",
     "@nestjs-modules/mailer": "^1.6.1",
     "@nestjs/axios": "^3.0.2",
@@ -64,6 +65,7 @@
     "geolib": "^3.3.4",
     "helmet": "^7.1.0",
     "intl": "^1.2.5",
+    "isolated-vm": "^5.0.4",
     "joi": "^17.12.1",
     "mime": "^4.0.1",
     "nestjs-seeder": "^0.3.2",

@@ -29,8 +29,8 @@ visualisations, seuils) mais sert de base à plusieurs formes de réutilisation 
    copiés pour démarrer un nouvel indicateur - réutilisation au sens "patron",
    pas instance partagée.
 
-4. **Réutilisation au sein d'une famille**
-   Plusieurs indicateurs partageant un `familyName` réutilisent la même *idée
+4. **Réutilisation au sein d'un cercle**
+   Plusieurs indicateurs partageant un `circleName` réutilisent la même *idée
    métier* (souvent un pipeline très similaire), chacun adapté à un
    `contextType` cible - réutilisation conceptuelle plus que technique.
 
@@ -56,7 +56,7 @@ indicateurs*.
 
   // Optionnel - relie cet indicateur à ses "sœurs" du même thème mais
   // scopées à d'autres contextType. Voir readme.md §8.
-  "familyName": "Tentatives avant réussite",
+  "circleName": "Tentatives avant réussite",
 
   // Événements PLaTon qui déclenchent un recalcul / refresh
   "requiredEvents": ["exercise.answered"],
@@ -120,7 +120,7 @@ indicateurs*.
 | `name` | Nom affiché, unique. |
 | `description` | Texte libre, affiché en infobulle/aide. |
 | `contextType` | Le contexte auquel appartient l'indicateur - fixe pour toute sa durée de vie. Détermine `contextId` lors du calcul (`userId` pour `learner`, `courseId`/`groupId`/`activityId` pour les autres) et qui peut le voir (table de visibilité, readme §8). |
-| `familyName` | `null` ou nom partagé par d'autres indicateurs traitant du même thème sous un autre `contextType`. Sert uniquement à l'affichage groupé (repliable) côté admin/sélecteur - aucun lien technique entre les membres d'une famille. |
+| `circleName` | `null` ou nom partagé par d'autres indicateurs traitant du même thème sous un autre `contextType`. Sert uniquement à l'affichage groupé (repliable) côté admin/sélecteur - aucun lien technique entre les membres d'un cercle. |
 | `requiredEvents` | Liste d'événements PLaTon (`exercise.answered`, …) qui, lors de l'ingestion, déclenchent un recalcul de la valeur `learner` et un `refreshSnapshots()` des snapshots de groupe liés à l'activité concernée. |
 | `isActive` | Indicateur visible/calculable ou désactivé globalement. |
 | `usageCount` | Compteur d'utilisation (nombre d'utilisateurs l'ayant activé). |
@@ -164,4 +164,4 @@ indicateurs*.
   `computeView`, snapshots vivants
 - [`readme.md`](readme.md) §7 - modèle Option B+ (`contextType` + `visualizations[]`),
   sélection de viz par l'utilisateur
-- [`readme.md`](readme.md) §8 - familles d'indicateurs et visibilité par rôle
+- [`readme.md`](readme.md) §8 - cercles d'indicateurs et visibilité par rôle

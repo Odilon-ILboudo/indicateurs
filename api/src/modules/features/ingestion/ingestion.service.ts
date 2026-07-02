@@ -5,8 +5,9 @@ import { Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { IndicatorDefinition } from '../indicators/entities/indicator-definition.entity';
 import { IndicatorValue, buildValueMetadata } from '../indicators/entities/indicator-value.entity';
-import { FormulaInterpreterService } from '../indicators/interpreter/formula-interpreter.service';
-import { IndicatorsService } from '../indicators/indicators.service';
+import { FormulaInterpreterService, CandidateRowsMap, GroupCandidateRowsMap } from '../indicators/interpreter/formula-interpreter.service';
+import { IndicatorsService, DeltaEvent } from '../indicators/indicators.service';
+import { PlatonService } from '../../core/platon/platon.service';
 import { resolveFormula } from '../indicators/formula-resolution.util';
 
 export interface RawEvent {
@@ -36,6 +37,7 @@ export class IngestionService implements OnModuleInit {
     private eventEmitter: EventEmitter2,
     private formulaInterpreter: FormulaInterpreterService,
     private indicatorsService: IndicatorsService,
+    private platonService: PlatonService,
   ) {}
 
   async onModuleInit() {
@@ -65,9 +67,13 @@ export class IngestionService implements OnModuleInit {
         // Rafraîchit les snapshots et les vues course/group/activity en cache liés à cette
         // activité dès que les données changent
         if (event.activityId) {
-          this.indicatorsService.refreshSnapshots(indicator.id, event.activityId)
+          // Calcul différentiel sur événement : on passe les données brutes de l'événement
+          // pour que refreshSnapshots/refreshActivityViews puissent mettre à jour uniquement
+          // la session concernée sans re-fetch SQL complet (si la formule est éligible).
+          const deltaEvent: DeltaEvent = { sessionId: event.sessionId, payload: event.payload };
+          this.indicatorsService.refreshSnapshots(indicator.id, event.activityId, deltaEvent)
             .catch(err => this.logger.warn(`refreshSnapshots échoué pour indicator=${indicator.id}: ${err.message}`));
-          this.indicatorsService.refreshActivityViews(indicator.id, event.activityId)
+          this.indicatorsService.refreshActivityViews(indicator.id, event.activityId, deltaEvent)
             .catch(err => this.logger.warn(`refreshActivityViews échoué pour indicator=${indicator.id}: ${err.message}`));
         }
       }
@@ -139,6 +145,9 @@ export class IngestionService implements OnModuleInit {
 
     let newValue = 0;
     let rowValues: Record<string, number> | undefined;
+    let groupRowValues: Record<string, Record<string, number>> | undefined;
+    let candidateRows: CandidateRowsMap | undefined;
+    let groupCandidateRows: GroupCandidateRowsMap | undefined;
 
     if (hasDslFormula) {
       const formulaContext = {
@@ -148,43 +157,195 @@ export class IngestionService implements OnModuleInit {
         indicatorId: indicator.id,
       };
 
-      // Calcul incrémental (delta) : pour les formules "agrégat simple sur SessionData", on
-      // évite de tout re-fetch/recalculer à chaque événement. L'état précédent
-      // (sessionId → valeur) est mis à jour avec la nouvelle valeur de cette session
-      // (insertion si nouvelle session, remplacement si une session existante est re-notée),
-      // puis l'agrégat est recalculé sur ce petit ensemble en mémoire.
       const shape = this.formulaInterpreter.getIncrementalShape(formula as any);
-      const existingRowValues = (record?.metadata as any)?.incremental?.rowValues as Record<string, number> | undefined;
 
-      if (shape && existingRowValues && event.sessionId) {
-        const rawVal = event.payload?.[shape.extractField];
-        const newRowVal = typeof rawVal === 'number' ? rawVal : parseFloat(rawVal);
-        if (!isNaN(newRowVal)) {
-          rowValues = { ...existingRowValues, [event.sessionId]: newRowVal };
-          newValue = this.formulaInterpreter.applyPostSteps(Object.values(rowValues), shape.postSteps);
-        }
-      }
+      if (shape?.findFirst) {
+        // ── Chemin findFirst semi-incrémental ─────────────────────────────────
+        // Stocke candidateRows ou groupCandidateRows : pour chaque session,
+        // { sortValue, extractedValue, passes }. Sur événement, on met à jour
+        // 1 entrée puis on re-scanne le groupe touché (O(n_groupe), 0 SQL).
+        const helper = async () => {
+          let sourceRow: Record<string, any>;
+          if (shape.needsTargetedFetch) {
+            const fetched = await this.formulaInterpreter.fetchSingleSessionRow(event.sessionId!, formulaContext, shape);
+            sourceRow = fetched ?? event.payload ?? {};
+          } else {
+            sourceRow = event.payload ?? {};
+          }
 
-      // Premier événement pour ce (indicateur, utilisateur), ou événement sans sessionId/valeur
-      // exploitable : calcul complet, qui initialise au passage l'état incrémental.
-      if (rowValues === undefined) {
-        if (shape) {
-          const computed = await this.formulaInterpreter.computeWithRowMap(formula as any, formulaContext, shape);
+          const passesFilter = shape.filterSteps.every(fs =>
+            this.formulaInterpreter.evaluateFilterRow(fs.params, sourceRow),
+          );
+
+          const { sortField, whereField, whereValue } = shape.findFirst!;
+          const extractedValue = parseFloat(sourceRow[shape.extractField]);
+          if (isNaN(extractedValue) || !passesFilter) return false;
+
+          const entry = {
+            sortValue: sortField ? sourceRow[sortField] : null,
+            extractedValue,
+            passes: whereField != null ? String(sourceRow[whereField]) === String(whereValue) : true,
+          };
+
+          if (shape.groupByField) {
+            const existing = (record?.metadata as any)?.incremental?.groupCandidateRows as GroupCandidateRowsMap | undefined;
+            if (existing === undefined) return false;
+            const groupKey = String(sourceRow[shape.groupByField] ?? '__null__');
+            const updated = { ...existing, [groupKey]: { ...(existing[groupKey] ?? {}), [event.sessionId!]: entry } };
+            newValue = await this.formulaInterpreter.computeResultFromGroupCandidates(updated, shape);
+            groupCandidateRows = updated;
+          } else {
+            const existing = (record?.metadata as any)?.incremental?.candidateRows as CandidateRowsMap | undefined;
+            if (existing === undefined) return false;
+            const updated = { ...existing, [event.sessionId!]: entry };
+            newValue = await this.formulaInterpreter.computeResultFromCandidates(updated, shape);
+            candidateRows = updated;
+          }
+          return true;
+        };
+
+        const incremental = event.sessionId ? await helper() : false;
+
+        if (!incremental) {
+          const computed = await this.formulaInterpreter.computeWithCandidateRows(formula as any, formulaContext, shape);
           newValue = computed.result;
-          rowValues = computed.rowValues;
-        } else {
-          newValue = await this.formulaInterpreter.interpret(formula as any, formulaContext);
+          candidateRows = computed.candidateRows;
+          groupCandidateRows = computed.groupCandidateRows;
+        }
+
+      } else if (shape?.groupByField) {
+        // ── Chemin groupBy incrémental ────────────────────────────────────────
+        // Stocke groupRowValues: { groupKey → { sessionId → valeur } } en metadata.
+        // Sur événement, seul le groupe touché est recalculé (0 SQL si pas de join).
+        const existingGroupRowValues = (record?.metadata as any)?.incremental?.groupRowValues as
+          Record<string, Record<string, number>> | undefined;
+
+        if (existingGroupRowValues !== undefined && event.sessionId) {
+          // Résoudre la source : payload direct ou row fetchée si join nécessaire
+          let sourceRow: Record<string, any>;
+          if (shape.needsTargetedFetch) {
+            const fetched = await this.formulaInterpreter.fetchSingleSessionRow(event.sessionId, formulaContext, shape);
+            sourceRow = fetched ?? event.payload ?? {};
+          } else {
+            sourceRow = event.payload ?? {};
+          }
+
+          const groupKey = String(sourceRow[shape.groupByField] ?? '__null__');
+          const passesFilter = shape.filterSteps.every(fs =>
+            this.formulaInterpreter.evaluateFilterRow(fs.params, sourceRow),
+          );
+
+          // Copie superficielle du dictionnaire + copie profonde du groupe touché uniquement
+          const newGroupRowValues = { ...existingGroupRowValues };
+          newGroupRowValues[groupKey] = { ...(newGroupRowValues[groupKey] ?? {}) };
+
+          if (passesFilter) {
+            const rawVal = sourceRow[shape.extractField];
+            const v = typeof rawVal === 'number' ? rawVal : parseFloat(rawVal);
+            if (!isNaN(v)) newGroupRowValues[groupKey][event.sessionId] = v;
+          } else {
+            delete newGroupRowValues[groupKey][event.sessionId];
+            if (Object.keys(newGroupRowValues[groupKey]).length === 0) {
+              delete newGroupRowValues[groupKey];
+            }
+          }
+
+          const allValues = Object.values(newGroupRowValues).flatMap(g => Object.values(g));
+          newValue = await this.formulaInterpreter.applyPostSteps(allValues, shape.postSteps);
+          groupRowValues = newGroupRowValues;
+        }
+
+        // Premier événement ou groupRowValues absent → calcul complet qui initialise l'état
+        if (groupRowValues === undefined) {
+          const computed = await this.formulaInterpreter.computeWithGroupRowMap(formula as any, formulaContext, shape);
+          newValue = computed.result;
+          groupRowValues = computed.groupRowValues;
+        }
+
+      } else {
+        // ── Chemins existants (rowValues plat) ───────────────────────────────
+        // Calcul incrémental pour fetch→[join*]→[filter*]→extract→aggregate.
+        // Trois chemins selon la shape :
+        //   1. Pas de join, pas de filter : lit depuis event.payload (0 SQL)
+        //   2. Filter sans join           : évalue le filtre sur event.payload (0 SQL)
+        //   3. Join (± filter)            : 1 SQL ciblé (1 ligne) + joins en mémoire
+        const existingRowValues = (record?.metadata as any)?.incremental?.rowValues as Record<string, number> | undefined;
+
+        if (shape && existingRowValues && event.sessionId) {
+          if (shape.needsTargetedFetch) {
+            const row = await this.formulaInterpreter.fetchSingleSessionRow(event.sessionId, formulaContext, shape);
+            if (row !== null) {
+              const passesFilter = shape.filterSteps.every(fs =>
+                this.formulaInterpreter.evaluateFilterRow(fs.params, row),
+              );
+              const newRowValues = { ...existingRowValues };
+              if (passesFilter) {
+                const rawVal = parseFloat(row[shape.extractField]);
+                if (!isNaN(rawVal)) newRowValues[event.sessionId] = rawVal;
+              } else {
+                delete newRowValues[event.sessionId];
+              }
+              rowValues = newRowValues;
+              newValue = await this.formulaInterpreter.applyPostSteps(Object.values(rowValues), shape.postSteps);
+            }
+          } else if (shape.filterSteps.length > 0) {
+            const passesFilter = shape.filterSteps.every(fs =>
+              this.formulaInterpreter.evaluateFilterRow(fs.params, event.payload ?? {}),
+            );
+            const newRowValues = { ...existingRowValues };
+            if (passesFilter) {
+              const rawVal = event.payload?.[shape.extractField];
+              const newRowVal = typeof rawVal === 'number' ? rawVal : parseFloat(rawVal);
+              if (!isNaN(newRowVal)) newRowValues[event.sessionId] = newRowVal;
+            } else {
+              delete newRowValues[event.sessionId];
+            }
+            rowValues = newRowValues;
+            newValue = await this.formulaInterpreter.applyPostSteps(Object.values(rowValues), shape.postSteps);
+          } else {
+            const rawVal = event.payload?.[shape.extractField];
+            const newRowVal = typeof rawVal === 'number' ? rawVal : parseFloat(rawVal);
+            if (!isNaN(newRowVal)) {
+              rowValues = { ...existingRowValues, [event.sessionId]: newRowVal };
+              newValue = await this.formulaInterpreter.applyPostSteps(Object.values(rowValues), shape.postSteps);
+            }
+          }
+        }
+
+        // Premier événement ou rowValues absent → calcul complet
+        if (rowValues === undefined) {
+          if (shape) {
+            const computed = await this.formulaInterpreter.computeWithRowMap(formula as any, formulaContext, shape);
+            newValue = computed.result;
+            rowValues = computed.rowValues;
+          } else {
+            newValue = await this.formulaInterpreter.interpret(formula as any, formulaContext);
+          }
         }
       }
     }
 
-    const extraMetadata = rowValues ? { incremental: { rowValues } } : {};
+    const extraMetadata = rowValues
+      ? { incremental: { rowValues } }
+      : groupRowValues
+        ? { incremental: { groupRowValues } }
+        : candidateRows
+          ? { incremental: { candidateRows } }
+          : groupCandidateRows
+            ? { incremental: { groupCandidateRows } }
+            : {};
 
     if (record) {
       if (hasDslFormula) {
+        const prevValue = record.value;
         record.value = newValue;
         record.metadata = buildValueMetadata(record.metadata, newValue, extraMetadata);
         await this.indicatorValueModel.save(record);
+        this.logger.log(
+          `[indicator] ✓ mis à jour "${indicator.name}" (${contextType}) ` +
+          `user=${contextId} : ${prevValue} → ${newValue}` +
+          (rowValues ? ' [incrémental]' : ' [complet]'),
+        );
       }
     } else {
       record = this.indicatorValueModel.create({
@@ -195,9 +356,13 @@ export class IngestionService implements OnModuleInit {
         metadata: buildValueMetadata(null, newValue, extraMetadata),
       });
       await this.indicatorValueModel.save(record);
+      this.logger.log(
+        `[indicator] ✓ créé "${indicator.name}" (${contextType}) ` +
+        `user=${contextId} : valeur initiale = ${newValue}`,
+      );
     }
 
-    this.eventEmitter.emit(`indicator.${indicator.name}.updated`, {
+    this.eventEmitter.emit('indicator.updated', {
       indicatorId: indicator.id,
       indicatorName: indicator.name,
       contextType,
@@ -248,6 +413,121 @@ export class IngestionService implements OnModuleInit {
     }
     
     return true;
+  }
+
+  // ── API publique pour les consumers RabbitMQ ─────────────────────────────
+
+  /** Retourne les indicateurs affectés par cet événement (exposé pour le consumer de groupe). */
+  async getAffectedIndicators(event: RawEvent) {
+    return this.findAffectedIndicators(event);
+  }
+
+  /**
+   * Traite un événement uniquement pour les indicateurs du contextType donné.
+   * Utilisé par les consumers RabbitMQ pour paralléliser le traitement par niveau.
+   */
+  async ingestForContext(event: RawEvent, contextType: string): Promise<void> {
+    if (!this.isValidEvent(event)) return;
+
+    const affectedIndicators = await this.findAffectedIndicators(event);
+    const filtered = affectedIndicators.filter(ind => ind.contextType === contextType);
+
+    if (filtered.length === 0) {
+      this.logger.debug(`[${contextType}] aucun indicateur actif pour event="${event.type}"`);
+      return;
+    }
+
+    this.logger.log(`[${contextType}] ${filtered.length} indicateur(s) à traiter pour event="${event.type}" user=${event.userId}`);
+
+    for (const indicator of filtered) {
+      if (contextType === 'learner') {
+        await this.processIndicatorUpdate(indicator, event);
+      } else if (contextType === 'activity' && event.activityId) {
+        // Pour les indicateurs d'activité, computeView avec forceRefresh
+        await this.indicatorsService
+          .computeView(indicator.id, 'activity', event.activityId, event.activityId, undefined, true)
+          .catch(e => this.logger.warn(`[activity] computeView échoué ind=${indicator.id}: ${e.message}`));
+      }
+    }
+  }
+
+  /**
+   * Traite un indicateur non-learner : dispatch selon contextType.
+   * Le case `default` couvre tout contextType futur sans modification du consumer.
+   */
+  async processAggregateIndicator(indicator: IndicatorDefinition, event: RawEvent): Promise<void> {
+    const deltaEvent: DeltaEvent = { sessionId: event.sessionId, payload: event.payload };
+
+    switch (indicator.contextType) {
+
+      case 'activity': {
+        if (!event.activityId) return;
+        const result = await this.indicatorsService
+          .computeView(indicator.id, 'activity', event.activityId, event.activityId, undefined, true)
+          .catch(e => { this.logger.warn(`[activity] computeView échoué ind=${indicator.id}: ${e.message}`); return null; });
+        if (result) {
+          this.emitUpdated(indicator, 'activity', event.activityId, result.value);
+        }
+        break;
+      }
+
+      case 'course': {
+        if (!event.courseId) return;
+        const result = await this.indicatorsService
+          .computeView(indicator.id, 'course', event.courseId, event.activityId, undefined, true)
+          .catch(e => { this.logger.warn(`[course] computeView échoué ind=${indicator.id}: ${e.message}`); return null; });
+        if (result) {
+          this.emitUpdated(indicator, 'course', event.courseId, result.value);
+        }
+        break;
+      }
+
+      case 'group': {
+        if (!event.activityId) return;
+        // refreshSnapshots et refreshActivityViews émettent WS eux-mêmes après chaque calcul
+        await Promise.allSettled([
+          this.indicatorsService.refreshSnapshots(indicator.id, event.activityId, deltaEvent)
+            .catch(e => this.logger.warn(`[group] refreshSnapshots échoué ind=${indicator.id}: ${e.message}`)),
+          this.indicatorsService.refreshActivityViews(indicator.id, event.activityId, deltaEvent)
+            .catch(e => this.logger.warn(`[group] refreshActivityViews échoué ind=${indicator.id}: ${e.message}`)),
+        ]);
+        break;
+      }
+
+      case 'teacher': {
+        if (!event.courseId) return;
+        const teacherId = await this.platonService.getTeacherByCourse(event.courseId)
+          .catch(e => { this.logger.warn(`[teacher] getTeacherByCourse échoué: ${e.message}`); return null; });
+        if (!teacherId) return;
+        const result = await this.indicatorsService
+          .computeView(indicator.id, 'teacher', teacherId, event.activityId, undefined, true)
+          .catch(e => { this.logger.warn(`[teacher] computeView échoué ind=${indicator.id}: ${e.message}`); return null; });
+        if (result) {
+          this.emitUpdated(indicator, 'teacher', teacherId, result.value);
+        }
+        break;
+      }
+
+      // admin et tout contextType futur : rafraîchit les valeurs déjà en cache
+      default: {
+        await this.indicatorsService
+          .refreshCachedContextValues(indicator.id, indicator.contextType)
+          .catch(e => this.logger.warn(`[${indicator.contextType}] refreshCached échoué ind=${indicator.id}: ${e.message}`));
+        break;
+      }
+    }
+  }
+
+  private emitUpdated(indicator: IndicatorDefinition, contextType: string, contextId: string, value: number): void {
+    this.eventEmitter.emit('indicator.updated', {
+      indicatorId: indicator.id,
+      indicatorName: indicator.name,
+      contextType,
+      contextId,
+      value,
+      eventType: 'refresh',
+      timestamp: new Date(),
+    });
   }
 
   async getIngestionStats(): Promise<{ cachedIndicators: number; cacheAge: number }> {

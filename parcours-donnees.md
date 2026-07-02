@@ -2,7 +2,7 @@
 
 Ce document complète `readme.md` (qui liste les routes API par contrôleur, §9)
 en traçant, **fichier par fichier**, le chemin complet de
-chaque famille de requêtes : composant Angular → service frontend → appel HTTP
+chaque cercle de requêtes : composant Angular → service frontend → appel HTTP
 → contrôleur NestJS → service backend (avec ses cascades) → accès aux données
 (PLaTon en lecture seule, ou `indicators` en lecture/écriture) → effets de
 bord éventuels.
@@ -377,7 +377,7 @@ visible pour `canManageIndicators`/`canCreateIndicators` (`RoleService`).
    (modale CRUD complète, voir tableau ci-dessous) ; recharge `load()` si la
    modale retourne "saved".
 5. `openFamilyWizard()` / `openFamilyMember()` : enchaîne plusieurs
-   `IndicatorBuilderComponent` (un par contexte de la famille) - voir
+   `IndicatorBuilderComponent` (un par contexte de le cercle) - voir
    `project_indicateur_famille_feature` pour le détail fonctionnel.
 
 ### `IndicatorBuilderComponent` - `features/admin/indicator-builder.component.ts`

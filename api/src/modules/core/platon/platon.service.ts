@@ -203,6 +203,14 @@ export class PlatonService {
     return result.map((row: { id: string }) => row.id);
   }
 
+  async getTeacherByCourse(courseId: string): Promise<string | null> {
+    const rows = await this.dataSource.query(
+      `SELECT owner_id FROM "Courses" WHERE id = $1 LIMIT 1`,
+      [courseId],
+    );
+    return rows[0]?.owner_id ?? null;
+  }
+
   /**
    * Récupère toutes les activités
    */
@@ -287,7 +295,9 @@ export class PlatonService {
 
     for (const [col, val] of Object.entries(extraFilters)) {
       if (val === undefined || val === null) continue;
-      if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(col)) continue;
+      if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(col)) {
+        throw new Error(`Nom de colonne invalide dans les filtres : '${col}'`);
+      }
       conditions.push(`"${col}" = $${idx++}`);
       params.push(val);
     }
@@ -343,6 +353,54 @@ export class PlatonService {
   }
 
   // ── Schéma dynamique ──────────────────────────────────────────────────────
+
+  async getSchemaWithRelations(): Promise<{
+    tables: { name: string; columns: { name: string; type: string; nullable: boolean }[] }[];
+    relations: { sourceTable: string; sourceColumn: string; targetTable: string; targetColumn: string }[];
+  }> {
+    const [colRows, fkRows]: [any[], any[]] = await Promise.all([
+      this.dataSource.query(
+        `SELECT table_name, column_name, data_type, is_nullable
+         FROM information_schema.columns
+         WHERE table_schema = 'public'
+         ORDER BY table_name, ordinal_position`,
+      ),
+      this.dataSource.query(
+        `SELECT
+           conrelid::regclass AS source_table,
+           a.attname          AS source_column,
+           confrelid::regclass AS target_table,
+           af.attname         AS target_column
+         FROM pg_constraint c
+         JOIN pg_attribute a  ON a.attrelid = c.conrelid  AND a.attnum = ANY(c.conkey)
+         JOIN pg_attribute af ON af.attrelid = c.confrelid AND af.attnum = ANY(c.confkey)
+         WHERE c.contype = 'f'
+         ORDER BY source_table, source_column`,
+      ),
+    ]);
+
+    const tableMap = new Map<string, { name: string; type: string; nullable: boolean }[]>();
+    for (const row of colRows) {
+      if (PlatonService.SENSITIVE_COLUMN_PATTERN.test(row.column_name)) continue;
+      if (!tableMap.has(row.table_name)) tableMap.set(row.table_name, []);
+      tableMap.get(row.table_name)!.push({
+        name: row.column_name,
+        type: row.data_type,
+        nullable: row.is_nullable === 'YES',
+      });
+    }
+
+    const tables = Array.from(tableMap.entries()).map(([name, columns]) => ({ name, columns }));
+
+    const relations = fkRows.map(r => ({
+      sourceTable:  String(r.source_table).replace(/^"|"$/g, ''),
+      sourceColumn: r.source_column,
+      targetTable:  String(r.target_table).replace(/^"|"$/g, ''),
+      targetColumn: r.target_column,
+    }));
+
+    return { tables, relations };
+  }
 
   async getAvailableTables(): Promise<{ name: string; columns: { name: string; type: string }[] }[]> {
     const rows: { table_name: string; column_name: string; data_type: string }[] =
@@ -415,7 +473,9 @@ export class PlatonService {
 
     for (const [col, val] of Object.entries(contextFilters)) {
       if (val === undefined || val === null) continue;
-      if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(col)) continue; // sécurité
+      if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(col)) {
+        throw new Error(`Nom de colonne invalide dans les filtres : '${col}'`);
+      }
       conditions.push(`"${col}" = $${idx++}`);
       params.push(val);
     }
