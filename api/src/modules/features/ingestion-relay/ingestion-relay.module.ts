@@ -20,7 +20,7 @@ import { IngestionCursor } from '../ingestion/entities/ingestion-cursor.entity';
         exchanges: [
           { name: PLATON_EXCHANGE, type: 'topic' },
         ],
-        // Le relay n'a pas de queues — il publie seulement
+        // Le relay n'a pas de queues - il publie seulement
         connectionInitOptions: { wait: false, reject: false, timeout: 5000 },
       }),
     }),

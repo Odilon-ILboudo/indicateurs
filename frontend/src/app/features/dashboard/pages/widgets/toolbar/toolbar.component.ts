@@ -1,13 +1,15 @@
 // frontend/src/app/widgets/toolbar/toolbar.component.ts
 import { CommonModule } from '@angular/common';
 import { Component, Output, EventEmitter, OnInit, inject } from '@angular/core';
+import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDividerModule } from '@angular/material/divider';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { User, UserService } from '../../../../../core/services/user.service';
-import { environment } from '../../../../../../environments/environment';
+import { getCurrentUserId } from '../../../../../core/auth/current-user';
+import { AuthProvider } from '../../../../../core/auth/auth.types';
 
 @Component({
   standalone: true,
@@ -20,11 +22,13 @@ export class ToolbarComponent implements OnInit {
   @Output() drawerToggle = new EventEmitter<void>();
 
   private readonly userService = inject(UserService);
+  private readonly authProvider = inject(AuthProvider);
+  private readonly router = inject(Router);
 
   protected user: User | null = null;
   protected isDarkTheme = false;
 
-  private readonly USER_ID = environment.defaultUserId;
+  private readonly USER_ID = getCurrentUserId();
 
   get themeIcon(): string {
     return this.isDarkTheme ? 'dark_mode' : 'light_mode';
@@ -93,5 +97,8 @@ export class ToolbarComponent implements OnInit {
     this.applyTheme();
   }
 
-  logout(): void {}
+  async logout(): Promise<void> {
+    await this.authProvider.signOut();
+    this.router.navigate(['/authentification']);
+  }
 }

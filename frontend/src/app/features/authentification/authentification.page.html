@@ -1,0 +1,25 @@
+<section class="login-content">
+  <header>
+    <img class="logo" src="images/logo/platon.svg" alt="Logo PLaTon" />
+  </header>
+  <main>
+    <h1>Connectez-vous à votre compte</h1>
+    
+      <mat-card-content>
+        <mat-spinner *ngIf="connecting" [diameter]="32" [mode]="'indeterminate'"></mat-spinner>
+      </mat-card-content>
+      <mat-card-actions>
+        @if (error) {
+          <p class="error-msg">Une erreur est survenue lors de la connexion.</p>
+          <button mat-raised-button color="primary" (click)="redirectToPlaton()">Réessayer</button>
+        } @else if (!connecting) {
+          <button mat-raised-button color="primary" (click)="redirectToPlaton()">SE CONNECTER</button>
+        }
+      </mat-card-actions>
+    
+  </main>
+</section>
+<section class="login-illustration">
+  <h2>Platform for Learning and Teaching online</h2>
+  <img src="images/illustrations/hero.png" alt="Illustration de PLaTon" />
+</section>

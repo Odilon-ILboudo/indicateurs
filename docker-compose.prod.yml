@@ -1,0 +1,61 @@
+# Mode production : stack complète (RabbitMQ + API + Frontend Nginx)
+#
+# Prérequis : le projet PLaTon doit tourner sur le même hôte avec le réseau
+# platon-network. Les containers platon_postgres et platon_redis doivent
+# être accessibles via ce réseau.
+
+services:
+  rabbitmq:
+    restart: always
+    image: rabbitmq:3-management
+    container_name: indicateurs_rabbitmq
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    networks:
+      - platon-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    restart: always
+    build:
+      context: .
+      dockerfile: .docker/api/Dockerfile
+    container_name: indicateurs_api
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      # Hosts Docker : remplacent les valeurs localhost du .env
+      PLATON_DB_HOST: platon_postgres
+      INDICATORS_DB_HOST: platon_postgres
+      RABBITMQ_URI: amqp://guest:guest@indicateurs_rabbitmq:5672
+      REDIS_HOST: platon_redis
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - platon-network
+
+  nginx:
+    restart: always
+    build:
+      context: .
+      dockerfile: .docker/frontend/Dockerfile
+    container_name: indicateurs_nginx
+    ports:
+      - "${INDICATEURS_PORT:-4300}:80"
+    depends_on:
+      - api
+    networks:
+      - platon-network
+
+volumes:
+  rabbitmqdata:
+
+networks:
+  platon-network:
+    external: true   # réseau partagé avec PLaTon

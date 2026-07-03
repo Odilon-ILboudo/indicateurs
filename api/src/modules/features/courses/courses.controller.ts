@@ -1,8 +1,14 @@
-import { Controller, Get, Header, NotFoundException, Param, Query, Res } from '@nestjs/common';
-import { Response } from 'express';
+import { Controller, Get, Param, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Request, Response } from 'express';
 import { CoursesService } from './courses.service';
+import { AuthGuard, AuthenticatedUser } from '../../core/auth/auth.guard';
+
+interface AuthenticatedRequest extends Request {
+  user?: AuthenticatedUser;
+}
 
 @Controller('v1/courses')
+@UseGuards(AuthGuard)
 export class CoursesController {
   constructor(private readonly coursesService: CoursesService) {}
 
@@ -31,11 +37,12 @@ export class CoursesController {
   @Get(':id/activities')
   listActivities(
     @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
     @Query('sectionId') sectionId?: string,
     @Query('challenge') challenge?: string,
     @Query('expands') _expands?: string | string[],
   ) {
-    return this.coursesService.listActivities(id, { sectionId, challenge });
+    return this.coursesService.listActivities(id, { sectionId, challenge }, request.user?.id);
   }
 
   @Get(':courseId/activities/:activityId/results/date')
@@ -72,8 +79,9 @@ export class CoursesController {
   findActivity(
     @Param('courseId') courseId: string,
     @Param('activityId') activityId: string,
+    @Req() request: AuthenticatedRequest,
   ) {
-    return this.coursesService.findActivity(courseId, activityId);
+    return this.coursesService.findActivity(courseId, activityId, request.user?.id);
   }
 
   @Get(':id/groups')
@@ -102,8 +110,9 @@ export class CoursesController {
   @Get(':id')
   async findById(
     @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
     @Query('expands') _expands?: string | string[],
   ) {
-    return this.coursesService.findCourseById(id);
+    return this.coursesService.findCourseById(id, request.user?.id);
   }
 }

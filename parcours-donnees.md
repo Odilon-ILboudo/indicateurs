@@ -259,7 +259,15 @@ parent (voir F pour `from: 'activity'` / `from: 'group-snapshot'`).
 ## D - Préférences utilisateur
 
 `api/src/modules/features/user-preferences/` - préfixe `@Controller('preferences')`
-→ `/api/preferences` (PAS de sous-préfixe `/indicators`).
+→ `/api/preferences` (PAS de sous-préfixe `/indicators`), `@UseGuards(AuthGuard)`
+sur tout le contrôleur (voir readme.md §12).
+
+> Le `?userId=` visible dans les appels ci-dessous est toujours envoyé par le
+> frontend (`indicator.service.ts`), mais le backend l'**ignore** depuis
+> l'audit de sécurité : l'utilisateur ciblé est systématiquement
+> `request.user.id` (identité vérifiée/décodée depuis le token). Avant, ce
+> paramètre client était utilisé tel quel - IDOR permettant de lire/modifier
+> les préférences de n'importe qui.
 
 ### D.1 Activer / désactiver un indicateur - `IndicatorSelectorComponent`
 
@@ -579,7 +587,8 @@ l'ingestion d'événements (voir I.3). Flux :
 ## G - Cours
 
 Module `api/src/modules/features/courses/` (`@Controller('v1/courses')` →
-`/api/v1/courses`). Le service interroge directement
+`/api/v1/courses`, `@UseGuards(AuthGuard)` sur tout le contrôleur - voir
+readme.md §12). Le service interroge directement
 `@Inject('PLATON_DATA_SOURCE') DataSource` en SQL brut (connexion `'platon'`,
 lecture seule), sans passer par `PlatonService`.
 
@@ -627,13 +636,19 @@ Backend : `courses.controller.ts` `search` (params `search`, `members`,
 
 - `courseService.find({id, expands:['permissions','statistic']})`
   → `course-browser.ts` → **`GET /api/v1/courses/:id`** →
-  `courses.controller.ts` `findById` → `courses.service.ts`
-  `findCourseById` :
+  `courses.controller.ts` `findById` (lit `request.user.id`, posé par
+  `AuthGuard`) → `courses.service.ts` `findCourseById` :
   - `SELECT c.*, TRIM(...) AS "ownerName", (sous-requêtes studentCount/
     teacherCount/activityCount/progression/timeSpent) FROM "Courses" c LEFT
     JOIN "Users" u ON u.id = c.owner_id WHERE c.id = $1`
     (sous-requêtes sur `CourseMembers`, `Activities`, `Sessions`+`Activities`).
-    404 si vide. Mapping `mapCourse`.
+    404 si vide.
+  - `computeCoursePermissions(ownerId, courseId, userId)` : `update` = owner
+    du cours OU `Users.role === 'admin'` OU membre `teacher` du cours
+    (`CourseMembers`) ; `delete` = owner OU `admin` uniquement (être teacher
+    membre ne suffit pas). Règle répliquée de PLaTon
+    (`course.expander.ts`/`course-member.service.ts#hasWritePermission`).
+    Mapping `mapCourse(row, permissions)`.
 - `courseService.getDemo(course.id)` → stub, retourne `null`
   (`course-browser.ts`, pas de HTTP réel).
 
@@ -662,8 +677,11 @@ Backend : `courses.controller.ts` `search` (params `search`, `members`,
      GROUP BY s.activity_id`.
    - `exerciseCountRows` : `COUNT(DISTINCT resource_id) FROM "SessionData"
      WHERE activity_id = ANY($1) GROUP BY activity_id`.
-3. Mapping `mapActivity(r, progressionMap, timeSpentMap,
-   exerciseCountMap)`.
+3. `hasActivityWritePermission(courseId, userId)` (`request.user.id`, une
+   seule fois pour toute la liste) : `admin` global OU membre `teacher` du
+   cours. Mapping `mapActivity(r, progressionMap, timeSpentMap,
+   exerciseCountMap, hasWritePermission)` → `permissions.answer` toujours
+   `true`, `update`/`viewStats`/`viewResource` = `hasWritePermission`.
 
 > **Note routage NestJS** : `:id/sections`, `:id/activities`, `:id/groups`,
 > `:id/groups/:groupId/members`, `:id/members` sont déclarées **avant**
@@ -722,12 +740,14 @@ Backend : `courses.controller.ts` `search` (params `search`, `members`,
 - **Détail activité** : `findActivity(courseId, activityId)` →
   **`GET /api/v1/courses/:courseId/activities/:activityId`** →
   `courses.controller.ts` `findActivity` (ici `courseId` **est**
-  utilisé) → `courses.service.ts` `findActivity` :
+  utilisé, ainsi que `request.user.id` posé par `AuthGuard`) →
+  `courses.service.ts` `findActivity` :
   `SELECT a.*, COALESCE(...) AS title, (a.source->>'resource')::text AS
   "resourceId", ... FROM "Activities" a LEFT JOIN "Resources" r ON r.id =
   (a.source->>'resource')::uuid WHERE a.course_id = $1 AND a.id = $2`. Si
   vide → `throw new Error(...)` (**pas de** `NotFoundException`).
-  Mapping `mapActivity(rows[0])`.
+  `hasActivityWritePermission(courseId, userId)` (même règle qu'en G.2).
+  Mapping `mapActivity(rows[0], undefined, undefined, undefined, hasWritePermission)`.
 
 - **Résultats** : `getActivityResults(activityId)` →
   **`GET /api/v1/courses/:courseId/activities/:activityId/results`**
@@ -779,7 +799,8 @@ Backend : `courses.controller.ts` `search` (params `search`, `members`,
 ## H - Ressources
 
 Module `api/src/modules/features/resources/` (`@Controller('v1/resources')`
-→ `/api/v1/resources`), même pattern SQL brut sur `'platon'`. Frontend :
+→ `/api/v1/resources`, `@UseGuards(AuthGuard)` sur tout le contrôleur - voir
+readme.md §12), même pattern SQL brut sur `'platon'`. Frontend :
 `ResourceService` (`platon-stubs/resource-browser.ts`,
 `const API = ${environment.apiUrl}/v1`) via
 `features/resources/resource/resource.presenter.ts` (`ResourcePresenter`).
@@ -799,14 +820,16 @@ Là aussi, la plupart des opérations d'écriture (`update`, `delete`, `join`,
     construit en mémoire par `buildTree`. Retourne soit la racine
     unique, soit `{ id: 'root', name: 'Cercles', children: tree }`.
   - `resourceService.circle(user.username)` →
-    `resource-browser.ts` → **`GET /api/v1/resources/user-circle?userId=`**
-    (utilise `environment.defaultUserId`, pas le username réel) →
-    `resources.controller.ts` `getUserCircle` →
-    `resources.service.ts` `getUserCircle` :
+    `resource-browser.ts` → **`GET /api/v1/resources/user-circle`**
+    (le paramètre `username` n'est pas utilisé pour construire l'appel ;
+    l'ancien `?userId=` client est de toute façon ignoré côté backend) →
+    `resources.controller.ts` `getUserCircle` (lit `request.user.id`, posé
+    par `AuthGuard`) → `resources.service.ts` `getUserCircle` :
     `SELECT r.* FROM "Resources" r WHERE r.personal = true AND r.owner_id =
     $1 LIMIT 1`. Si aucune ligne, retourne un objet `CIRCLE`
     minimal construit en mémoire (`id: userId, name: 'Mon espace',
-    permissions: {read:true, write:true}`, pas d'écriture DB).
+    permissions: {read:true, write:true}`, pas d'écriture DB). Sinon,
+    `mapResource(rows[0])` avec permissions calculées (voir H.2).
     Sinon `mapResource(rows[0])`.
   - `resourceService.search({views: true, expands: EXPANDS})` → voir
     ci-dessous.
@@ -848,9 +871,20 @@ Là aussi, la plupart des opérations d'écriture (`update`, `delete`, `join`,
 - `resourceService.find({id, markAsViewed: isInitialLoading,
   expands:['parent','statistic','metadata']})` →
   `resource-browser.ts` → **`GET /api/v1/resources/:id`** →
-  `resources.controller.ts` `findById` → `resources.service.ts`
-  `findResourceById` : `SELECT r.* FROM "Resources" r WHERE r.id::text = $1
-  OR r.code = $1`. 404 si vide. Mapping `mapResource`.
+  `resources.controller.ts` `findById` (lit `request.user.id`) →
+  `resources.service.ts` `findResourceById` : `SELECT r.* FROM "Resources" r
+  WHERE r.id::text = $1 OR r.code = $1`. 404 si vide.
+  `computeResourcePermissions(resource, userId)` : `write` = owner du cercle
+  (le cercle lui-même si `type=CIRCLE`, sinon son `parentId`) OU `admin`
+  global sur cercle non-personnel OU membre accepté (`ResourceMembers`,
+  `waiting=false`) du cercle ou d'un cercle ancêtre (requête récursive sur
+  `parent_id`) ; `member`/`watcher`/`waiting` lus directement sur la ressource
+  (`ResourceMembers`/`ResourceWatchers`) ; `read` toujours `true`. Règle
+  répliquée de PLaTon (`permissions.service.ts#userPermissionsOnResource`).
+  Mapping `mapResource(row, permissions)`. Avant l'audit de sécurité,
+  `write`/`member`/`watcher`/`waiting` étaient codés en dur à `false` pour
+  tout le monde (aucun risque, mais UX trop restrictive puisque ce module
+  reste lecture seule côté backend).
 - `resourceService.tree()` → **`GET /api/v1/resources/tree`** (H.1).
 
 Sous-pages `features/resources/resource/{overview,browse,settings,events}` :
@@ -894,7 +928,7 @@ Deux consumers, routing key `'#'` (reçoit tous les types d'événements) :
 → `processIndicatorUpdate(indicator, event)` pour chaque indicateur actif
 dont `requiredEvents` contient `event.type` :
 
-1. `getIncrementalShape(formula)` — analyse la formule.
+1. `getIncrementalShape(formula)` - analyse la formule.
 2. **Si incrémental possible** (shape connue + métadonnées en BDD + sessionId présent) :
    - chemin `findFirst` → met à jour `candidateRows`/`groupCandidateRows` + `computeResultFromCandidates` (0 SQL)
    - chemin `groupBy` → met à jour `groupRowValues` + `applyPostSteps` (0 SQL)
@@ -917,7 +951,7 @@ dont `requiredEvents` contient `event.type` :
 | `teacher` | `getTeacherByCourse(courseId)` → `computeView` + emit WS |
 | `admin` + futurs | `refreshCachedContextValues(indicatorId, contextType)` |
 
-### I.4 WebSocket — `IndicatorsGateway`
+### I.4 WebSocket - `IndicatorsGateway`
 
 `api/src/modules/features/ingestion/indicators.gateway.ts`
 
@@ -932,7 +966,7 @@ Côté frontend : `frontend/src/app/core/services/indicator-socket.service.ts`
 
 ### I.5 `POST /api/ingest` (HTTP legacy)
 
-`ingestion.controller.ts` — endpoint HTTP toujours présent pour les tests manuels.
+`ingestion.controller.ts` - endpoint HTTP toujours présent pour les tests manuels.
 En production, les événements arrivent exclusivement par le pipeline RabbitMQ (I.1 → I.3).
 
 > **Côté frontend**, aucun composant n'appelle directement `/ingest`.

@@ -1,10 +1,11 @@
 // web/src/app/app.config.ts
 import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
 import { AuthProvider } from './core/auth/auth.types';
-import { MockAuthProvider } from './core/auth/mock-auth.provider';
+import { RemoteAuthProvider } from './core/auth/remote-auth.provider';
 import { provideRouter, withRouterConfig } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
+import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { indicatorInterceptor } from './core/interceptors/indicator.interceptor';
 import { appRoutes } from './app.routes';
 
@@ -38,10 +39,10 @@ registerLocaleData(localeFr);
 export const appConfig: ApplicationConfig = {
   providers: [
     provideZoneChangeDetection({ eventCoalescing: true }),
-    { provide: AuthProvider, useClass: MockAuthProvider },
+    { provide: AuthProvider, useClass: RemoteAuthProvider },
     provideRouter(appRoutes, withRouterConfig({ paramsInheritanceStrategy: 'always' })),
     provideHttpClient(
-      withInterceptors([indicatorInterceptor])
+      withInterceptors([authInterceptor, indicatorInterceptor])
     ),
     provideAnimationsAsync(),
     { provide: NZ_I18N, useValue: fr_FR },

@@ -66,10 +66,10 @@ export class ResourceService {
   }
 
   circle(_username: string): Observable<Resource> {
-    // We use userId from environment since we don't have real username→userId lookup
+    const userId = JSON.parse(localStorage.getItem('currentUser') || '{}')?.id ?? ''
     return this.http
       .get<{ resource: Resource }>(`${API}/resources/user-circle`, {
-        params: new HttpParams().set('userId', environment.defaultUserId),
+        params: new HttpParams().set('userId', userId),
       })
       .pipe(map((r) => r.resource))
   }

@@ -25,6 +25,7 @@ fonctionnement global du projet sans avoir à parcourir tout le code source.
 9. [Routes API](#9-routes-api)
 10. [Frontend](#10-frontend)
 11. [Flux métier de bout en bout](#11-flux-métier-de-bout-en-bout)
+12. [Sécurité et authentification](#12-sécurité-et-authentification)
 
 ---
 
@@ -108,7 +109,8 @@ modules/
   core/
     config/configuration.ts     - lecture des variables d'env (ports, BDD, Redis, cron)
     database/                   - connexions TypeORM (PLATON_DATA_SOURCE + connexion 'indicators')
-    guards/admin.guard.ts       - STUB : retourne toujours true, non branché sur les routes
+    auth/auth.guard.ts          - vérifie le token Authorization: Bearer (voir section 12)
+    guards/admin.guard.ts       - restreint une route au rôle 'admin' (lit request.user.id posé par AuthGuard)
     platon/platon.service.ts    - toutes les requêtes SQL brutes vers la BDD PLaTon
   features/
     indicators/                 - cœur du projet : entités, moteur DSL, CRUD, snapshots
@@ -595,8 +597,11 @@ flux `learner`.
 
 ## 9. Routes API
 
-Toutes les routes sont préfixées `/api`. **Aucune authentification** n'est
-appliquée (voir section 12).
+Toutes les routes sont préfixées `/api`. Les contrôleurs `courses`,
+`resources`, `user-preferences` exigent un token valide (`AuthGuard`, voir
+section 12) ; les routes d'écriture d'`indicators` et `event-types` exigent en
+plus le rôle `admin` (`AdminGuard`). Le reste (`indicators` en lecture,
+`ingest*`, `event-types` en lecture...) reste ouvert.
 
 ### Indicateurs (`/api/indicators`, `indicators.controller.ts`)
 
@@ -613,22 +618,28 @@ GET  /indicators/:id/values?contextType=&contextId=&period=&limit=
 GET  /indicators/:id/usage
 GET  /indicators/:id/logs?limit=
 
-POST /indicators                       - créer
+POST /indicators                       - créer (admin)
 POST /indicators/dashboard             - valeurs batch pour le tableau de bord
 POST /indicators/preview               - { formula, context } → { result } (exécute le DSL - voir 12)
 POST /indicators/preview-steps         - idem mais pas-à-pas (debug)
 POST /indicators/:id/compute-view      - { contextType, contextId, vizId?, activityId? }
-POST /indicators/:id/recalculate
+POST /indicators/:id/recalculate       - (admin)
 
-PATCH  /indicators/:id
-PATCH  /indicators/:id/status
-DELETE /indicators/:id
+PATCH  /indicators/:id                 - (admin)
+PATCH  /indicators/:id/status          - (admin)
+DELETE /indicators/:id                 - (admin)
 
 GET    /indicators/:id/snapshots?activityId=
 POST   /indicators/:id/snapshots       - { contextType, contextId, activityId, title } → 409 si doublon
 PATCH  /indicators/:id/snapshots/:snapshotId
 DELETE /indicators/:id/snapshots/:snapshotId
+
+POST   /indicators/:id/notify          - notification liée à l'indicateur (admin)
+DELETE /indicators/:id/feedback/:feedbackId - (admin)
 ```
+
+> (admin) = protégé par `AuthGuard` + `AdminGuard` (rôle `admin` requis, voir
+> section 12). Les autres routes d'`indicators` restent ouvertes.
 
 > Important : dans le contrôleur, les routes littérales (`schema`, `all`,
 > `teacher/:id/context`, `course/:id/activities`, `course/:id/students`,
@@ -638,12 +649,18 @@ DELETE /indicators/:id/snapshots/:snapshotId
 ### Préférences utilisateur (`/api/preferences`, `user-preferences.controller.ts`)
 
 ```
-GET    /preferences?userId=
-GET    /preferences/:indicatorId?userId=
-POST   /preferences/:indicatorId?userId=     - body accepte userRole?
-PATCH  /preferences/:indicatorId?userId=     - body accepte userRole?, activeVizId?, enabledVizIds?
-DELETE /preferences/:indicatorId?userId=
+GET    /preferences
+GET    /preferences/:indicatorId
+POST   /preferences/:indicatorId     - body accepte userRole?
+PATCH  /preferences/:indicatorId     - body accepte userRole?, activeVizId?, enabledVizIds?
+DELETE /preferences/:indicatorId
 ```
+
+Protégé par `AuthGuard` (voir section 12) : l'utilisateur cible est toujours
+`request.user.id` (identité vérifiée/décodée depuis le token), et non plus un
+`?userId=` fourni par le client comme avant l'audit de sécurité - ça fermait un
+IDOR qui permettait de lire/modifier les préférences de n'importe qui en
+changeant cet identifiant dans l'URL.
 
 Si `userRole === 'teacher' | 'admin'`, `calculateAndStoreValue` (calcul learner)
 est skippé - pas de ligne `indicator_value` learner créée pour un enseignant.
@@ -667,6 +684,15 @@ GET /v1/courses/:courseId/activities/:activityId/csv   - téléchargement CSV
 > `:courseId` est ignoré pour les routes `activities/:activityId*` (le frontend
 > envoie `_` comme courseId) - seul `:activityId` compte côté NestJS.
 
+Protégé par `AuthGuard`. `GET /:id`, `GET /:id/activities` et
+`GET /:courseId/activities/:activityId` utilisent `request.user.id` pour
+calculer les vraies permissions (`permissions.update`/`delete` pour un cours,
+`permissions.update`/`viewStats`/`viewResource` pour une activité) - owner du
+cours, rôle global `admin`, ou membre `teacher` du cours (règle répliquée de
+PLaTon, voir `course.expander.ts` et `course-member.service.ts` côté PLaTon).
+Avant l'audit de sécurité, ces champs étaient codés en dur à `true` pour
+n'importe quel utilisateur.
+
 ### Ressources (`/api/v1/resources`, `resources.controller.ts`)
 
 ```
@@ -674,17 +700,25 @@ GET /v1/resources                - recherche (filtres multiples)
 GET /v1/resources/tree           - arbre de cercles (type=CIRCLE, personal=false)
 GET /v1/resources/completion     - autocomplete
 GET /v1/resources/owners         - propriétaires distincts
-GET /v1/resources/user-circle?userId=  - cercle personnel d'un user
+GET /v1/resources/user-circle    - cercle personnel de l'utilisateur courant
 GET /v1/resources/:id
 ```
+
+Protégé par `AuthGuard`. `user-circle` et `GET /:id` utilisent
+`request.user.id` (plus de `?userId=` client). `GET /:id` calcule les vraies
+permissions (`write`/`member`/`watcher`/`waiting`) selon la règle PLaTon
+(owner du cercle, admin global sur cercle non-personnel, membre accepté du
+cercle ou d'un cercle ancêtre - voir `permissions.service.ts` côté PLaTon) ;
+`read` reste toujours `true`. Aucune route de mutation n'existe côté
+`resources.controller.ts` - ce module reste lecture seule.
 
 ### Types d'événements (`/api/event-types`, `event-types.controller.ts`)
 
 ```
 GET    /event-types
-POST   /event-types
-PATCH  /event-types/:id
-DELETE /event-types/:id
+POST   /event-types          - (admin)
+PATCH  /event-types/:id      - (admin)
+DELETE /event-types/:id      - (admin)
 ```
 
 ### Autres modules
@@ -792,7 +826,7 @@ Pour les visualisations `line-chart`, un sélecteur de période est affiché :
 ## 11. Flux métier de bout en bout
 
 1. Le frontend charge les indicateurs actifs et les préférences de l'utilisateur
-   (`GET /indicators`, `GET /preferences?userId=`).
+   (`GET /indicators`, `GET /preferences`).
 2. Pour un contexte `learner`, la valeur est pré-calculée (lors de l'activation
    de l'indicateur ou via `recalculate`) et simplement lue.
 3. Pour `course`/`group`/`activity`, le frontend appelle `compute-view` ; le
@@ -811,4 +845,62 @@ Pour les visualisations `line-chart`, un sélecteur de période est affiché :
 5. Le frontend affiche la visualisation choisie (carte/jauge/courbe/barres/
    histogramme) selon les préférences (`activeVizId`/`enabledVizIds`) et les
    règles de visibilité par rôle (`RoleService`).
+
+---
+
+## 12. Sécurité et authentification
+
+### Contexte : pourquoi pas un simple `JwtStrategy` classique
+
+Le frontend attache un `Authorization: Bearer <accessToken>` à chaque requête
+(`auth.interceptor.ts`), token obtenu en redirigeant l'utilisateur vers le
+**PLaTon de production** (`https://platon.univ-eiffel.fr/login`), pas vers
+l'instance locale dont on connaît le `.env`. Le secret de signature réel
+(`SECRET_KEY` de production) est donc **inconnu** dans cet environnement de
+développement - impossible de vérifier la signature du token comme le ferait
+PLaTon lui-même (`platon/libs/core/server/.../jwt.strategy.ts`).
+
+### `AuthGuard` (`api/src/modules/core/auth/auth.guard.ts`)
+
+Comportement commuté par `NODE_ENV` (`api/.env`) :
+
+- **`development`** (défaut) : décode le payload du token (`sub`, `username`,
+  `exp`) **sans vérifier la signature**, et rejette (401) uniquement si `exp`
+  est dépassé. Suffisant pour éjecter un utilisateur dont la session a expiré,
+  insuffisant pour empêcher un client de forger un `sub` arbitraire.
+- **`production`** : vérification cryptographique complète
+  (`jsonwebtoken.verify` avec `jwtSecret`). À utiliser quand `indicateurs` est
+  déployé aux côtés de **son propre** PLaTon, avec un secret réellement
+  partagé (contrairement à maintenant, où l'authentification passe par le
+  PLaTon universitaire externe).
+
+Dans les deux cas, `request.user = { id, username }` est peuplé pour les
+guards/contrôleurs suivants.
+
+### `AdminGuard` (`api/src/modules/core/guards/admin.guard.ts`)
+
+Doit toujours être posé **après** `AuthGuard` (`@UseGuards(AuthGuard, AdminGuard)`) :
+lit `request.user.id`, vérifie `Users.role === 'admin'` en base PLaTon locale,
+sinon 403.
+
+### Ce que ça protège concrètement
+
+| Zone | Avant l'audit | Maintenant |
+|---|---|---|
+| Permissions cours/activités | codées en dur à `true` pour tout le monde | calculées (owner/admin/teacher membre), voir §9 |
+| Permissions ressources | codées en dur à `false` pour tout le monde | calculées en lecture (owner/admin/membre de cercle), voir §9 |
+| Mutations indicateurs/event-types | `AdminGuard` stub (`return true`), non branché | rôle `admin` réellement vérifié |
+| Préférences utilisateur | `userId` accepté tel quel depuis le client (IDOR) | forcé à `request.user.id` |
+| Session expirée | ignorée, aucune conséquence | 401 → `auth.interceptor.ts` vide le `localStorage` et redirige vers `/authentification` |
+
+### Limite connue
+
+En développement, un appel direct à l'API (hors navigateur) avec un `sub`
+inventé et un `exp` dans le futur passe le contrôle - `AuthGuard` en mode
+`development` ne garantit pas l'authenticité, seulement la fraîcheur. Fermer
+complètement ce trou demanderait soit de connaître le secret de production
+(non souhaitable à dupliquer), soit de valider chaque token via un appel réseau
+à l'API PLaTon de production (`GET /api/v1/users/:username` avec le même
+Bearer, comme le fait déjà `authentification.page.ts` au login) - non
+implémenté à ce jour, faute d'un besoin de sécurité renforcée en développement.
 

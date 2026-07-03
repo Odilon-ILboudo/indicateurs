@@ -30,8 +30,8 @@ import {
   CourseService,
 } from '@platon/feature/course/browser'
 import { Course, CourseFilters, CourseOrderings } from '@platon/feature/course/common'
-import { UserRoles } from '@platon/core/common'
 import { CourseManagementTutorialService } from '@platon/feature/tuto/browser'
+import { RoleService } from '../../core/services/role.service'
 
 @Component({
   standalone: true,
@@ -104,13 +104,14 @@ export class CoursesPage implements OnInit, OnDestroy {
     private readonly courseService: CourseService,
     private readonly courseManagementTutorialService: CourseManagementTutorialService,
     private readonly activatedRoute: ActivatedRoute,
-    private readonly changeDetectorRef: ChangeDetectorRef
+    private readonly changeDetectorRef: ChangeDetectorRef,
+    private readonly roleService: RoleService,
   ) {}
 
   async ngOnInit(): Promise<void> {
     this.user = (await this.authService.ready()) as User
-    this.displayShowAllButton = this.user?.role === UserRoles.admin
-    this.canCreateCourse = this.user?.role === UserRoles.teacher || this.user?.role === UserRoles.admin
+    this.displayShowAllButton = this.roleService.isAdmin()
+    this.canCreateCourse = this.roleService.canManageIndicators()
     this.changeDetectorRef.markForCheck()
     const order = localStorage.getItem('course-order') as CourseOrderings
     const direction = localStorage.getItem('course-direction') as OrderingDirections
@@ -142,43 +143,45 @@ export class CoursesPage implements OnInit, OnDestroy {
         }
 
         this.searching = true
-        const response = await firstValueFrom(
-          this.courseService.search({
-            ...this.filters,
-            members: this.user?.id ? [this.user.id] : undefined,
-            expands: ['permissions', 'statistic'],
-          })
-        )
-        this.items = response.resources
-        this.totalMatches = response.total
-        this.searching = false
-
-        this.checkForCourseTutorial()
-
-        this.changeDetectorRef.markForCheck()
+        try {
+          const response = await firstValueFrom(
+            this.courseService.search({
+              ...this.filters,
+              members: this.user?.id ? [this.user.id] : undefined,
+              expands: ['permissions', 'statistic'],
+            })
+          )
+          this.items = response.resources
+          this.totalMatches = response.total
+          this.checkForCourseTutorial()
+        } catch (error) {
+          console.error('[CoursesPage] Erreur lors du chargement des cours :', error)
+        } finally {
+          this.searching = false
+          this.changeDetectorRef.markForCheck()
+        }
       })
     )
   }
 
-  async searchAll() {
-    this.filters = {
-      ...this.filters,
-      showAll: true,
-    }
-
+  async searchAll(): Promise<void> {
     this.searching = true
-    const response = await firstValueFrom(
-      this.courseService.search({
-        ...this.filters,
-        expands: ['permissions', 'statistic'],
-      })
-    )
-    this.items = response.resources
-    this.totalMatches = response.total
-    this.searching = false
-    this.displayShowAllButton = false
-
-    this.changeDetectorRef.markForCheck()
+    try {
+      const response = await firstValueFrom(
+        this.courseService.search({
+          ...this.filters,
+          expands: ['permissions', 'statistic'],
+        })
+      )
+      this.items = response.resources
+      this.totalMatches = response.total
+      this.displayShowAllButton = false
+    } catch (error) {
+      console.error('[CoursesPage] Erreur lors du chargement de tous les cours :', error)
+    } finally {
+      this.searching = false
+      this.changeDetectorRef.markForCheck()
+    }
   }
 
   ngOnDestroy(): void {

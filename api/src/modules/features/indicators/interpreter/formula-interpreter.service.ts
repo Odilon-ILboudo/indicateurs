@@ -145,7 +145,7 @@ export class FormulaInterpreterService {
    *   fetch(SessionData, contextFields ∋ user_id)
    *   [join]*
    *   [filter]*
-   *   [groupBy(groupField)]   ← optionnel — active le chemin groupRowValues
+   *   [groupBy(groupField)]   ← optionnel - active le chemin groupRowValues
    *   extract(field)
    *   aggregate(avg|sum|count|min|max)
    *   [round|divide]*

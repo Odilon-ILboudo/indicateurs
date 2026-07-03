@@ -3,6 +3,7 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PlatonModule } from './platon/platon.module';
+import { AuthModule } from './auth/auth.module';
 import configuration from './config/configuration';
 import { DatabaseModule } from './database/database.module';
 
@@ -37,7 +38,8 @@ import { DatabaseModule } from './database/database.module';
     
     DatabaseModule,
     PlatonModule,
+    AuthModule,
   ],
-  exports: [DatabaseModule, PlatonModule],
+  exports: [DatabaseModule, PlatonModule, AuthModule],
 })
 export class CoreModule {}

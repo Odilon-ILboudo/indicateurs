@@ -4,9 +4,10 @@ import { ChangeDetectorRef, Component, inject, OnInit } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { RouterModule } from '@angular/router';
 import { NzModalModule } from 'ng-zorro-antd/modal';
+import { firstValueFrom } from 'rxjs';
 import { User, UserService } from '../../../../../core/services/user.service';
 import { RoleService } from '../../../../../core/services/role.service';
-import { environment } from '../../../../../../environments/environment';
+import { AuthProvider } from '../../../../../core/auth/auth.types';
 
 type NavLink = {
   url?: string | null;
@@ -32,10 +33,8 @@ export class SidebarComponent implements OnInit {
 
   private readonly changeDetectorRef = inject(ChangeDetectorRef);
   private readonly roleService = inject(RoleService);
+  private readonly authProvider = inject(AuthProvider);
   private readonly userService = inject(UserService);
-
-  // l'ID depuis environment
-  private readonly USER_ID = environment.defaultUserId;
 
   async ngOnInit(): Promise<void> {
     await this.loadUser();
@@ -45,30 +44,34 @@ export class SidebarComponent implements OnInit {
 
   private async loadUser(): Promise<void> {
     try {
-      const response = await this.userService.getUserById(this.USER_ID).toPromise();
-      if (response?.success && response.data) {
-        this.user = response.data;
-        this.roleService.setRole(this.user.role);
-      } else {
-        console.error('Utilisateur non trouvé');
-        this.setDefaultUser();
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement de l\'utilisateur:', error);
-      this.setDefaultUser();
-    }
-  }
+      const authUser = await this.authProvider.current()
+      if (!authUser) return;
 
-  private setDefaultUser(): void {
-    this.user = {
-      id: this.USER_ID,
-      username: 'default',
-      firstName: 'Utilisateur',
-      lastName: 'Défaut',
-      role: 'student',
-      email: '',
-    };
-    this.roleService.setRole('student');
+      // Le rôle dans authProvider vient de PLaTon production (token OAuth).
+      // On interroge le backend indicateurs qui lit la DB locale PLaTon,
+      // source de vérité pour le rôle en développement.
+      let role = authUser.role as User['role'];
+      try {
+        const response = await firstValueFrom(this.userService.getUserById(authUser.id));
+        if (response?.success && response.data?.role) {
+          role = response.data.role;
+        }
+      } catch {
+        // Fallback sur le rôle du token si le backend est inaccessible
+      }
+
+      this.user = {
+        id: authUser.id,
+        username: authUser.username,
+        firstName: authUser.firstName ?? '',
+        lastName: authUser.lastName ?? '',
+        role,
+        email: authUser.email ?? '',
+      };
+      this.roleService.setRole(role);
+    } catch (error) {
+      console.error('Erreur lors du chargement de l\'utilisateur:', error)
+    }
   }
 
   private buildNavigationLinks(): void {

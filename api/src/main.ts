@@ -18,9 +18,10 @@ async function bootstrap() {
     forbidNonWhitelisted: true,
   }));
   
-  // toutes les méthodes nécessaires
+  const isProd = configService.get('NODE_ENV') === 'production';
   app.enableCors({
-    origin: ['http://localhost:4200', 'http://localhost:3000', 'http://127.0.0.1:4200'],
+    // En prod, Nginx proxie /api : même origine, pas de CORS. En dev, localhost.
+    origin: isProd ? true : ['http://localhost:4200', 'http://localhost:3000', 'http://127.0.0.1:4200'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
     credentials: true,

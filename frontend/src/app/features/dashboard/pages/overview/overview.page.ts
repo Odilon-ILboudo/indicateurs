@@ -13,7 +13,7 @@ import { IndicatorService } from '../../../../core/services/indicator.service';
 import { DashboardSettingsService } from '../../../../core/services/dashboard-settings.service';
 import { RoleService } from '../../../../core/services/role.service';
 import { DashboardContext, IndicatorDefinition } from '../../../../core/models/indicator.model';
-import { environment } from '../../../../../environments/environment';
+import { getCurrentUserId } from '../../../../core/auth/current-user';
 
 @Component({
   standalone: true,
@@ -45,8 +45,8 @@ export class OverviewPage implements OnInit, OnDestroy {
     const scope = this.roleService.isTeacher() ? 'teacher' : this.roleService.isAdmin() ? 'admin' : 'learner';
     return {
       scope,
-      scopeId: environment.defaultUserId,
-      userId: environment.defaultUserId,
+      scopeId: getCurrentUserId(),
+      userId: getCurrentUserId(),
       academicYear: '2024-2025',
       semester: 'S1',
     };

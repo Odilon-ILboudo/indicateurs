@@ -3,7 +3,6 @@ import { ChangeDetectionStrategy, Component, Directive, EventEmitter, Injectable
 import { CommonModule } from '@angular/common'
 import { HttpClient } from '@angular/common/http'
 import { firstValueFrom, Observable, of } from 'rxjs'
-import { environment } from '../environments/environment'
 import { User, UserGroup, UserRoles } from './core-common'
 import { Topic, Level, ListResponse } from './core-common'
 import { Routes } from '@angular/router'
@@ -16,23 +15,17 @@ export class AuthService {
 
   async ready(): Promise<User> {
     if (this.cachedUser) return this.cachedUser
-    try {
-      const res = await firstValueFrom(
-        this.http.get<{ success: boolean; data: User }>(`${environment.apiUrl}/users/${environment.defaultUserId}`)
-      )
-      if (res?.success && res.data) {
-        this.cachedUser = res.data
-        return res.data
-      }
-    } catch {
-      // fall through to default
+    const stored = localStorage.getItem('currentUser')
+    if (stored) {
+      this.cachedUser = JSON.parse(stored)
+      return this.cachedUser!
     }
     this.cachedUser = {
-      id: environment.defaultUserId,
-      username: 'default',
+      id: '',
+      username: 'anonymous',
       firstName: 'Utilisateur',
       lastName: '',
-      role: UserRoles.teacher,
+      role: UserRoles.student,
       email: '',
     }
     return this.cachedUser

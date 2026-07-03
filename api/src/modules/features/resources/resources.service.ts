@@ -108,7 +108,7 @@ export class ResourcesService {
     };
   }
 
-  async findResourceById(id: string) {
+  async findResourceById(id: string, userId?: string) {
     const rows: Record<string, unknown>[] = await this.dataSource.query(
       `SELECT
          r.id, r.name, r.desc, r.type, r.status,
@@ -126,7 +126,110 @@ export class ResourcesService {
     );
 
     if (!rows.length) throw new NotFoundException(`Resource not found: ${id}`);
-    return { resource: this.mapResource(rows[0]) };
+    const row = rows[0];
+    const permissions = await this.computeResourcePermissions(
+      {
+        id: row.id as string,
+        type: row.type as string,
+        parentId: row.parentId as string | null,
+        ownerId: row.ownerId as string,
+        personal: row.personal as boolean,
+      },
+      userId,
+    );
+    return { resource: this.mapResource(row, permissions) };
+  }
+
+  /**
+   * Réplique la règle PLaTon (permissions.service.ts#userPermissionsOnResource) :
+   * write = owner du cercle OU (admin global ET cercle non personnel) OU membre accepté du cercle
+   *         OU owner/membre accepté d'un cercle ancêtre. member/watcher/waiting portent sur la
+   *         ressource elle-même (pas sur le cercle).
+   */
+  private async computeResourcePermissions(
+    resource: { id: string; type: string; parentId: string | null; ownerId: string; personal: boolean },
+    userId?: string,
+  ): Promise<{ read: boolean; write: boolean; member: boolean; watcher: boolean; waiting: boolean }> {
+    if (!userId) {
+      return { read: true, write: false, member: false, watcher: false, waiting: false };
+    }
+
+    const ownMemberRows: { waiting: boolean }[] = await this.dataSource.query(
+      `SELECT waiting FROM "ResourceMembers" WHERE user_id = $1 AND resource_id = $2`,
+      [userId, resource.id],
+    );
+    const member = ownMemberRows.length > 0;
+    const waiting = !!ownMemberRows[0]?.waiting;
+
+    const watcherRows: unknown[] = await this.dataSource.query(
+      `SELECT 1 FROM "ResourceWatchers" WHERE user_id = $1 AND resource_id = $2`,
+      [userId, resource.id],
+    );
+    const watcher = watcherRows.length > 0;
+
+    const circleId = resource.type === 'CIRCLE' ? resource.id : resource.parentId;
+    if (!circleId) {
+      return { read: true, write: false, member, watcher, waiting };
+    }
+
+    const circleRows: { id: string; ownerId: string; personal: boolean }[] = await this.dataSource.query(
+      `SELECT id, owner_id AS "ownerId", personal FROM "Resources" WHERE id = $1`,
+      [circleId],
+    );
+    const circle = circleRows[0];
+    if (!circle) {
+      return { read: true, write: false, member, watcher, waiting };
+    }
+
+    if (circle.ownerId === userId) {
+      return { read: true, write: true, member, watcher, waiting };
+    }
+
+    const userRows: { role: string }[] = await this.dataSource.query(`SELECT role FROM "Users" WHERE id = $1`, [
+      userId,
+    ]);
+    if (userRows[0]?.role === 'admin' && !circle.personal) {
+      return { read: true, write: true, member, watcher, waiting };
+    }
+
+    const circleMemberRows: { waiting: boolean }[] = await this.dataSource.query(
+      `SELECT waiting FROM "ResourceMembers" WHERE user_id = $1 AND resource_id = $2`,
+      [userId, circle.id],
+    );
+    if (circleMemberRows.some((m) => !m.waiting)) {
+      return { read: true, write: true, member, watcher, waiting };
+    }
+
+    // Owner/membre accepté d'un cercle ancêtre (non personnel) - cf. parentPermissionOnResources.
+    let hasParentPermission = false;
+    if (!(circle.personal && circle.ownerId !== userId)) {
+      const ancestors: { id: string; ownerId: string }[] = await this.dataSource.query(
+        `WITH RECURSIVE ancestors AS (
+           SELECT r.id, r.parent_id, r.owner_id
+           FROM "Resources" r
+           WHERE r.id = $1 AND r.type = 'CIRCLE' AND r.personal = false
+           UNION ALL
+           SELECT p.id, p.parent_id, p.owner_id
+           FROM "Resources" p
+           JOIN ancestors a ON p.id = a.parent_id
+           WHERE p.type = 'CIRCLE' AND p.personal = false
+         )
+         SELECT id, owner_id AS "ownerId" FROM ancestors WHERE id != $1`,
+        [circle.id],
+      );
+      if (ancestors.length) {
+        const ancestorIds = ancestors.map((a) => a.id);
+        const ancestorMemberRows: { resourceId: string; waiting: boolean }[] = await this.dataSource.query(
+          `SELECT resource_id AS "resourceId", waiting FROM "ResourceMembers" WHERE user_id = $1 AND resource_id = ANY($2)`,
+          [userId, ancestorIds],
+        );
+        hasParentPermission = ancestors.some(
+          (a) => a.ownerId === userId || ancestorMemberRows.some((m) => m.resourceId === a.id && !m.waiting),
+        );
+      }
+    }
+
+    return { read: true, write: hasParentPermission, member, watcher, waiting };
   }
 
   async getCircleTree() {
@@ -217,7 +320,16 @@ export class ResourcesService {
       }));
   }
 
-  private mapResource(r: Record<string, unknown>) {
+  private mapResource(
+    r: Record<string, unknown>,
+    permissions: { read: boolean; write: boolean; member: boolean; watcher: boolean; waiting: boolean } = {
+      read: true,
+      write: false,
+      member: false,
+      watcher: false,
+      waiting: false,
+    },
+  ) {
     return {
       id: r.id,
       name: r.name,
@@ -234,7 +346,7 @@ export class ResourcesService {
       updatedAt: r.updatedAt,
       levels: [],
       topics: [],
-      permissions: { read: true, write: false, member: false, watcher: false, waiting: false },
+      permissions,
     };
   }
 

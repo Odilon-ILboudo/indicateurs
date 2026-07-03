@@ -23,7 +23,7 @@ import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
 import { NzRateModule } from 'ng-zorro-antd/rate';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzInputModule } from 'ng-zorro-antd/input';
-import { environment } from '../../../environments/environment';
+import { getCurrentUserId } from '../../core/auth/current-user';
 
 @Component({
   selector: 'ui-indicator-detail',
@@ -62,7 +62,7 @@ export class IndicatorDetailComponent implements OnInit {
   indicator: IndicatorDefinition | null = null;
 
   activeContextType: string = 'learner';
-  activeContextId: string = environment.defaultUserId;
+  activeContextId: string = getCurrentUserId();
   activeActivityId: string | undefined = undefined;
 
   courseContextCourseName = '';
@@ -201,7 +201,7 @@ export class IndicatorDetailComponent implements OnInit {
     const viz = this.visualizations[index];
     if (!viz || viz.id === this.activeVizId) return;
     this.activeVizId = viz.id;
-    this.indicatorService.setVizPreference(environment.defaultUserId, this.indicator!.id, viz.id);
+    this.indicatorService.setVizPreference(getCurrentUserId(), this.indicator!.id, viz.id);
     // Calcule à la demande si pas encore fait
     if (!this.results[viz.id] && !this.loading[viz.id]) {
       this.computeViz(viz);
@@ -361,7 +361,7 @@ export class IndicatorDetailComponent implements OnInit {
     if (!this.indicator || this.feedbackRating === 0) return;
     this.feedbackSubmitting = true;
     this.indicatorService
-      .submitFeedback(this.indicator.id, environment.defaultUserId, this.feedbackRating, this.feedbackComment.trim() || undefined)
+      .submitFeedback(this.indicator.id, getCurrentUserId(), this.feedbackRating, this.feedbackComment.trim() || undefined)
       .subscribe({
         next: () => {
           this.feedbackSubmitting = false;

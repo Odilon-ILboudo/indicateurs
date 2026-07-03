@@ -1,5 +1,5 @@
 // Stub: @platon/feature/course/browser
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, forwardRef, Injectable, Input, NgModule, OnChanges, OnInit, OnDestroy, Output, Pipe, PipeTransform, ViewChild } from '@angular/core'
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, forwardRef, inject, Injectable, Input, NgModule, OnChanges, OnInit, OnDestroy, Output, Pipe, PipeTransform, ViewChild } from '@angular/core'
 import { CommonModule, NgIf } from '@angular/common'
 import { ControlValueAccessor, FormControl, FormGroup, FormsModule, NG_VALUE_ACCESSOR, ReactiveFormsModule } from '@angular/forms'
 import { HttpClient, HttpParams } from '@angular/common/http'
@@ -670,7 +670,8 @@ export class CsvDownloadButtonComponent {
     mat-card { width:100%; transition:box-shadow 0.5s; border-radius:5px; }
     mat-card:hover { box-shadow:0px 2px 4px -1px rgba(0,0,0,0.2),0px 4px 5px 0px rgba(0,0,0,0.14),0px 1px 10px 0px rgba(0,0,0,0.12); }
     mat-card-header { max-width:100%; min-width:0; box-sizing:border-box; padding:16px 16px 0; }
-    mat-card-title.card-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:1.1rem; }
+    :host ::ng-deep .mat-mdc-card-header-text { min-width:0; }
+    mat-card-title.card-title { display:block; min-width:0; overflow-wrap:break-word; word-break:break-word; white-space:normal; font-size:1.1rem; }
     mat-card-content { padding:0; position:relative; }
     .ribbon-container { width:100%; height:0; position:absolute; top:-12px; left:0; z-index:1; }
     .card-content { display:flex; flex-direction:column; align-items:center; padding:16px; padding-top:20px; }
@@ -1030,11 +1031,7 @@ export class CourseMemberSearchBarComponent implements ControlValueAccessor {
   private allMembers: CourseMember[] = []
   private onChange = (_: CourseMember[]) => {}
   private onTouched = () => {}
-  private courseService = new CourseService(null as any)
-
-  constructor(http: HttpClient) {
-    this.courseService = new CourseService(http)
-  }
+  private courseService = inject(CourseService)
 
   writeValue(_val: CourseMember[]): void {}
   registerOnChange(fn: (_: CourseMember[]) => void): void { this.onChange = fn }

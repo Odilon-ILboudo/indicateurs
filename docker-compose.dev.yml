@@ -1,0 +1,30 @@
+# Mode développement : infrastructure uniquement
+# L'API tourne localement :    cd api && yarn start:dev
+# Le frontend tourne localement : cd frontend && yarn start
+#
+# Prérequis : le projet PLaTon doit tourner (docker compose -f docker-compose.dev.yml up)
+# car on partage son réseau, son PostgreSQL et son Redis.
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: indicateurs_rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"   # UI de gestion : http://localhost:15672 (guest/guest)
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    networks:
+      - platon-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  rabbitmqdata:
+
+networks:
+  platon-network:
+    external: true   # réseau créé par le docker-compose.dev.yml de PLaTon

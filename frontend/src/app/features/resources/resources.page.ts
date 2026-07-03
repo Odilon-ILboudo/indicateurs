@@ -204,41 +204,46 @@ export default class ResourcesPage implements OnInit, OnDestroy {
       })
     }
 
-    const [tree, circle, views, topics, levels, owners] = await Promise.all([
-      firstValueFrom(this.resourceService.tree()),
-      firstValueFrom(this.resourceService.circle(this.user.username)),
-      firstValueFrom(this.resourceService.search({ views: true, expands: EXPANDS })),
-      firstValueFrom(this.tagService.listTopics()),
-      firstValueFrom(this.tagService.listLevels()),
-      firstValueFrom(this.resourceService.listOwners()),
-    ])
+    try {
+      const [tree, circle, views, topics, levels, owners] = await Promise.all([
+        firstValueFrom(this.resourceService.tree()),
+        firstValueFrom(this.resourceService.circle(this.user.username)),
+        firstValueFrom(this.resourceService.search({ views: true, expands: EXPANDS })),
+        firstValueFrom(this.tagService.listTopics()),
+        firstValueFrom(this.tagService.listLevels()),
+        firstValueFrom(this.resourceService.listOwners()),
+      ])
 
-    this.tree = tree
-    this.circle = circle
-    this.topics = topics
-    this.levels = levels
-    this.views = views.resources
-    this.owners = owners
+      this.tree = tree
+      this.circle = circle
+      this.topics = topics
+      this.levels = levels
+      this.views = views.resources
+      this.owners = owners
 
-    this.circles = []
+      this.circles = []
 
-    this.filterIndicators = [
-      ...topics.map(TopicFilterIndicator),
-      ...topics.map(AntiTopicFilterIndicator),
-      ...levels.map(LevelFilterIndicator),
-      ...owners.map(OwnerFilterIndicator),
-      ...this.filterIndicators,
-    ]
-
-    if (this.tree) {
-      this.circles = flattenCircleTree(this.tree)
       this.filterIndicators = [
-        ...flattenCircleTree(tree).map((circle) => CircleFilterIndicator(circle)),
+        ...topics.map(TopicFilterIndicator),
+        ...topics.map(AntiTopicFilterIndicator),
+        ...levels.map(LevelFilterIndicator),
+        ...owners.map(OwnerFilterIndicator),
         ...this.filterIndicators,
       ]
-    }
 
-    this.changeDetectorRef.markForCheck()
+      if (this.tree) {
+        this.circles = flattenCircleTree(this.tree)
+        this.filterIndicators = [
+          ...flattenCircleTree(tree).map((circle) => CircleFilterIndicator(circle)),
+          ...this.filterIndicators,
+        ]
+      }
+    } catch (error) {
+      console.error('[ResourcesPage] Erreur lors du chargement initial :', error)
+    } finally {
+      this.searching = false
+      this.changeDetectorRef.markForCheck()
+    }
 
     this.subscriptions.push(
       this.activatedRoute.queryParams.subscribe(async (e: QueryParams) => {
@@ -273,25 +278,30 @@ export default class ResourcesPage implements OnInit, OnDestroy {
         this.hasMore = true
         this.paginating = false
 
-        const response = await firstValueFrom(
-          this.resourceService.search({
-            ...this.filters,
-            expands: EXPANDS,
-            limit: PAGINATION_LIMIT,
-          })
-        )
+        try {
+          const response = await firstValueFrom(
+            this.resourceService.search({
+              ...this.filters,
+              expands: EXPANDS,
+              limit: PAGINATION_LIMIT,
+            })
+          )
 
-        this.items = response.resources
-        this.hasMore = response.resources.length > 0
-        this.totalMatches = response.total
-        this.searching = false
+          this.items = response.resources
+          this.hasMore = response.resources.length > 0
+          this.totalMatches = response.total
 
-        // Marquer qu'une recherche a été effectuée
-        if (e.q && e.q.length > 0) {
-          this.hasSearched = true
+          // Marquer qu'une recherche a été effectuée
+          if (e.q && e.q.length > 0) {
+            this.hasSearched = true
+          }
+          this.checkForResourcesTutorial()
+        } catch (error) {
+          console.error('[ResourcesPage] Erreur lors de la recherche :', error)
+        } finally {
+          this.searching = false
+          this.changeDetectorRef.markForCheck()
         }
-        this.checkForResourcesTutorial()
-        this.changeDetectorRef.markForCheck()
       })
     )
 
@@ -343,21 +353,25 @@ export default class ResourcesPage implements OnInit, OnDestroy {
     }
 
     this.paginating = true
-    const response = await firstValueFrom(
-      this.resourceService.search({
-        ...this.filters,
-        expands: EXPANDS,
-        limit: PAGINATION_LIMIT,
-        offset: this.items.length,
-      })
-    )
+    try {
+      const response = await firstValueFrom(
+        this.resourceService.search({
+          ...this.filters,
+          expands: EXPANDS,
+          limit: PAGINATION_LIMIT,
+          offset: this.items.length,
+        })
+      )
 
-    const length = this.items.length
-    this.items = uniquifyBy([...this.items, ...response.resources], 'id')
-    this.hasMore = this.items.length > length
-    this.paginating = false
-
-    this.changeDetectorRef.markForCheck()
+      const length = this.items.length
+      this.items = uniquifyBy([...this.items, ...response.resources], 'id')
+      this.hasMore = this.items.length > length
+    } catch (error) {
+      console.error('[ResourcesPage] Erreur lors du chargement de la suite :', error)
+    } finally {
+      this.paginating = false
+      this.changeDetectorRef.markForCheck()
+    }
   }
 
   protected applyTagFilter(id: string, type: 'topic' | 'level') {

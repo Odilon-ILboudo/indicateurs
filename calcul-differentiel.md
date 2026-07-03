@@ -1,4 +1,4 @@
-# Calcul différentiel et recalcul total — Documentation technique
+# Calcul différentiel et recalcul total - Documentation technique
 
 Ce document explique en détail comment le système calcule la valeur d'un indicateur lorsqu'un événement PLaTon arrive (ex : un étudiant répond à un exercice). Il couvre les deux modes : **calcul différentiel** (mise à jour partielle, sans SQL) et **recalcul total** (pipeline DSL complet depuis la base de données).
 
@@ -16,7 +16,7 @@ fetch(SessionData) → filter → extract → aggregate   → SQL sur toutes les
 
 Pour 100 étudiants × 10 exercices = 1 000 sessions, chaque réponse d'étudiant déclencherait une requête SQL qui lit toutes les 1 000 lignes. Avec 10 indicateurs actifs = 10 000 lignes lues par événement.
 
-La solution : **mémoriser l'état intermédiaire** entre deux événements. Quand une nouvelle session arrive, on met à jour uniquement la session concernée en mémoire, et on recalcule l'agrégat sur ce petit dictionnaire — **zéro SQL**.
+La solution : **mémoriser l'état intermédiaire** entre deux événements. Quand une nouvelle session arrive, on met à jour uniquement la session concernée en mémoire, et on recalcule l'agrégat sur ce petit dictionnaire - **zéro SQL**.
 
 ---
 
@@ -71,7 +71,7 @@ Cette frontière détermine ce qui peut être mis en cache et ce qui ne peut pas
 
 ---
 
-## 4. Détection de la forme incrémentable — `getIncrementalShape`
+## 4. Détection de la forme incrémentable - `getIncrementalShape`
 
 **Fichier** : `api/src/modules/features/indicators/interpreter/formula-interpreter.service.ts`
 
@@ -120,9 +120,9 @@ interface IncrementalShape {
 
 ## 5. Les 4 structures de métadonnées
 
-Selon la forme du pipeline, un état intermédiaire différent est stocké dans la colonne `metadata` de la table `indicator_values` (sous la clé `incremental`). Ces 4 structures sont **mutuellement exclusives** — une seule est présente à la fois.
+Selon la forme du pipeline, un état intermédiaire différent est stocké dans la colonne `metadata` de la table `indicator_values` (sous la clé `incremental`). Ces 4 structures sont **mutuellement exclusives** - une seule est présente à la fois.
 
-### 5.1 `rowValues` — pipeline sans groupBy ni findFirst
+### 5.1 `rowValues` - pipeline sans groupBy ni findFirst
 
 **Exemple de pipeline** : `fetch → [filter*] → extract → aggregate`
 
@@ -144,7 +144,7 @@ Chaque clé est un `sessionId`, chaque valeur est la valeur extraite (`row[extra
 
 ---
 
-### 5.2 `groupRowValues` — pipeline avec groupBy, sans findFirst
+### 5.2 `groupRowValues` - pipeline avec groupBy, sans findFirst
 
 **Exemple de pipeline** : `fetch → [filter*] → groupBy(resource_id) → extract → aggregate`
 
@@ -170,11 +170,11 @@ Chaque clé est un `sessionId`, chaque valeur est la valeur extraite (`row[extra
 2. `allValues = flatMap(groupRowValues, g => values(g))` → `[nouvValeur, 60, 75, 45]`
 3. `aggregate(allValues)` → résultat final
 
-Seule la copie du groupe `resource-uuid-A` est nécessaire — les autres groupes sont inchangés.
+Seule la copie du groupe `resource-uuid-A` est nécessaire - les autres groupes sont inchangés.
 
 ---
 
-### 5.3 `candidateRows` — pipeline avec findFirst, sans groupBy
+### 5.3 `candidateRows` - pipeline avec findFirst, sans groupBy
 
 **Exemple de pipeline** : `fetch → [filter*] → findFirst(sortField: grade) → extract → aggregate`
 
@@ -191,7 +191,7 @@ Seule la copie du groupe `resource-uuid-A` est nécessaire — les autres groupe
 ```
 
 Chaque entrée contient :
-- `sortValue` : valeur du champ de tri (ex: `grade`) — pour trouver le "premier"
+- `sortValue` : valeur du champ de tri (ex: `grade`) - pour trouver le "premier"
 - `extractedValue` : valeur à extraire après findFirst
 - `passes` : `true` si la ligne satisfait la condition `whereField == whereValue` (ou toujours `true` si pas de condition)
 
@@ -205,7 +205,7 @@ Chaque entrée contient :
 
 ---
 
-### 5.4 `groupCandidateRows` — pipeline avec groupBy ET findFirst
+### 5.4 `groupCandidateRows` - pipeline avec groupBy ET findFirst
 
 **Exemple de pipeline** : `fetch → [filter*] → groupBy(resource_id) → findFirst(sortField: grade) → extract → aggregate`
 
@@ -233,7 +233,7 @@ Chaque entrée contient :
 
 ---
 
-## 6. La méthode `applyPostSteps` — post-traitement asynchrone
+## 6. La méthode `applyPostSteps` - post-traitement asynchrone
 
 **Fichier** : `formula-interpreter.service.ts`
 
@@ -252,7 +252,7 @@ Applique en séquence toutes les étapes qui viennent après `extract`. Les éta
 
 ### Pourquoi `js` est autorisé ici
 
-Le `js` après `extract` ne reçoit que des nombres — il n'a pas besoin des rows SessionData. Il s'exécute dans un isolate V8 (sans accès à la BDD) et transforme le résultat numérique. Donc : **0 SQL supplémentaire**, compatible avec le calcul différentiel.
+Le `js` après `extract` ne reçoit que des nombres - il n'a pas besoin des rows SessionData. Il s'exécute dans un isolate V8 (sans accès à la BDD) et transforme le résultat numérique. Donc : **0 SQL supplémentaire**, compatible avec le calcul différentiel.
 
 ---
 
@@ -495,7 +495,7 @@ fetch(SessionData, [user_id, activity_id])
 - `avg([90, 70]) = 80`
 - `round(80, 1) = 80.0`
 
-**Résultat** : `80.0` — **0 SQL PLaTon**, 1 UPSERT `indicator_values`
+**Résultat** : `80.0` - **0 SQL PLaTon**, 1 UPSERT `indicator_values`
 
 ---
 

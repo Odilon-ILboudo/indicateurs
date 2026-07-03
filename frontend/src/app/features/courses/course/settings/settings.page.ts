@@ -12,7 +12,6 @@ import { NzFormModule } from 'ng-zorro-antd/form'
 import { NzSpinModule } from 'ng-zorro-antd/spin'
 import { NzButtonModule } from 'ng-zorro-antd/button'
 import { NzSelectModule } from 'ng-zorro-antd/select'
-import { UserRoles } from '@platon/core/common'
 import { NzInputModule } from 'ng-zorro-antd/input'
 import { NzIconModule } from 'ng-zorro-antd/icon'
 import { Clipboard } from '@angular/cdk/clipboard'
@@ -69,9 +68,7 @@ export class CourseSettingsPage implements OnInit, OnDestroy {
   protected saving = false
 
   protected get canEdit(): boolean {
-    const { user } = this.context
-    if (!user) return false
-    return user.role === UserRoles.teacher || user.role === UserRoles.admin
+    return !!this.context.course?.permissions?.update
   }
 
   protected get canSubmit(): boolean {

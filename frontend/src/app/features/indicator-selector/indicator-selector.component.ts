@@ -32,7 +32,7 @@ const REQUIRED_EVENT_LABELS: Record<string, string> = {
 };
 import { IndicatorDefinition, IndicatorScope, IndicatorVisualization } from '../../core/models/indicator.model';
 import { buildIndicatorDisplayRows, IndicatorDisplayRow } from '../../shared/utils/indicator-family-grouping';
-import { environment } from '../../../environments/environment';
+import { getCurrentUserId } from '../../core/auth/current-user';
 
 // ── Constantes DSL ────────────────────────────────────────────────────────────
 
@@ -761,7 +761,7 @@ export class IndicatorSelectorComponent implements OnInit {
 
     const next = isEnabled ? current.filter(id => id !== viz.id) : [...current, viz.id];
     const persisted = next.length === all.length ? null : next;
-    this.indicatorService.setEnabledVizIds(environment.defaultUserId, indicator.id, persisted);
+    this.indicatorService.setEnabledVizIds(getCurrentUserId(), indicator.id, persisted);
     this.cdr.detectChanges();
   }
 }

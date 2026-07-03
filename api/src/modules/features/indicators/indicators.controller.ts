@@ -1,10 +1,12 @@
 // src/modules/features/indicators/indicators.controller.ts
 import {
-  Controller, Get, Post, Patch, Delete,
+  Controller, Get, Post, Patch, Delete, UseGuards,
   Body, Param, Query, BadRequestException,
 } from '@nestjs/common';
 import { IndicatorsService } from './indicators.service';
 import { FormulaInterpreterService } from './interpreter/formula-interpreter.service';
+import { AdminGuard } from '../../core/guards/admin.guard';
+import { AuthGuard } from '../../core/auth/auth.guard';
 
 @Controller('indicators')
 export class IndicatorsController {
@@ -115,6 +117,7 @@ export class IndicatorsController {
   // ── Écriture ─────────────────────────────────────────────────────────────
 
   @Post()
+  @UseGuards(AuthGuard, AdminGuard)
   async createIndicator(@Body() definition: any) {
     return this.indicatorsService.create(definition);
   }
@@ -174,21 +177,25 @@ export class IndicatorsController {
   }
 
   @Post(':id/recalculate')
+  @UseGuards(AuthGuard, AdminGuard)
   async recalculate(@Param('id') id: string) {
     return this.indicatorsService.recalculate(id);
   }
 
   @Patch(':id')
+  @UseGuards(AuthGuard, AdminGuard)
   async updateIndicator(@Param('id') id: string, @Body() data: any) {
     return this.indicatorsService.update(id, data);
   }
 
   @Patch(':id/status')
+  @UseGuards(AuthGuard, AdminGuard)
   async toggleStatus(@Param('id') id: string, @Body() body: { isActive: boolean }) {
     return this.indicatorsService.toggleStatus(id, body.isActive);
   }
 
   @Delete(':id')
+  @UseGuards(AuthGuard, AdminGuard)
   async deleteIndicator(@Param('id') id: string) {
     await this.indicatorsService.delete(id);
     return { success: true };
@@ -243,6 +250,7 @@ export class IndicatorsController {
 
   /** Envoie une notification liée à un indicateur. */
   @Post(':id/notify')
+  @UseGuards(AuthGuard, AdminGuard)
   async sendNotification(
     @Param('id') id: string,
     @Body() body: { title: string; message: string },
@@ -275,6 +283,7 @@ export class IndicatorsController {
 
   /** Supprime un retour d'expérience (admin). */
   @Delete(':id/feedback/:feedbackId')
+  @UseGuards(AuthGuard, AdminGuard)
   async deleteFeedback(
     @Param('id') id: string,
     @Param('feedbackId') feedbackId: string,

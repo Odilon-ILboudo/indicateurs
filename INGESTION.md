@@ -52,7 +52,7 @@ RABBITMQ_URI=amqp://guest:guest@localhost:5672
 
 ---
 
-## Étape 1 — Trigger PostgreSQL (PLaTon DB)
+## Étape 1 - Trigger PostgreSQL (PLaTon DB)
 
 ### Installation (à exécuter une seule fois sur la BDD PLaTon)
 
@@ -63,7 +63,7 @@ PGPASSWORD=test psql -h localhost -p 5432 -U platon -d platon \
 
 ### Ce que le script crée
 
-**Table `platon_outbox_events`** — reçoit un enregistrement à chaque réponse :
+**Table `platon_outbox_events`** - reçoit un enregistrement à chaque réponse :
 
 | Colonne      | Type        | Description                          |
 |--------------|-------------|--------------------------------------|
@@ -72,7 +72,7 @@ PGPASSWORD=test psql -h localhost -p 5432 -U platon -d platon \
 | `payload`    | JSONB       | userId, sessionId, activityId, grade |
 | `created_at` | TIMESTAMPTZ | Horodatage automatique               |
 
-**Trigger `trg_platon_outbox_session_data`** — se déclenche sur `SessionData` après `INSERT OR UPDATE OF grade`.
+**Trigger `trg_platon_outbox_session_data`** - se déclenche sur `SessionData` après `INSERT OR UPDATE OF grade`.
 
 ### Vérifier que le trigger est en place
 
@@ -84,7 +84,7 @@ PGPASSWORD=test psql -h localhost -p 5432 -U platon -d platon -c \
 
 ---
 
-## Étape 2 — Relay NestJS (Outbox → RabbitMQ)
+## Étape 2 - Relay NestJS (Outbox → RabbitMQ)
 
 **Fichier :** `api/src/modules/features/ingestion-relay/ingestion-relay.service.ts`
 
@@ -94,12 +94,12 @@ Le relay s'exécute toutes les **2 secondes** via un `@Cron`. Il :
 3. Publie chaque événement dans RabbitMQ
 4. Met à jour le curseur `ingestion_cursors.last_id` dans la BDD indicators
 
-**Curseur de position** — table `ingestion_cursors` (indicators DB) :
+**Curseur de position** - table `ingestion_cursors` (indicators DB) :
 
 | Colonne       | Description                                   |
 |---------------|-----------------------------------------------|
 | `stream_name` | `platon_outbox` (clé primaire)               |
-| `last_id`     | Dernier id traité — garantit zéro perte       |
+| `last_id`     | Dernier id traité - garantit zéro perte       |
 | `updated_at`  | Mis à jour à chaque batch                     |
 
 ### Vérifier la position du curseur
@@ -111,7 +111,7 @@ PGPASSWORD=test psql -h localhost -p 5432 -U platon -d indicators -c \
 
 ---
 
-## Étape 3 — Consumers RabbitMQ
+## Étape 3 - Consumers RabbitMQ
 
 **Fichier :** `api/src/modules/features/ingestion/ingestion-consumer.service.ts`
 
@@ -120,7 +120,7 @@ Deux consumers avec routing key `'#'` (reçoivent tous les types d'événements)
 ### Consumer `indicators.learner`
 
 - **Ce qu'il traite :** indicateurs `contextType = 'learner'`
-- **Comment :** `ingestForContext(raw, 'learner')` → `processIndicatorUpdate()` — calcul incrémental si éligible, sinon SQL complet
+- **Comment :** `ingestForContext(raw, 'learner')` → `processIndicatorUpdate()` - calcul incrémental si éligible, sinon SQL complet
 - **Résultat :** met à jour `indicator_values` pour `(indicatorId, learner, userId)` + émet WS
 
 ### Consumer `indicators.aggregate`
@@ -138,13 +138,13 @@ Deux consumers avec routing key `'#'` (reçoivent tous les types d'événements)
 
 ---
 
-## Étape 4 — WebSocket temps réel
+## Étape 4 - WebSocket temps réel
 
 **Fichier :** `api/src/modules/features/ingestion/indicators.gateway.ts`
 
 Après chaque mise à jour d'une valeur, `IngestionService` émet l'événement `indicator.updated` via `EventEmitter2`. Le gateway le capte avec `@OnEvent('indicator.updated')` et le broadcaste à tous les clients connectés via socket.io sur le namespace `/indicators`.
 
-**Côté Angular** — `IndicatorSocketService` :
+**Côté Angular** - `IndicatorSocketService` :
 - Se connecte automatiquement au montage du premier `IndicatorCardComponent`
 - Filtre les événements par `(indicatorId, contextType, contextId)`
 - Met à jour la valeur de la card sans rechargement via `markForCheck()`
@@ -156,19 +156,19 @@ Après chaque mise à jour d'une valeur, `IngestionService` émet l'événement 
 ### Prérequis
 
 ```bash
-# Terminal 1 — démarrer RabbitMQ
+# Terminal 1 - démarrer RabbitMQ
 docker start rabbitmq   # si déjà créé
 # ou
 docker run -d --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
 
-# Terminal 2 — démarrer le backend
+# Terminal 2 - démarrer le backend
 cd indicateurs/api && yarn start
 
-# Terminal 3 — démarrer le frontend (optionnel pour le test WebSocket)
+# Terminal 3 - démarrer le frontend (optionnel pour le test WebSocket)
 cd indicateurs/frontend && ng serve
 ```
 
-### Test 1 — Écriture directe dans l'outbox (bypass trigger)
+### Test 1 - Écriture directe dans l'outbox (bypass trigger)
 
 Utile pour tester le relay et les consumers sans modifier PLaTon :
 
@@ -185,7 +185,7 @@ VALUES ('exercise.answered', jsonb_build_object(
 ));"
 ```
 
-### Test 2 — Déclenchement via trigger (simulation réaliste)
+### Test 2 - Déclenchement via trigger (simulation réaliste)
 
 Met à jour une session réelle → le trigger écrit dans l'outbox automatiquement.  
 ⚠️ Il faut inclure `grade = grade` pour que le trigger `UPDATE OF grade` se déclenche même si seul `attempts` change :
@@ -214,7 +214,7 @@ WHERE id = '2871a397-cf72-49c8-b8c1-1ce7d8cb9b9d';"
 | Indicateur  | Tentatives avant réussite - Apprenant         |
 | Calcul      | Moyenne des tentatives par exercice réussi    |
 
-### Test 3 — Vérifications post-traitement
+### Test 3 - Vérifications post-traitement
 
 ```bash
 # Vérifier que l'outbox a bien reçu les événements
@@ -242,21 +242,21 @@ PGPASSWORD=test psql -h localhost -p 5432 -U platon -d indicators -c \
 Lors du traitement d'un événement, les logs suivants apparaissent dans l'ordre :
 
 ```
-# Relay — lit l'outbox et publie
+# Relay - lit l'outbox et publie
 [IngestionRelayService]    DEBUG Relay : 1 événement(s) publiés (cursor → 7)
 
 # 2 consumers reçoivent en parallèle
 [IngestionConsumerService]  LOG [learner]    ← événement reçu user=e901cddd... session=3fd495b1...
 [IngestionConsumerService]  LOG [aggregate]  ← événement reçu activity=53100bc2...
 
-# Consumer learner — formule exécutée
+# Consumer learner - formule exécutée
 [IngestionService]          LOG [learner] 4 indicateur(s) à traiter event="exercise.answered"
 [FormulaInterpreterService] DEBUG Étape [fetch] → 2 éléments
 [FormulaInterpreterService] DEBUG Étape [aggregate] → 8
 [IngestionService]          LOG [indicator] ✓ mis à jour "Tentatives avant réussite - Apprenant"
                                              (learner) user=e901cddd : 7 → 8 [complet]
 
-# WebSocket — broadcast aux clients connectés
+# WebSocket - broadcast aux clients connectés
 [IndicatorsGateway]         DEBUG WS broadcast: "Tentatives avant réussite..." value=8
 
 # Confirmation consumer

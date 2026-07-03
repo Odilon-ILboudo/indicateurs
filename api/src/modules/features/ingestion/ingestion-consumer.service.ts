@@ -16,7 +16,7 @@ export class IngestionConsumerService {
   // Reçoit TOUS les types d'événements (routing '#') et traite uniquement les
   // indicateurs contextType='learner'. Le filtrage fin se fait dans IngestionService
   // via requiredEvents : si l'événement reçu ne figure pas dans requiredEvents de
-  // l'indicateur, il est ignoré — la routing key large n'entraîne pas de surcharge.
+  // l'indicateur, il est ignoré - la routing key large n'entraîne pas de surcharge.
   @RabbitSubscribe({
     exchange: PLATON_EXCHANGE,
     routingKey: '#',

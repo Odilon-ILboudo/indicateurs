@@ -32,7 +32,7 @@
         <span nz-icon nzType="calendar" nzTheme="outline"></span>
         <span
           >Créé le {{ course.createdAt | date }} par
-          <user-avatar [userIdOrName]="course.ownerName || course.ownerId" noIcon showUsername="inline" />
+          <user-avatar [userIdOrName]="course.ownerId" noIcon showUsername="inline" />
         </span>
       </nz-tag>
 

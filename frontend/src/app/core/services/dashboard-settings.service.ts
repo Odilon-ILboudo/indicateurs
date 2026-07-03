@@ -4,14 +4,18 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { IndicatorService } from './indicator.service';
 import { RoleService } from './role.service';
 import { UserDashboardSettings } from '../models/indicator.model';
-import { environment } from '../../../environments/environment';
+import { AuthProvider } from '../auth/auth.types';
 
 @Injectable({ providedIn: 'root' })
 export class DashboardSettingsService {
   private readonly indicatorService = inject(IndicatorService);
   private readonly roleService = inject(RoleService);
+  private readonly authProvider = inject(AuthProvider);
 
-  private currentUserId: string = environment.defaultUserId;
+  private get currentUserId(): string {
+    const stored = localStorage.getItem('currentUser')
+    return stored ? JSON.parse(stored).id : ''
+  }
   private settings$ = new BehaviorSubject<UserDashboardSettings>({
     dismissedToast: false,
     activeIndicators: [],

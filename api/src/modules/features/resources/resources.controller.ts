@@ -1,7 +1,14 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { Request } from 'express';
 import { ResourcesService } from './resources.service';
+import { AuthGuard, AuthenticatedUser } from '../../core/auth/auth.guard';
+
+interface AuthenticatedRequest extends Request {
+  user?: AuthenticatedUser;
+}
 
 @Controller('v1/resources')
+@UseGuards(AuthGuard)
 export class ResourcesController {
   constructor(private readonly resourcesService: ResourcesService) {}
 
@@ -23,8 +30,8 @@ export class ResourcesController {
   }
 
   @Get('user-circle')
-  getUserCircle(@Query('userId') userId: string) {
-    return this.resourcesService.getUserCircle(userId ?? '');
+  getUserCircle(@Req() request: AuthenticatedRequest) {
+    return this.resourcesService.getUserCircle(request.user?.id ?? '');
   }
 
   // --- Parameterized routes ---
@@ -67,9 +74,10 @@ export class ResourcesController {
   @Get(':id')
   findById(
     @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
     @Query('expands') _expands?: string | string[],
     @Query('markAsViewed') _markAsViewed?: string,
   ) {
-    return this.resourcesService.findResourceById(id);
+    return this.resourcesService.findResourceById(id, request.user?.id);
   }
 }

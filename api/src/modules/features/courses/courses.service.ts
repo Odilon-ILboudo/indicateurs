@@ -87,12 +87,13 @@ export class CoursesService {
     );
 
     return {
-      resources: rows.map((r) => this.mapCourse(r)),
+      // Liste de cours : les actions d'édition ne s'affichent pas ici, pas besoin du détail des permissions.
+      resources: rows.map((r) => this.mapCourse(r, { update: false, delete: false })),
       total: parseInt(countResult[0]?.total ?? '0', 10),
     };
   }
 
-  async findCourseById(id: string) {
+  async findCourseById(id: string, userId?: string) {
     const rows: Record<string, unknown>[] = await this.dataSource.query(
       `SELECT
          c.id, c.name, c.desc, c.owner_id AS "ownerId", c.is_test AS "isTest",
@@ -121,7 +122,49 @@ export class CoursesService {
     );
 
     if (!rows.length) throw new NotFoundException(`Course not found: ${id}`);
-    return { resource: this.mapCourse(rows[0]) };
+    const row = rows[0];
+    const permissions = await this.computeCoursePermissions(row.ownerId as string, id, userId);
+    return { resource: this.mapCourse(row, permissions) };
+  }
+
+  /**
+   * Réplique la règle PLaTon (course.expander.ts / course-member.service.ts#hasWritePermission) :
+   * update = owner du cours OU rôle global admin OU membre "teacher" de ce cours.
+   * delete = owner du cours OU rôle global admin (être teacher membre ne suffit pas).
+   */
+  private async computeCoursePermissions(
+    ownerId: string,
+    courseId: string,
+    userId?: string,
+  ): Promise<{ update: boolean; delete: boolean }> {
+    if (!userId) return { update: false, delete: false };
+    if (userId === ownerId) return { update: true, delete: true };
+
+    const userRows: { role: string }[] = await this.dataSource.query(
+      `SELECT role FROM "Users" WHERE id = $1`,
+      [userId],
+    );
+    if (userRows[0]?.role === 'admin') return { update: true, delete: true };
+
+    const teacherRows: unknown[] = await this.dataSource.query(
+      `SELECT 1 FROM "CourseMembers" WHERE course_id = $1 AND user_id = $2 AND role = 'teacher'`,
+      [courseId, userId],
+    );
+    return { update: teacherRows.length > 0, delete: false };
+  }
+
+  private async hasActivityWritePermission(courseId: string, userId?: string): Promise<boolean> {
+    if (!userId) return false;
+    const userRows: { role: string }[] = await this.dataSource.query(
+      `SELECT role FROM "Users" WHERE id = $1`,
+      [userId],
+    );
+    if (userRows[0]?.role === 'admin') return true;
+    const teacherRows: unknown[] = await this.dataSource.query(
+      `SELECT 1 FROM "CourseMembers" WHERE course_id = $1 AND user_id = $2 AND role = 'teacher'`,
+      [courseId, userId],
+    );
+    return teacherRows.length > 0;
   }
 
   async listMembers(courseId: string, filters: { roles?: string; role?: string; search?: string }) {
@@ -245,7 +288,7 @@ export class CoursesService {
     return { resources: rows, total: rows.length };
   }
 
-  async listActivities(courseId: string, filters: { sectionId?: string; challenge?: string }) {
+  async listActivities(courseId: string, filters: { sectionId?: string; challenge?: string }, userId?: string) {
     const conditions = ['a.course_id = $1'];
     const params: unknown[] = [courseId];
     let idx = 2;
@@ -326,14 +369,17 @@ export class CoursesService {
     const progressionMap = new Map(progressionRows.map((r) => [r.activity_id, r.progression]));
     const timeSpentMap = new Map(timeSpentRows.map((r) => [r.activity_id, r.timeSpent]));
     const exerciseCountMap = new Map(exerciseCountRows.map((r) => [r.activity_id, r.exerciseCount]));
+    const activityPermissions = await this.hasActivityWritePermission(courseId, userId);
 
     return {
-      resources: rows.map((r) => this.mapActivity(r, progressionMap, timeSpentMap, exerciseCountMap)),
+      resources: rows.map((r) =>
+        this.mapActivity(r, progressionMap, timeSpentMap, exerciseCountMap, activityPermissions),
+      ),
       total: rows.length,
     };
   }
 
-  private mapCourse(r: Record<string, unknown>) {
+  private mapCourse(r: Record<string, unknown>, permissions: { update: boolean; delete: boolean }) {
     return {
       id: r.id,
       name: r.name,
@@ -351,7 +397,7 @@ export class CoursesService {
         timeSpent: r.timeSpent ?? 0,
         challengeCount: 0,
       },
-      permissions: { update: true, delete: false },
+      permissions,
     };
   }
 
@@ -360,6 +406,7 @@ export class CoursesService {
     progressionMap?: Map<string, number>,
     timeSpentMap?: Map<string, number>,
     exerciseCountMap?: Map<string, number>,
+    hasWritePermission = false,
   ) {
     const now = new Date();
     const openAt = r.openAt ? new Date(r.openAt as string) : null;
@@ -387,11 +434,16 @@ export class CoursesService {
       progression: progressionMap?.get(r.id as string) ?? 0,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
-      permissions: { update: true, answer: true, viewStats: true, viewResource: true },
+      permissions: {
+        answer: true,
+        update: hasWritePermission,
+        viewStats: hasWritePermission,
+        viewResource: hasWritePermission,
+      },
     };
   }
 
-  async findActivity(courseId: string, activityId: string) {
+  async findActivity(courseId: string, activityId: string, userId?: string) {
     const rows: Record<string, unknown>[] = await this.dataSource.query(
       `SELECT
          a.id,
@@ -413,7 +465,8 @@ export class CoursesService {
       [courseId, activityId],
     );
     if (!rows.length) throw new Error(`Activity not found: ${activityId}`);
-    return { resource: this.mapActivity(rows[0]) };
+    const hasWritePermission = await this.hasActivityWritePermission(courseId, userId);
+    return { resource: this.mapActivity(rows[0], undefined, undefined, undefined, hasWritePermission) };
   }
 
   async getActivityResults(activityId: string) {

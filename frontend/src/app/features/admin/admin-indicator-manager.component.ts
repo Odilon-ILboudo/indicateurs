@@ -418,7 +418,7 @@ export class IndicatorCircleStartModalComponent {
 
           <div class="prev-row">
             <span class="prev-label">Description</span>
-            <p class="prev-value">{{ ind.description || '—' }}</p>
+            <p class="prev-value">{{ ind.description || '-' }}</p>
           </div>
 
           <div class="prev-row prev-meta">
@@ -579,7 +579,7 @@ export class IndicatorCircleStartModalComponent {
   <!-- Modal retours d'expérience -->
   <nz-modal
     [(nzVisible)]="feedbackModalVisible"
-    [nzTitle]="feedbackIndicator ? 'Retours — ' + feedbackIndicator.name : 'Retours'"
+    [nzTitle]="feedbackIndicator ? 'Retours - ' + feedbackIndicator.name : 'Retours'"
     [nzWidth]="600"
     [nzFooter]="null"
     (nzOnCancel)="feedbackModalVisible = false">
@@ -821,7 +821,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
           this.removeLoading = false;
           this.removeModalVisible = false;
           this.cdr.markForCheck();
-          this.messageSvc.success(`« ${ind.name} » retiré du cercle — maintenant indicateur unique`);
+          this.messageSvc.success(`« ${ind.name} » retiré du cercle - maintenant indicateur unique`);
         },
         error: () => { this.removeLoading = false; this.messageSvc.error('Erreur'); },
       });

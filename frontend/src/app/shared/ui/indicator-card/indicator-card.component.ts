@@ -17,7 +17,7 @@ import { FormsModule } from '@angular/forms';
 import { IndicatorService } from '../../../core/services/indicator.service';
 import { IndicatorSocketService } from '../../../core/services/indicator-socket.service';
 import { DashboardContext, IndicatorDefinition, IndicatorValue, IndicatorVisualization } from '../../../core/models/indicator.model';
-import { environment } from '../../../../environments/environment';
+import { getCurrentUserId } from '../../../core/auth/current-user';
 import { IndicatorConfigModalComponent } from './indicator-config-modal.component';
 import { ModalDataService } from './modal-data.service';
 
@@ -137,7 +137,7 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   private loadUserColorPreference(): void {
-    const userId = environment.defaultUserId;
+    const userId = getCurrentUserId();
     this.indicatorService.getUserPreference(userId, this.indicator.id).subscribe({
       next: (preference) => {
         this.applyUserColorForActiveViz(preference?.displayPreferences);
@@ -308,7 +308,7 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
 
   private saveVizVisibility(componentInstance: IndicatorConfigModalComponent, modal: any): Promise<void> {
     this.isSavingConfig = true;
-    const userId = environment.defaultUserId;
+    const userId = getCurrentUserId();
     const enabledVizIds = componentInstance.getEnabledVizIds();
     const allVizIds = enabledVizIds.length === this.visibleVisualizations.length ? null : enabledVizIds;
 
@@ -322,7 +322,7 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
 
   private savePreferences(modal: any): Promise<void> {
     this.isSavingConfig = true;
-    const userId = environment.defaultUserId;
+    const userId = getCurrentUserId();
 
     // Construire displayPreferences avec la clé viz_{vizId}
     const vizIdToSave = this.configVizId || this.activeVizId;

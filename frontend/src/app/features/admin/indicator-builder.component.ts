@@ -27,7 +27,7 @@ import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import * as yaml from 'js-yaml';
 import { IndicatorService } from '../../core/services/indicator.service';
 import { IndicatorDefinition, IndicatorScope, ViewVisualizationType, TeacherCourse, CourseActivity } from '../../core/models/indicator.model';
-import { environment } from '../../../environments/environment';
+import { getCurrentUserId } from '../../core/auth/current-user';
 
 // ── Types DSL ────────────────────────────────────────────────────────────────
 
@@ -263,7 +263,7 @@ interface ImportErrorDisplay {
         <div *ngIf="!similarSearching && similarIndicators.length > 0" class="similar-banner">
           <div class="similar-banner-header">
             <mat-icon class="similar-banner-icon">warning_amber</mat-icon>
-            <span>{{ similarIndicators.length }} indicateur{{ similarIndicators.length > 1 ? 's similaires existants' : ' similaire existant' }} — vérifiez avant de créer.</span>
+            <span>{{ similarIndicators.length }} indicateur{{ similarIndicators.length > 1 ? 's similaires existants' : ' similaire existant' }} - vérifiez avant de créer.</span>
           </div>
           <div class="similar-list">
             <div *ngFor="let ind of similarIndicators" class="similar-item">
@@ -295,7 +295,7 @@ interface ImportErrorDisplay {
             <!-- Description -->
             <div class="prev-row">
               <span class="prev-label">Description</span>
-              <p class="prev-value">{{ ind.description || '—' }}</p>
+              <p class="prev-value">{{ ind.description || '-' }}</p>
             </div>
 
             <!-- Métadonnées : 3 colonnes -->
@@ -306,7 +306,7 @@ interface ImportErrorDisplay {
               </div>
               <div class="prev-meta-cell prev-meta-sep">
                 <span class="prev-label">Cercle</span>
-                <p class="prev-value">{{ ind.circleName || '—' }}</p>
+                <p class="prev-value">{{ ind.circleName || '-' }}</p>
               </div>
               <div class="prev-meta-cell prev-meta-sep">
                 <span class="prev-label">Statut</span>
@@ -389,7 +389,7 @@ interface ImportErrorDisplay {
         <nz-select [(ngModel)]="def.requiredEvents" nzMode="tags"
           nzPlaceHolder="Sélectionner ou saisir un événement" style="width:100%">
           <nz-option *ngFor="let evt of availableEventTypes"
-            [nzValue]="evt.name" [nzLabel]="evt.name + ' — ' + evt.label">
+            [nzValue]="evt.name" [nzLabel]="evt.name + ' - ' + evt.label">
           </nz-option>
         </nz-select>
       </nz-form-control>
@@ -2001,7 +2001,7 @@ ${this.importMode === 'yaml' ? `pipeline:
 }`}`;
   }
   previewCtx = {
-    userId:     (environment as any).defaultUserId || '',
+    userId:     getCurrentUserId() || '',
     groupId:    '',
     activityId: '',
   };
@@ -2289,7 +2289,7 @@ ${this.importMode === 'yaml' ? `pipeline:
     else if (this.modalData?.circlePreset) this.applyCirclePreset(this.modalData.circlePreset);
 
     this.previewCoursesLoading = true;
-    this.indicatorSvc.getTeacherContext(environment.defaultUserId).subscribe({
+    this.indicatorSvc.getTeacherContext(getCurrentUserId()).subscribe({
       next: courses => { this.previewCourses = courses; this.previewCoursesLoading = false; this.cdr.detectChanges(); },
       error: () => { this.previewCoursesLoading = false; },
     });
@@ -2690,7 +2690,7 @@ ${this.importMode === 'yaml' ? `pipeline:
       const wrongKey = Object.keys(raw).find(k => k !== 'pipeline');
       if (wrongKey) {
         throw new PipelineError(
-          `Clé racine "${wrongKey}" inconnue — le document doit commencer par "pipeline".`,
+          `Clé racine "${wrongKey}" inconnue - le document doit commencer par "pipeline".`,
           ['pipeline'], 'Clé attendue', wrongKey,
         );
       }
@@ -2734,7 +2734,7 @@ ${this.importMode === 'yaml' ? `pipeline:
     if (!raw.type) {
       if (wrongStepKey) {
         throw new PipelineError(
-          `Étape ${stepNum} : clé "${wrongStepKey}" inconnue — le nom correct est "type".`,
+          `Étape ${stepNum} : clé "${wrongStepKey}" inconnue - le nom correct est "type".`,
           ['type'], 'Clé attendue', wrongStepKey,
         );
       }
@@ -2747,7 +2747,7 @@ ${this.importMode === 'yaml' ? `pipeline:
       throw new PipelineError(
         `Étape ${stepNum} : type "${raw.type}" inconnu. Pour du code JavaScript personnalisé, utilisez "type: js" avec "params.code".`,
         VALID_TYPES, 'Types valides', raw.type,
-        VALID_TYPES.map(t => `${t} — ${this.STEP_TYPE_LABELS[t]}`),
+        VALID_TYPES.map(t => `${t} - ${this.STEP_TYPE_LABELS[t]}`),
       );
     }
     // Clé étrangère présente malgré un type valide (ex: prams, lable…)
