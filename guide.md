@@ -46,6 +46,33 @@ répète que ce qui est nécessaire à l'action.
      indicateur" et "Créer un cercle" invisibles pour les autres rôles.
    - `canManageIndicators` = Admin **ou** Enseignant → accès en lecture à la
      table de gestion.
+5. **Prérequis événements** : depuis le retrait du seed automatique legacy
+   (2026-07-07), le sélecteur "Événements déclencheurs" du wizard n'accepte
+   plus de saisie libre - il ne propose que les événements **configurés et
+   installés** via l'écran **"Événements & déclencheurs"**
+   (`event-rule-manager.component.ts`, accessible depuis `/dashboard/indicators`
+   en rôle Admin). Le trigger historique de `exercise.answered`
+   (`trg_platon_outbox_session_data` sur `SessionData.grade`) fonctionne
+   toujours tout seul, mais n'est plus référencé par aucune règle - il
+   n'apparaît donc plus dans ce sélecteur tant qu'une règle n'a pas été créée
+   **et installée** pour lui.
+   > ⚠️ **Piège à éviter** : créer une règle sur `SessionData`/`grade` puis
+   > l'installer ajoute un **second** trigger générique en plus du trigger
+   > historique - chaque réponse d'étudiant produirait alors **deux**
+   > événements `exercise.answered` (inoffensif car le recalcul est
+   > idempotent, mais double le bruit des logs/WebSocket). Pour ce guide,
+   > préférez créer une règle sur une **colonne différente** non déjà
+   > couverte, par exemple :
+   > - Table `SessionData`, colonne surveillée `attempts`, opération `UPDATE`,
+   >   condition `changed`.
+   > - Mapping contexte : `userId → user_id`, `courseId → course_id`,
+   >   `activityId → activity_id`, `sessionId → id`.
+   > - Type d'événement : créer `exercise.attempted` ("Tentative
+   >   enregistrée").
+   > - Cliquer "Installer" → confirmer.
+   >
+   > Remplacez alors, dans toutes les étapes ci-dessous, `exercise.answered`
+   > par `exercise.attempted` dans les champs "Événements déclencheurs".
 
 ➡️ **Pour toute la phase de création (étapes A à C ci-dessous), restez en
 rôle Admin.**
@@ -77,14 +104,16 @@ indicateurs 5 et 6 sont autonomes.
 2. Dans la modale "Créer une cercle d'indicateurs" :
    - **Nom de le cercle** : `Tentatives avant réussite`
    - **Description** : `Nombre moyen de tentatives nécessaires avant la première réussite (note 100), décliné par contexte.`
-   - **Événements déclencheurs** (champ tags) : ajouter `exercise.answered`
+   - **Événements déclencheurs** (sélection multiple, événements configurés
+     uniquement - voir étape 0.5) : sélectionner l'événement préparé (ex.
+     `exercise.attempted`)
    - **Contextes à couvrir** (multi-sélection) : cocher dans cet ordre
      **Apprenant**, **Activité**, **Cours**, **Groupe de TP** (l'ordre de
      sélection détermine l'ordre d'enchaînement des wizards).
 3. Cliquer **"Configurer les indicateurs"** → ouvre directement le builder
    pour le 1er contexte (Apprenant), pré-rempli avec le nom
    `Tentatives avant réussite - Apprenant`, la description et
-   `requiredEvents = [exercise.answered]`.
+   `requiredEvents` (l'événement sélectionné ci-dessus).
 
 À chaque "Créer", la modale se ferme et celle du contexte suivant s'ouvre
 automatiquement, jusqu'au dernier (Groupe de TP).
@@ -170,9 +199,10 @@ Cliquer **"Créer"** → enchaîne automatiquement sur l'indicateur "Activité".
 
 ### A.2 Indicateur 2/6 - Activité (`activity`)
 
-**Étape 1** : nom pré-rempli `Tentatives avant réussite - Activité`. Ajouter
-un second tag dans "Événements déclencheurs" : `activity.completed` (en plus
-de `exercise.answered`).
+**Étape 1** : nom pré-rempli `Tentatives avant réussite - Activité`,
+`requiredEvents` inchangé (l'événement configuré à l'étape 0.5, ex.
+`exercise.attempted`). Pas de second événement ici - `activity.completed`
+n'a jamais eu de trigger réel et n'est plus sélectionnable.
 
 **Étape 2** : `contextType = activity` (pré-rempli). Configurer **2
 visualisations** - elles afficheront toutes deux le **même scalaire** calculé
@@ -347,8 +377,9 @@ sur toutes les sessions.
 
 ### A.4 Indicateur 4/6 - Groupe de TP (`group`)
 
-**Étape 1** : nom pré-rempli `Tentatives avant réussite - Groupe de TP`.
-Ajouter un second tag : `exercise.viewed` (en plus de `exercise.answered`).
+**Étape 1** : nom pré-rempli `Tentatives avant réussite - Groupe de TP`,
+`requiredEvents` inchangé. Pas de second événement ici - `exercise.viewed`
+n'a jamais eu de trigger réel et n'est plus sélectionnable.
 
 **Étape 2** : `contextType = group`. Configurer **1 visualisation** - la
 formule retournera un objet par étudiant, adapté aux barres :

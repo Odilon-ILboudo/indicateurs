@@ -132,3 +132,64 @@ export interface IndicatorFeedbacksResult {
   averageRating: number;
 }
 
+// ── Événements & déclencheurs dynamiques ────────────────────────────────────
+
+export interface EventTypeOption {
+  id: string;
+  name: string;
+  label: string;
+  description: string | null;
+  isActive: boolean;
+}
+
+export type EventRuleOperation = 'INSERT' | 'UPDATE' | 'INSERT_OR_UPDATE';
+export type EventRuleConditionKind = 'always' | 'changed' | 'equals' | 'not_equals' | 'threshold_crossed';
+
+export interface EventRuleCondition {
+  kind: EventRuleConditionKind;
+  value?: string | number | boolean | null;
+  operator?: '>' | '>=' | '<' | '<=';
+  threshold?: number;
+}
+
+export interface EventRuleContextMapping {
+  userId: string;
+  courseId?: string;
+  activityId?: string;
+  sessionId?: string;
+}
+
+export interface EventRule {
+  id: string;
+  eventTypeId: string;
+  eventType: EventTypeOption;
+  sourceTable: string;
+  watchedColumn: string | null;
+  operation: EventRuleOperation;
+  condition: EventRuleCondition;
+  contextMapping: EventRuleContextMapping;
+  isActive: boolean;
+  triggerInstalled: boolean;
+  installedAt: string | null;
+  lastAppliedSql: string | null;
+  lastInstallError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateEventRuleBody {
+  eventTypeId?: string;
+  newEventType?: { name: string; label: string; description?: string };
+  sourceTable: string;
+  watchedColumn?: string | null;
+  operation: EventRuleOperation;
+  condition: EventRuleCondition;
+  contextMapping: EventRuleContextMapping;
+}
+
+export interface InstallTriggerResult {
+  success: boolean;
+  message?: string;
+  sql: string;
+}
+

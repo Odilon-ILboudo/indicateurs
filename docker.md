@@ -91,6 +91,7 @@ Variables importantes à adapter :
 | `PLATON_DB_PASSWORD` | Mot de passe PostgreSQL (même que dans `platon/.env`) |
 | `JWT_SECRET` | Doit être identique au `SECRET_KEY` du PLaTon déployé aux côtés de cette instance (utilisé uniquement en `NODE_ENV=production`, voir readme.md §12 - sans effet en dev, où les utilisateurs s'authentifient sur le PLaTon universitaire) |
 | `INDICATEURS_PORT` | Port exposé pour le frontend (défaut : `4300`) |
+| `PLATON_DB_ADMIN_USERNAME`/`PASSWORD` | Optionnel - identifiant Postgres à privilèges élevés pour l'installation des déclencheurs dynamiques (readme.md §6bis). Laisser vide si non utilisé. |
 
 ---
 

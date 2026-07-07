@@ -10,6 +10,7 @@ import { UserPreferencesModule } from './modules/features/user-preferences/user-
 import { CoursesModule } from './modules/features/courses/courses.module';
 import { ResourcesModule } from './modules/features/resources/resources.module';
 import { EventTypesModule } from './modules/features/event-types/event-types.module';
+import { EventRulesModule } from './modules/features/event-rules/event-rules.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { EventTypesModule } from './modules/features/event-types/event-types.mod
     CoursesModule,
     ResourcesModule,
     EventTypesModule,
+    EventRulesModule,
   ],
 })
 export class AppModule {}

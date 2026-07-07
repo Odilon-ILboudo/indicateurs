@@ -21,9 +21,10 @@ import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzTabsModule } from 'ng-zorro-antd/tabs';
 import { NzRateModule } from 'ng-zorro-antd/rate';
 import { IndicatorService } from '../../core/services/indicator.service';
-import { IndicatorDefinition, IndicatorFeedback, IndicatorScope } from '../../core/models/indicator.model';
+import { IndicatorDefinition, IndicatorFeedback, IndicatorScope, EventTypeOption } from '../../core/models/indicator.model';
 import { IndicatorConfigComponent } from './indicator-config.component';
 import { IndicatorBuilderComponent, CONTEXT_LABELS, IndicatorCirclePreset } from './indicator-builder.component';
+import { EventRuleManagerComponent } from './event-rule-manager.component';
 import { buildIndicatorDisplayRows, IndicatorDisplayRow } from '../../shared/utils/indicator-family-grouping';
 
 // ── Modale : logs d'exécution ─────────────────────────────────────────────────
@@ -131,12 +132,9 @@ export interface CircleStartResult {
             nzTooltipPlacement="right">info_outline</mat-icon>
         </nz-form-label>
         <nz-form-control>
-          <nz-select [(ngModel)]="requiredEvents" nzMode="tags"
-            nzPlaceHolder="ex: exercise.answered" style="width:100%">
-            <nz-option nzValue="exercise.answered"  nzLabel="exercise.answered"></nz-option>
-            <nz-option nzValue="exercise.viewed"    nzLabel="exercise.viewed"></nz-option>
-            <nz-option nzValue="activity.completed" nzLabel="activity.completed"></nz-option>
-            <nz-option nzValue="activity.started"   nzLabel="activity.started"></nz-option>
+          <nz-select [(ngModel)]="requiredEvents" nzMode="multiple"
+            nzPlaceHolder="Choisir un ou plusieurs événements" style="width:100%" [nzLoading]="eventTypesLoading">
+            <nz-option *ngFor="let evt of availableEventTypes" [nzValue]="evt.name" [nzLabel]="evt.name + ' - ' + evt.label"></nz-option>
           </nz-select>
         </nz-form-control>
       </nz-form-item>
@@ -166,16 +164,27 @@ export interface CircleStartResult {
   `,
   styles: [`.circle-start { display:flex; flex-direction:column; }`],
 })
-export class IndicatorCircleStartModalComponent {
+export class IndicatorCircleStartModalComponent implements OnInit {
   private readonly modalRef = inject(NzModalRef);
+  private readonly indicatorSvc = inject(IndicatorService);
 
   circleName = '';
   description = '';
   requiredEvents: string[] = [];
   contextTypes: IndicatorScope[] = [];
+  availableEventTypes: EventTypeOption[] = [];
+  eventTypesLoading = false;
 
   readonly contextOptions: { value: IndicatorScope; label: string }[] =
     (Object.keys(CONTEXT_LABELS) as IndicatorScope[]).map(value => ({ value, label: CONTEXT_LABELS[value] }));
+
+  ngOnInit(): void {
+    this.eventTypesLoading = true;
+    this.indicatorSvc.getEventTypes(true).subscribe({
+      next: types => { this.availableEventTypes = types; this.eventTypesLoading = false; },
+      error: () => { this.availableEventTypes = []; this.eventTypesLoading = false; },
+    });
+  }
 
   get canStart(): boolean {
     return !!this.circleName.trim() && this.requiredEvents.length > 0 && this.contextTypes.length > 0;
@@ -219,6 +228,10 @@ export class IndicatorCircleStartModalComponent {
           </p>
         </div>
         <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
+          <button nz-button (click)="openEventRuleManager()" class="icon-btn">
+            <mat-icon>bolt</mat-icon>
+            Événements &amp; déclencheurs
+          </button>
           <button nz-button (click)="openCircleWizard()" class="icon-btn">
             <mat-icon>folder_special</mat-icon>
             Créer un cercle
@@ -913,6 +926,17 @@ export class AdminIndicatorManagerComponent implements OnInit {
   }
 
   // ── Modales ───────────────────────────────────────────────────────────────
+
+  openEventRuleManager(): void {
+    this.modalSvc.create({
+      nzTitle: 'Événements & déclencheurs',
+      nzContent: EventRuleManagerComponent,
+      nzFooter: null,
+      nzWidth: '80vw',
+      nzCentered: true,
+      nzBodyStyle: { 'max-height': '80vh', 'overflow-y': 'auto' },
+    });
+  }
 
   openBuilder(indicator?: IndicatorDefinition): void {
     const ref = this.modalSvc.create({

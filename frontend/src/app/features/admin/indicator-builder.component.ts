@@ -386,12 +386,15 @@ interface ImportErrorDisplay {
     <nz-form-item>
       <nz-form-label [nzRequired]="true">Événements déclencheurs <mat-icon class="info-icon" nz-tooltip="Événements PLaTon qui déclenchent l'ingestion de nouvelles données. L'indicateur est recalculé automatiquement quand ces événements surviennent." nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
       <nz-form-control>
-        <nz-select [(ngModel)]="def.requiredEvents" nzMode="tags"
-          nzPlaceHolder="Sélectionner ou saisir un événement" style="width:100%">
+        <nz-select [(ngModel)]="def.requiredEvents" nzMode="multiple"
+          nzPlaceHolder="Sélectionner un ou plusieurs événements configurés" style="width:100%">
           <nz-option *ngFor="let evt of availableEventTypes"
             [nzValue]="evt.name" [nzLabel]="evt.name + ' - ' + evt.label">
           </nz-option>
         </nz-select>
+        <div *ngIf="!availableEventTypes.length" style="margin-top:6px;font-size:12px;color:#999">
+          Aucun événement configuré. Créez-en un depuis "Événements &amp; déclencheurs" dans l'onglet Administration.
+        </div>
       </nz-form-control>
     </nz-form-item>
   </div>
@@ -2281,9 +2284,9 @@ ${this.importMode === 'yaml' ? `pipeline:
       error: () => { this.schemaLoading = false; },
     });
 
-    this.indicatorSvc.getEventTypes().subscribe({
-      next: types => { this.availableEventTypes = types.filter(t => t.isActive); this.cdr.detectChanges(); },
-      error: () => { this.availableEventTypes = [{ name: 'exercise.answered', label: 'Exercice répondu' }]; },
+    this.indicatorSvc.getEventTypes(true).subscribe({
+      next: types => { this.availableEventTypes = types; this.cdr.detectChanges(); },
+      error: () => { this.availableEventTypes = []; },
     });
     if (this.modalData?.indicator) this.hydrate(this.modalData.indicator);
     else if (this.modalData?.circlePreset) this.applyCirclePreset(this.modalData.circlePreset);
@@ -2317,6 +2320,8 @@ ${this.importMode === 'yaml' ? `pipeline:
   onNameInput(value: string): void {
     this.nameSearch$.next(value);
   }
+
+  // ── Création d'un nouveau type d'événement ("Autres…" dans le sélecteur) ──
 
   openPreview(ind: IndicatorDefinition): void {
     this.previewIndicator = ind;

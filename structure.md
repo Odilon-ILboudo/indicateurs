@@ -121,7 +121,7 @@ indicateurs*.
 | `description` | Texte libre, affiché en infobulle/aide. |
 | `contextType` | Le contexte auquel appartient l'indicateur - fixe pour toute sa durée de vie. Détermine `contextId` lors du calcul (`userId` pour `learner`, `courseId`/`groupId`/`activityId` pour les autres) et qui peut le voir (table de visibilité, readme §8). |
 | `circleName` | `null` ou nom partagé par d'autres indicateurs traitant du même thème sous un autre `contextType`. Sert uniquement à l'affichage groupé (repliable) côté admin/sélecteur - aucun lien technique entre les membres d'un cercle. |
-| `requiredEvents` | Liste d'événements PLaTon (`exercise.answered`, …) qui, lors de l'ingestion, déclenchent un recalcul de la valeur `learner` et un `refreshSnapshots()` des snapshots de groupe liés à l'activité concernée. |
+| `requiredEvents` | Liste d'événements PLaTon (`exercise.answered`, …) qui, lors de l'ingestion, déclenchent un recalcul de la valeur `learner` et un `refreshSnapshots()` des snapshots de groupe liés à l'activité concernée. Le wizard ne propose que les événements **configurés et installés** (voir readme.md §6bis, `event-rules`) - impossible d'y saisir une valeur libre. |
 | `isActive` | Indicateur visible/calculable ou désactivé globalement. |
 | `usageCount` | Compteur d'utilisation (nombre d'utilisateurs l'ayant activé). |
 | `formula` | **Formule unique partagée par toutes les visualisations** - pipeline DSL (1 indicateur = 1 formule). |

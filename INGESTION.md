@@ -84,13 +84,112 @@ PGPASSWORD=test psql -h localhost -p 5432 -U platon -d platon -c \
 
 ---
 
+## Étape 1bis - Déclencheurs dynamiques (no-redeploy réel)
+
+Le trigger de l'étape 1 est câblé en dur : il ne produit **que** `exercise.answered`,
+sur `SessionData.grade`. Pour ajouter un nouvel événement (une autre table, une
+autre colonne, une autre condition) sans toucher au code, il existe un second
+mécanisme, entièrement piloté depuis l'admin (**Indicateurs → "Événements &
+déclencheurs"**).
+
+### Principe
+
+```
+Table PLaTon (INSERT/UPDATE)
+       │ trigger générique installé via l'admin (fn_platon_outbox_generic)
+       ▼
+platon_outbox_events   (event_type = 'raw:<Table>', payload = {table, op, new, old})
+       │ IngestionRelayService.relay()
+       ▼
+  event_type commence par 'raw:' ?
+       │
+       ├─ NON → republié tel quel (chemin historique, ex. exercise.answered)
+       │
+       └─ OUI → classify() : évalue chaque IndicatorEventRule active
+                (table, colonne surveillée, condition, mapping contexte)
+                → 0..N messages RabbitMQ, un par règle qui matche
+```
+
+`indicator_event_rules` (table, base `indicators`) porte une règle par
+`(sourceTable, watchedColumn, operation, condition, contextMapping)` →
+`eventTypeId`. Le catalogue `indicator_event_types` reste la source des *noms*
+exposés au wizard (`GET /api/event-types?configured=true` ne renvoie que les
+types associés à une règle active **et** dont le trigger est réellement
+installé).
+
+### Créer et installer une règle (admin uniquement)
+
+Module frontend : `frontend/src/app/features/admin/event-rule-manager.component.ts`
+(+ `event-rule-builder.component.ts`, `event-rule-install-modal.component.ts`).
+Backend : `api/src/modules/features/event-rules/`.
+
+1. **"Nouvelle règle"** → wizard guidé : table PLaTon → colonne surveillée →
+   opération (INSERT/UPDATE/les deux) → condition (`always`/`changed`/
+   `equals`/`not_equals`/`threshold_crossed`) → mapping contexte (colonnes →
+   `userId`/`courseId`/`activityId`/`sessionId`) → type d'événement (existant
+   ou nouveau). `POST /api/event-rules` - **aucun SQL exécuté à cette étape**,
+   juste enregistrement.
+2. **"Installer"** (icône ⚡) → ouvre un aperçu du SQL (`GET
+   /api/event-rules/:id/preview-sql`) - toujours sans effet. Le bouton
+   **"Confirmer l'installation"** exécute réellement le DDL
+   (`POST /api/event-rules/:id/install`) : `CREATE OR REPLACE FUNCTION
+   fn_platon_outbox_generic()` (idempotente, partagée par toutes les tables)
+   puis `DROP TRIGGER IF EXISTS` + `CREATE TRIGGER trg_platon_outbox_generic_
+   <table>` avec la liste de colonnes surveillées recalculée (union de toutes
+   les règles actives et déjà installées sur cette table).
+3. **"Supprimer"** (icône corbeille) : si le trigger n'est pas installé, retrait
+   simple de la règle. S'il est installé, ouvre le même type d'aperçu SQL, mais
+   pour un retrait - qui **réduit** le trigger (recalcule les colonnes sans
+   celle de la règle supprimée) s'il est partagé par d'autres règles actives
+   sur la même table, ou le supprime entièrement sinon.
+
+### Droits Postgres requis - `PLATON_DB_ADMIN_USERNAME`/`PASSWORD`
+
+`DROP TRIGGER` exige en PostgreSQL d'être **propriétaire** de la table (pas
+juste d'avoir le privilège `TRIGGER`, contrairement à `CREATE TRIGGER`). Le
+rôle applicatif (`PLATON_DB_USERNAME`) n'est pas forcément propriétaire des
+tables PLaTon. Deux options :
+
+- **Régler une fois pour toutes** (recommandé si vous savez déjà quelles
+  tables seront utilisées) :
+  ```sql
+  ALTER TABLE "NomDeLaTable" OWNER TO platon;  -- remplacer 'platon' par PLATON_DB_USERNAME
+  ```
+- **Ou configurer un identifiant admin** dans `api/.env` (superuser, ou
+  propriétaire des tables concernées) :
+  ```env
+  PLATON_DB_ADMIN_USERNAME=postgres
+  PLATON_DB_ADMIN_PASSWORD=...
+  ```
+  Si ces variables sont renseignées, `EventRulesService.execDdl()` exécute le
+  DDL directement via cette connexion (ouverte le temps de la requête, puis
+  fermée) - **aucune modification d'ownership**, rien à restaurer. Sans elles,
+  l'installation tente la connexion applicative habituelle et affiche le SQL
+  en repli si les droits manquent (message d'erreur explicite dans la modale).
+
+### Événement historique `exercise.answered`
+
+Le trigger `trg_platon_outbox_session_data` (étape 1 ci-dessus) continue de
+fonctionner **sans aucun changement** - rien dans ce mécanisme n'y touche.
+Mais depuis le retrait de la ligne "legacy" du catalogue (2026-07-07), aucune
+`IndicatorEventRule` ne le référence plus par défaut : `exercise.answered`
+n'apparaît donc plus dans le sélecteur "configuré" du wizard d'indicateur tant
+qu'une règle équivalente n'est pas recréée via "Nouvelle règle" (table
+`SessionData`, colonne `grade`, condition `always`, mapping `user_id`/
+`course_id`/`activity_id`/`id`) puis installée.
+
+---
+
 ## Étape 2 - Relay NestJS (Outbox → RabbitMQ)
 
 **Fichier :** `api/src/modules/features/ingestion-relay/ingestion-relay.service.ts`
 
 Le relay s'exécute toutes les **2 secondes** via un `@Cron`. Il :
 1. Lit `platon_outbox_events` où `id > last_id` (lecture seule sur PLaTon DB)
-2. Injecte le champ `type` depuis la colonne `event_type` dans le payload
+2. Si `event_type` commence par `raw:` (trigger générique, voir étape 1bis) →
+   `classify()` détermine le(s) `event_type` métier réel(s) via les règles
+   actives. Sinon, injecte simplement le champ `type` depuis la colonne
+   `event_type` dans le payload (chemin historique, inchangé).
 3. Publie chaque événement dans RabbitMQ
 4. Met à jour le curseur `ingestion_cursors.last_id` dans la BDD indicators
 

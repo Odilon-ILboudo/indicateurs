@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { EventTypesService } from './event-types.service';
 import { AdminGuard } from '../../core/guards/admin.guard';
 import { AuthGuard } from '../../core/auth/auth.guard';
@@ -8,8 +8,8 @@ export class EventTypesController {
   constructor(private readonly svc: EventTypesService) {}
 
   @Get()
-  findAll() {
-    return this.svc.findAll();
+  findAll(@Query('configured') configured?: string) {
+    return this.svc.findAll(configured === 'true');
   }
 
   @Get(':id')

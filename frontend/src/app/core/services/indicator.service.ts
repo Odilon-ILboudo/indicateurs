@@ -2,7 +2,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, BehaviorSubject, map, of, tap } from 'rxjs';
-import { CourseActivity, IndicatorDefinition, IndicatorFeedback, IndicatorFeedbacksResult, IndicatorNotification, IndicatorSnapshot, IndicatorValue, StepDebugResult, TeacherCourse, ViewResult } from '../models/indicator.model';
+import { CourseActivity, IndicatorDefinition, IndicatorFeedback, IndicatorFeedbacksResult, IndicatorNotification, IndicatorSnapshot, IndicatorValue, StepDebugResult, TeacherCourse, ViewResult, EventTypeOption, EventRule, CreateEventRuleBody, InstallTriggerResult } from '../models/indicator.model';
 import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
@@ -319,7 +319,46 @@ export class IndicatorService {
 
   // ── Types d'événements ────────────────────────────────────────────────────
 
-  getEventTypes(): Observable<{ id: string; name: string; label: string; description: string | null; isActive: boolean }[]> {
-    return this.http.get<any[]>(`${environment.apiUrl}/event-types`);
+  getEventTypes(configuredOnly = false): Observable<EventTypeOption[]> {
+    const q = configuredOnly ? '?configured=true' : '';
+    return this.http.get<EventTypeOption[]>(`${environment.apiUrl}/event-types${q}`);
+  }
+
+  createEventType(body: { name: string; label: string; description?: string }): Observable<EventTypeOption> {
+    return this.http.post<EventTypeOption>(`${environment.apiUrl}/event-types`, body);
+  }
+
+  // ── Règles de déclenchement dynamiques ──────────────────────────────────
+
+  getEventRules(): Observable<EventRule[]> {
+    return this.http.get<EventRule[]>(`${environment.apiUrl}/event-rules`);
+  }
+
+  createEventRule(body: CreateEventRuleBody): Observable<EventRule> {
+    return this.http.post<EventRule>(`${environment.apiUrl}/event-rules`, body);
+  }
+
+  updateEventRule(id: string, body: Partial<CreateEventRuleBody>): Observable<EventRule> {
+    return this.http.patch<EventRule>(`${environment.apiUrl}/event-rules/${id}`, body);
+  }
+
+  deleteEventRule(id: string): Observable<void> {
+    return this.http.delete<void>(`${environment.apiUrl}/event-rules/${id}`);
+  }
+
+  previewInstallSql(id: string): Observable<{ sql: string }> {
+    return this.http.get<{ sql: string }>(`${environment.apiUrl}/event-rules/${id}/preview-sql`);
+  }
+
+  installTrigger(id: string): Observable<InstallTriggerResult> {
+    return this.http.post<InstallTriggerResult>(`${environment.apiUrl}/event-rules/${id}/install`, {});
+  }
+
+  previewUninstallSql(id: string): Observable<{ sql: string }> {
+    return this.http.get<{ sql: string }>(`${environment.apiUrl}/event-rules/${id}/preview-uninstall-sql`);
+  }
+
+  deleteAndUninstallEventRule(id: string): Observable<InstallTriggerResult> {
+    return this.http.post<InstallTriggerResult>(`${environment.apiUrl}/event-rules/${id}/uninstall`, {});
   }
 }

@@ -14,6 +14,16 @@ export default () => ({
     logging: false,
   },
 
+  // Identifiants Postgres à privilèges élevés sur PLaTon (superuser, ou propriétaire des
+  // tables concernées), utilisés UNIQUEMENT pour exécuter le DDL d'installation d'un trigger
+  // généré depuis l'admin (event-rules) - jamais pour autre chose, jamais de modification
+  // d'ownership. Optionnel : si absent, l'installation tente la connexion applicative
+  // habituelle (échoue avec le message d'erreur habituel si les droits manquent).
+  platonDatabaseAdmin: {
+    username: process.env.PLATON_DB_ADMIN_USERNAME || null,
+    password: process.env.PLATON_DB_ADMIN_PASSWORD || null,
+  },
+
   // Base de données Indicateurs (lecture/écriture)
   indicatorsDatabase: {
     type: 'postgres' as const,

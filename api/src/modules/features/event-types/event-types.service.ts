@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ConflictException, OnModuleInit, Logger 
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { IndicatorEventType } from './event-type.entity';
+import { IndicatorEventRule } from '../event-rules/indicator-event-rule.entity';
 
 @Injectable()
 export class EventTypesService implements OnModuleInit {
@@ -10,6 +11,8 @@ export class EventTypesService implements OnModuleInit {
   constructor(
     @InjectRepository(IndicatorEventType, 'indicators')
     private readonly repo: Repository<IndicatorEventType>,
+    @InjectRepository(IndicatorEventRule, 'indicators')
+    private readonly ruleRepo: Repository<IndicatorEventRule>,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -25,8 +28,13 @@ export class EventTypesService implements OnModuleInit {
     }
   }
 
-  findAll() {
-    return this.repo.find({ order: { name: 'ASC' } });
+  findAll(configuredOnly = false) {
+    if (!configuredOnly) return this.repo.find({ order: { name: 'ASC' } });
+    return this.repo.createQueryBuilder('et')
+      .innerJoin(IndicatorEventRule, 'r', 'r.event_type_id = et.id AND r.is_active = true AND r.trigger_installed = true')
+      .distinct(true)
+      .orderBy('et.name', 'ASC')
+      .getMany();
   }
 
   async findOne(id: string) {

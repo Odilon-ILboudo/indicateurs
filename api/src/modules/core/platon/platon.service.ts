@@ -1,5 +1,5 @@
 // src/modules/core/platon/platon.service.ts
-import { Injectable, Inject, Logger } from '@nestjs/common';
+import { Injectable, Inject, Logger, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 
 @Injectable()
@@ -419,6 +419,20 @@ export class PlatonService {
     }
 
     return Array.from(map.entries()).map(([name, columns]) => ({ name, columns }));
+  }
+
+  /**
+   * Valide qu'une table/colonne PLaTon existe et est exposable, avant toute interpolation
+   * dans du SQL dynamique (DDL de trigger notamment). Réutilise getAvailableTables() : même
+   * source de vérité (information_schema) et même exclusion des colonnes sensibles.
+   */
+  async assertValidTableColumn(table: string, column?: string | null): Promise<void> {
+    const tables = await this.getAvailableTables();
+    const t = tables.find(x => x.name === table);
+    if (!t) throw new BadRequestException(`Table PLaTon inconnue ou non accessible : '${table}'`);
+    if (column && !t.columns.some(c => c.name === column)) {
+      throw new BadRequestException(`Colonne '${column}' introuvable ou non exposable sur '${table}'`);
+    }
   }
 
   /**

@@ -494,6 +494,57 @@ triées par date décroissante). Ces lignes sont écrites par `interpret()`
 > cohérente entre le schéma exposé au builder et les requêtes réellement
 > exécutées par `interpret()` (B.2).
 
+### E.7 Événements & déclencheurs dynamiques - `EventRuleManagerComponent`
+
+Bouton "Événements & déclencheurs" (`admin-indicator-manager.component.ts`
+`openEventRuleManager()`) → modale `EventRuleManagerComponent`
+(`features/admin/event-rule-manager.component.ts`).
+
+1. `ngOnInit()` → `load()` → `indicatorSvc.getEventRules()` →
+   **`GET /api/event-rules`** → `event-rules.controller.ts` `findAll` →
+   `event-rules.service.ts` `findAll` (table `indicator_event_rules`,
+   `where: { isActive: true }`, `eventType` chargé en `eager: true`).
+2. **Créer une règle** - `openNewRule()` → modale
+   `EventRuleBuilderComponent` (`event-rule-builder.component.ts`) :
+   - `ngOnInit()` charge `getPlatonSchema()` (**`GET /api/indicators/schema`**,
+     réutilisé tel quel, voir E.6) et `getEventTypes()` (**`GET
+     /api/event-types`**, catalogue complet non filtré).
+   - `save()` → `indicatorSvc.createEventRule(body)` → **`POST
+     /api/event-rules`** → `event-rules.controller.ts` `create` →
+     `event-rules.service.ts` `create` : valide `sourceTable`/`watchedColumn`
+     via `PlatonService.assertValidTableColumn` (réutilise
+     `getAvailableTables`, même filtre de sécurité qu'en E.6), résout ou crée
+     l'`eventTypeId` (délègue à `EventTypesService.create` si nouveau type),
+     insère dans `indicator_event_rules` (`triggerInstalled: false`).
+3. **Aperçu SQL** - `openInstall(rule)` → modale
+   `EventRuleInstallModalComponent` (mode `'install'`) :
+   - `ngOnInit()` → `indicatorSvc.previewInstallSql(rule.id)` → **`GET
+     /api/event-rules/:id/preview-sql`** → `event-rules.service.ts`
+     `previewInstallSql` → `buildDdl(rule)` (génère le SQL, **aucune
+     exécution**).
+   - Bouton "Confirmer l'installation" → `indicatorSvc.installTrigger(rule.id)`
+     → **`POST /api/event-rules/:id/install`** → `event-rules.service.ts`
+     `installTrigger` → `buildDdl(rule)` puis `execDdl(sql)` : exécute via
+     `PLATON_DB_ADMIN_USERNAME`/`PASSWORD` si configurés (connexion `pg.Client`
+     séparée, ouverte/fermée pour cette seule requête), sinon via la
+     connexion `PLATON_DATA_SOURCE` habituelle. Met à jour `triggerInstalled`,
+     `installedAt`, `lastAppliedSql`/`lastInstallError` sur la ligne
+     `indicator_event_rules`.
+4. **Suppression** - `!rule.triggerInstalled` → popconfirm →
+   `deactivate(rule)` → **`DELETE /api/event-rules/:id`** →
+   `event-rules.service.ts` `remove` (`isActive = false`, aucun SQL PLaTon).
+   Si `rule.triggerInstalled` → `openUninstall(rule)` → même modale (mode
+   `'uninstall'`) → `previewUninstallSql`/`deleteAndUninstall` (**`GET
+   /api/event-rules/:id/preview-uninstall-sql`** / **`POST
+   /api/event-rules/:id/uninstall`**) → `event-rules.service.ts`
+   `buildUninstallDdl` (réduit le trigger générique de la table si d'autres
+   règles actives le partagent, sinon `DROP TRIGGER IF EXISTS`), puis
+   `execDdl` et désactivation de la règle.
+
+> Toutes les routes `/api/event-rules*` exigent `AuthGuard` + `AdminGuard`
+> (y compris les `GET`), contrairement à `/api/event-types` dont les `GET`
+> restent publics - voir readme.md §6bis pour le détail du mécanisme.
+
 ---
 
 ## F - Page activité & snapshots de groupe
@@ -902,10 +953,17 @@ pour le schéma complet, les commandes de test et les IDs de référence.
 
 ### I.1 Trigger PostgreSQL → `platon_outbox_events`
 
-Déclenché automatiquement par `trg_platon_outbox_session_data` sur
-`AFTER INSERT OR UPDATE OF grade` sur `SessionData` (BDD PLaTon).
-Écrit une ligne dans `platon_outbox_events` : `event_type`, `payload`
-(userId, sessionId, activityId, courseId, grade, attempts).
+Chemin historique : déclenché automatiquement par
+`trg_platon_outbox_session_data` sur `AFTER INSERT OR UPDATE OF grade` sur
+`SessionData` (BDD PLaTon). Écrit une ligne dans `platon_outbox_events` :
+`event_type = 'exercise.answered'`, `payload` (userId, sessionId, activityId,
+courseId, grade, attempts).
+
+Chemin dynamique (voir E.7) : un trigger générique
+`trg_platon_outbox_generic_<table>` (fonction partagée
+`fn_platon_outbox_generic()`), installé depuis l'admin, écrit
+`event_type = 'raw:<Table>'`, `payload = {table, op, new, old}` - à
+classifier en I.2.
 
 ### I.2 `IngestionRelayService` → RabbitMQ
 
@@ -913,8 +971,14 @@ Déclenché automatiquement par `trg_platon_outbox_session_data` sur
 
 Cron `*/2 * * * * *` :
 1. `SELECT * FROM platon_outbox_events WHERE id > last_id` (BDD PLaTon, lecture seule).
-2. Publie chaque ligne dans RabbitMQ exchange `platon.events` (topic), routing key = `event_type`.
-3. Avance `ingestion_cursors.last_id` (BDD indicators).
+2. Si `event_type` commence par `raw:` → `classify(payload)` : évalue chaque
+   `IndicatorEventRule` active (cache 30s, `RULE_CACHE_TTL_MS`) contre
+   `payload.table`/`payload.op`/condition/mapping contexte → 0..N événements
+   métier résolus (voir E.7 pour la création/installation des règles).
+   Sinon, publie tel quel (chemin historique, inchangé).
+3. Publie chaque événement résolu dans RabbitMQ exchange `platon.events`
+   (topic), routing key = `event_type` métier.
+4. Avance `ingestion_cursors.last_id` (BDD indicators).
 
 ### I.3 Consumers RabbitMQ
 

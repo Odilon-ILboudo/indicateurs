@@ -20,6 +20,7 @@ fonctionnement global du projet sans avoir à parcourir tout le code source.
 4. [Bases de données](#4-bases-de-données)
 5. [Modèle de données - entités `indicators`](#5-modèle-de-données--entités-indicators)
 6. [Moteur DSL - calcul des indicateurs](#6-moteur-dsl--calcul-des-indicateurs)
+6bis. [Déclencheurs dynamiques (event-rules)](#6bis-déclencheurs-dynamiques-event-rules)
 7. [Modèle - contextType + visualizations](#7-modèle-option-b--contexttype--visualizations)
 8. [Cercles d'indicateurs et visibilité par rôle](#8-familles-dindicateurs-et-visibilité-par-rôle)
 9. [Routes API](#9-routes-api)
@@ -79,6 +80,13 @@ INDICATORS_DB_NAME=
 # quand aucune activité n'est précisée par l'appelant
 TARGET_ACTIVITY_ID=
 
+# Optionnel - identifiant Postgres à privilèges élevés (superuser, ou propriétaire
+# des tables PLaTon concernées), utilisé uniquement pour exécuter le DDL d'installation
+# des déclencheurs dynamiques (section 6bis / event-rules). Sans ça, l'installation
+# tente la connexion applicative habituelle.
+PLATON_DB_ADMIN_USERNAME=
+PLATON_DB_ADMIN_PASSWORD=
+
 NODE_ENV=development
 PORT=3001
 JWT_SECRET=
@@ -120,6 +128,7 @@ modules/
       indicators.controller.ts  - toutes les routes /api/indicators*
       indicators.service.ts     - logique métier (computeView, recalculate, snapshots…)
     event-types/                - types d'événements PLaTon gérés en BDD (CRUD, seed au démarrage)
+    event-rules/                 - déclencheurs dynamiques : règle → trigger PostgreSQL généré (section 6bis)
     user-preferences/           - préférences d'affichage par utilisateur
     ingestion/                  - consumers RabbitMQ, WebSocket gateway, service d'ingestion
       ingestion-consumer.service.ts - 2 consumers routing key '#' (learner + aggregate)
@@ -158,6 +167,9 @@ features/
     admin-indicator-manager.component.ts  - table CRUD admin
     indicator-builder.component.ts        - wizard de création/édition (3 étapes, voir section 6/7)
     indicator-config.component.ts         - config rapide d'affichage
+    event-rule-manager.component.ts       - écran "Événements & déclencheurs" (section 6bis)
+    event-rule-builder.component.ts       - wizard guidé de création d'une règle
+    event-rule-install-modal.component.ts - aperçu SQL + confirmation d'install/retrait
   indicator-selector/    - l'utilisateur active/désactive ses indicateurs
   indicator-detail/      - page détail d'un indicateur (tabs par visualisation)
   activity-indicator/    - ancien composant legacy
@@ -299,7 +311,20 @@ Notification destinée à un utilisateur : `indicatorId`, `userId`, `message`, `
 ### `IndicatorEventType` (table `indicator_event_types`)
 
 Types d'événements PLaTon déclarés en BDD : `id`, `name`, `label`, `description`, `isActive`.
-Géré via `GET/POST/PATCH/DELETE /api/event-types`. Seed automatique de `exercise.answered` au démarrage si la table est vide. Permet d'ajouter de nouveaux types d'événements sans redéploiement.
+Géré via `GET/POST/PATCH/DELETE /api/event-types`. Seed automatique de `exercise.answered` au démarrage si la table est vide. `GET /api/event-types?configured=true` ne renvoie que les types associés à une `IndicatorEventRule` active **et** installée (voir section 6bis) - c'est ce filtre qui alimente le sélecteur du wizard d'indicateur.
+
+### `IndicatorEventRule` (table `indicator_event_rules`)
+
+Une règle de classification : transforme un changement brut sur une table PLaTon en un `IndicatorEventType`. Voir section 6bis pour le détail complet.
+
+| Champ | Rôle |
+|---|---|
+| `eventTypeId` | type d'événement produit si la règle matche |
+| `sourceTable` / `watchedColumn` | table et colonne PLaTon surveillées (`watchedColumn` peut être `null` = INSERT uniquement) |
+| `operation` | `INSERT` \| `UPDATE` \| `INSERT_OR_UPDATE` |
+| `condition` | `{ kind: 'always'\|'changed'\|'equals'\|'not_equals'\|'threshold_crossed', value?, operator?, threshold? }` |
+| `contextMapping` | colonnes source → `userId` (obligatoire) / `courseId` / `activityId` / `sessionId` |
+| `triggerInstalled` / `installedAt` / `lastAppliedSql` / `lastInstallError` | suivi de l'installation réelle du trigger PostgreSQL |
 
 ### `IndicatorSnapshot` (table `indicator_snapshots`)
 
@@ -482,6 +507,40 @@ résultats, "Afficher tout" si > 5 lignes).
 
 ---
 
+## 6bis. Déclencheurs dynamiques (`event-rules`)
+
+Un seul événement est câblé en dur dans le code : `exercise.answered`, produit
+par le trigger `trg_platon_outbox_session_data` sur `SessionData.grade`
+(installé manuellement, voir [`INGESTION.md`](INGESTION.md) étape 1). Pour
+ajouter un **nouvel** événement (autre table, autre colonne, autre condition)
+sans redéploiement, l'écran admin **"Événements & déclencheurs"**
+(`event-rule-manager.component.ts`) permet de :
+
+1. **Créer une règle** (`event-rule-builder.component.ts`) : table PLaTon →
+   colonne surveillée → opération → condition → mapping contexte (colonnes →
+   `userId`/`courseId`/`activityId`/`sessionId`) → type d'événement (existant
+   ou nouveau) → `POST /api/event-rules`. Aucun SQL exécuté à cette étape.
+2. **Installer le trigger** (`event-rule-install-modal.component.ts`) :
+   aperçu du SQL (`GET /api/event-rules/:id/preview-sql`), puis exécution
+   réelle sur confirmation (`POST /api/event-rules/:id/install`) - crée/mets
+   à jour un trigger générique `trg_platon_outbox_generic_<table>` (fonction
+   partagée `fn_platon_outbox_generic()`, réutilisée par toutes les tables).
+3. **Supprimer** : retire le trigger (ou le réduit s'il est partagé par
+   d'autres règles actives sur la même table) puis désactive la règle.
+
+`IngestionRelayService.classify()` (voir [`INGESTION.md`](INGESTION.md) étape
+1bis) évalue les règles actives contre chaque événement générique brut
+(`event_type` préfixé `raw:`) pour déterminer le(s) événement(s) métier réel(s)
+à publier. Le chemin historique (`exercise.answered` et tout `event_type` non
+préfixé `raw:`) reste totalement inchangé.
+
+`DROP TRIGGER` exigeant en PostgreSQL la propriété de la table (pas juste un
+privilège `GRANT`), l'installation peut échouer si le rôle applicatif n'est
+pas propriétaire - voir `PLATON_DB_ADMIN_USERNAME`/`PASSWORD` (section 2) pour
+un contournement sans jamais modifier l'ownership.
+
+---
+
 ## 7. Modèle - `contextType` + `visualizations[]`
 
 **1 indicateur = 1 `contextType` unique**, mais peut avoir **N visualisations**
@@ -600,7 +659,8 @@ flux `learner`.
 Toutes les routes sont préfixées `/api`. Les contrôleurs `courses`,
 `resources`, `user-preferences` exigent un token valide (`AuthGuard`, voir
 section 12) ; les routes d'écriture d'`indicators` et `event-types` exigent en
-plus le rôle `admin` (`AdminGuard`). Le reste (`indicators` en lecture,
+plus le rôle `admin` (`AdminGuard`) - `event-rules` exige `AdminGuard` sur
+**toutes** ses routes, y compris les `GET`. Le reste (`indicators` en lecture,
 `ingest*`, `event-types` en lecture...) reste ouvert.
 
 ### Indicateurs (`/api/indicators`, `indicators.controller.ts`)
@@ -715,10 +775,29 @@ cercle ou d'un cercle ancêtre - voir `permissions.service.ts` côté PLaTon) ;
 ### Types d'événements (`/api/event-types`, `event-types.controller.ts`)
 
 ```
-GET    /event-types
+GET    /event-types?configured=true   - filtre : uniquement les types avec une règle active + installée
 POST   /event-types          - (admin)
 PATCH  /event-types/:id      - (admin)
 DELETE /event-types/:id      - (admin)
+```
+
+### Déclencheurs dynamiques (`/api/event-rules`, `event-rules.controller.ts`, section 6bis)
+
+Toutes les routes sont protégées `AuthGuard` + `AdminGuard` (y compris les `GET`
+- ces routes exposent des noms de table/colonne PLaTon et du SQL généré).
+
+```
+GET    /event-rules
+GET    /event-rules/:id
+POST   /event-rules
+PATCH  /event-rules/:id
+DELETE /event-rules/:id                    - désactivation simple (isActive = false), ne touche pas au trigger
+
+GET    /event-rules/:id/preview-sql        - aperçu du DDL d'installation, sans effet
+POST   /event-rules/:id/install            - exécute réellement le DDL
+
+GET    /event-rules/:id/preview-uninstall-sql  - aperçu du DDL de retrait, sans effet
+POST   /event-rules/:id/uninstall          - exécute le retrait (ou la réduction) puis désactive la règle
 ```
 
 ### Autres modules

@@ -4,19 +4,36 @@ import { Repository, DataSource } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import { IngestionCursor } from '../ingestion/entities/ingestion-cursor.entity';
+import { IndicatorEventRule, EventRuleCondition } from '../event-rules/indicator-event-rule.entity';
 
 export const PLATON_EXCHANGE = 'platon.events';
+
+const RULE_CACHE_TTL_MS = 30_000;
+
+interface ClassifiedEvent {
+  type: string;
+  userId: string;
+  courseId?: string;
+  activityId?: string;
+  sessionId?: string;
+  payload: Record<string, any>;
+}
 
 @Injectable()
 export class IngestionRelayService {
   private readonly logger = new Logger(IngestionRelayService.name);
   private isRunning = false;
 
+  private ruleCache: IndicatorEventRule[] = [];
+  private ruleCacheLoadedAt = 0;
+
   constructor(
     @Inject('PLATON_DATA_SOURCE')
     private readonly platonDb: DataSource,
     @InjectRepository(IngestionCursor, 'indicators')
     private readonly cursorRepo: Repository<IngestionCursor>,
+    @InjectRepository(IndicatorEventRule, 'indicators')
+    private readonly ruleRepo: Repository<IndicatorEventRule>,
     private readonly amqp: AmqpConnection,
   ) {}
 
@@ -58,10 +75,28 @@ export class IngestionRelayService {
       let published = 0;
       for (const row of rows) {
         try {
-          // Injecte "type" depuis la colonne event_type de l'outbox
-          // (le trigger PLaTon ne met pas "type" dans le payload JSON)
-          const message = { ...row.payload, type: row.event_type };
-          await this.amqp.publish(PLATON_EXCHANGE, row.event_type, message);
+          if (row.event_type.startsWith('raw:')) {
+            // Événement générique brut (trigger installé via l'admin) : à classifier selon
+            // les règles actives avant de savoir quel(s) event_type métier il représente.
+            const classified = await this.classify(row.payload);
+            for (const evt of classified) {
+              const message = {
+                ...evt.payload,
+                type: evt.type,
+                userId: evt.userId,
+                courseId: evt.courseId,
+                activityId: evt.activityId,
+                sessionId: evt.sessionId,
+              };
+              await this.amqp.publish(PLATON_EXCHANGE, evt.type, message);
+            }
+            // 0 correspondance = ignoré silencieusement, pas de bruit 'raw:*' sur le bus.
+          } else {
+            // Injecte "type" depuis la colonne event_type de l'outbox
+            // (le trigger PLaTon ne met pas "type" dans le payload JSON)
+            const message = { ...row.payload, type: row.event_type };
+            await this.amqp.publish(PLATON_EXCHANGE, row.event_type, message);
+          }
           published++;
         } catch (err) {
           this.logger.error(`Publish échoué pour outbox id=${row.id}: ${(err as Error).message}`);
@@ -79,6 +114,84 @@ export class IngestionRelayService {
       this.logger.error(`Relay échoué : ${(err as Error).message}`);
     } finally {
       this.isRunning = false;
+    }
+  }
+
+  // ── Classification des événements génériques ────────────────────────────
+
+  private async refreshRuleCache(): Promise<void> {
+    if (Date.now() - this.ruleCacheLoadedAt < RULE_CACHE_TTL_MS) return;
+    this.ruleCache = await this.ruleRepo.find({ where: { isActive: true } });
+    this.ruleCacheLoadedAt = Date.now();
+  }
+
+  private async classify(rawPayload: Record<string, any>): Promise<ClassifiedEvent[]> {
+    await this.refreshRuleCache();
+
+    const table = rawPayload?.table;
+    const op = rawPayload?.op;
+    const newRow = rawPayload?.new ?? {};
+    const oldRow = rawPayload?.old ?? null;
+
+    const matches: ClassifiedEvent[] = [];
+    for (const rule of this.ruleCache) {
+      if (rule.sourceTable !== table) continue;
+      if (rule.operation === 'INSERT' && op !== 'INSERT') continue;
+      if (rule.operation === 'UPDATE' && op !== 'UPDATE') continue;
+      if (!this.evaluateCondition(rule.condition, rule.watchedColumn, newRow, oldRow)) continue;
+
+      const userId = rule.contextMapping.userId ? newRow[rule.contextMapping.userId] : undefined;
+      if (!userId) continue; // invariant RawEvent : userId obligatoire
+
+      matches.push({
+        type: rule.eventType.name,
+        userId: String(userId),
+        courseId: rule.contextMapping.courseId ? newRow[rule.contextMapping.courseId] : undefined,
+        activityId: rule.contextMapping.activityId ? newRow[rule.contextMapping.activityId] : undefined,
+        sessionId: rule.contextMapping.sessionId ? newRow[rule.contextMapping.sessionId] : undefined,
+        payload: newRow,
+      });
+    }
+    return matches;
+  }
+
+  private evaluateCondition(
+    condition: EventRuleCondition,
+    column: string | null,
+    newRow: Record<string, any>,
+    oldRow: Record<string, any> | null,
+  ): boolean {
+    if (condition.kind === 'always') return true;
+    if (!column) return false;
+
+    const newVal = newRow[column];
+    const oldVal = oldRow ? oldRow[column] : undefined;
+
+    switch (condition.kind) {
+      case 'changed':
+        return oldRow === null || newVal !== oldVal;
+      case 'equals':
+        return newVal === condition.value;
+      case 'not_equals':
+        return newVal !== condition.value;
+      case 'threshold_crossed': {
+        const passes = (v: any) => this.compareThreshold(v, condition.operator, condition.threshold);
+        return passes(newVal) && !passes(oldVal);
+      }
+      default:
+        return false;
+    }
+  }
+
+  private compareThreshold(value: any, operator?: string, threshold?: number): boolean {
+    if (threshold === undefined || value === undefined || value === null) return false;
+    const v = Number(value);
+    switch (operator) {
+      case '>': return v > threshold;
+      case '>=': return v >= threshold;
+      case '<': return v < threshold;
+      case '<=': return v <= threshold;
+      default: return false;
     }
   }
 }

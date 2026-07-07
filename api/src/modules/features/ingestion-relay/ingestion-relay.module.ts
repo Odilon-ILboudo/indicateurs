@@ -6,12 +6,13 @@ import { RabbitMQModule } from '@golevelup/nestjs-rabbitmq';
 import { DatabaseModule } from '../../core/database/database.module';
 import { IngestionRelayService, PLATON_EXCHANGE } from './ingestion-relay.service';
 import { IngestionCursor } from '../ingestion/entities/ingestion-cursor.entity';
+import { IndicatorEventRule } from '../event-rules/indicator-event-rule.entity';
 
 @Module({
   imports: [
     DatabaseModule,
     ScheduleModule.forRoot(),
-    TypeOrmModule.forFeature([IngestionCursor], 'indicators'),
+    TypeOrmModule.forFeature([IngestionCursor, IndicatorEventRule], 'indicators'),
     RabbitMQModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
