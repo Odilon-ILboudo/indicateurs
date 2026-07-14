@@ -211,8 +211,9 @@ toutes les dépendances `@platon/*` / `@cisstech/nge/*` sont remplacées par des
 | `nge-markdown.ts` | `@cisstech/nge/markdown` → `NgeMarkdownComponent` (rendu minimal) |
 
 Points clés de ces stubs :
-- `AuthService.ready()` retourne un utilisateur basé sur `environment.defaultUserId`
-  (pas de vraie authentification).
+- `AuthService.ready()` lit l'utilisateur connecté depuis `localStorage.currentUser`
+  (peuplé par le flux SSO réel, section 12) - repli sur un utilisateur anonyme
+  (`role: student`) si absent.
 - `CourseService` / `ResourceService` font de **vrais appels HTTP** vers
   `/api/v1/courses*` et `/api/v1/resources*` (modules `courses`/`resources` du
   backend) - ce ne sont pas des stubs vides pour la lecture, seules les
@@ -660,9 +661,11 @@ cercle ; les indicateurs sans cercle restent à leur place. Réutilisé dans
 
 ### Comment changer de rôle pour tester
 
-Changer `environment.defaultUserId` dans
-`frontend/src/environments/environment.ts` vers l'un des UUID de test documentés
-en commentaire sur cette ligne (student / admin / teacher).
+L'authentification se fait par SSO réel vers PLaTon (section 12) - il n'existe
+plus de mécanisme de simulation de rôle côté frontend (l'ancien
+`environment.defaultUserId` a été retiré). Pour tester sous un rôle donné, se
+connecter avec un compte PLaTon réel possédant ce rôle, et se
+déconnecter/reconnecter avec un autre compte pour changer de rôle.
 
 ### Contextes orphelins `teacher`/`admin`
 
