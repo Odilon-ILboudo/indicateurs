@@ -1043,33 +1043,19 @@ En production, les événements arrivent exclusivement par le pipeline RabbitMQ 
 
 ## J - Modules legacy / orphelins
 
-### J.1 `activity-attempts` (legacy)
+### J.1 `activity-attempts` (legacy, supprimé)
 
-`api/src/modules/features/activity-indicator/` (`@Controller('indicators/activity-attempts')`
-→ `/api/indicators/activity-attempts`) :
-
-| Route | Contrôleur | Service | Données |
-|---|---|---|---|
-| `GET /value?userId=&activityId=&indicatorId=` | `activity-indicator.controller.ts` `getIndicatorValue` | `getIndicatorWithDetails` (`activity-indicator.service.ts`) | `attemptsCalculator.calculateForActivity` + `platonService.getActivityDetails(activityId)` + `indicatorDefinitionModel.findOne` |
-| `GET /raw?userId=&activityId=` | `activity-indicator.controller.ts` `getRawValue` | `getIndicatorValue` (`activity-indicator.service.ts`) | idem, sans détails |
-| `GET /history?userId=&activityId=&limit=` | `activity-indicator.controller.ts` `getHistory` | `indicatorsService.getValues(...)` puis filtre en mémoire sur `metadata.activityId` | table `indicator_values` |
-| `POST /recalc/:activityId` | `activity-indicator.controller.ts` `recalcForActivity` | `recalculateForActivity` (`activity-indicator.service.ts`, fire-and-forget) | boucle `platonService.getUsersByActivity` + `attemptsCalculator.calculateForActivity` + upsert `indicator_values` (`saveIndicatorValue`) |
-| `GET /activities` | `activity-indicator.controller.ts` `getActivities` | `getAllActivities` → `platonService.getAllActivities()` | table PLaTon activités |
-| `GET /ranking/:activityId` | `activity-indicator.controller.ts` `getRanking` | `getRankingForActivity` (`activity-indicator.service.ts`) | boucle `platonService.getUsersByActivity` + `getIndicatorValue` par user, tri croissant |
-
-`AttemptsCalculatorService.calculateForActivity` (`indicators/calculators/attempts-calculator.service.ts`) :
-récupère `platonService.getUserSessionDataByActivity(userId, activityId)`,
-groupe par exercice (`resource_id`), pour chaque exercice cherche le premier
-enregistrement `grade === 100` et prend sa colonne `attempts` comme "tentatives
-avant réussite", puis fait la moyenne sur les exercices réussis.
-
-**Côté frontend** : `features/activity-indicator/activity-indicator.component.ts`
-appelle `core/services/activity-indicator.service.ts`
-`getValue(userId, activityId, indicatorId)` → **`GET /indicators/activity-attempts/value?userId=&activityId=&indicatorId=`**.
-Ce composant est exporté par `shared/ui/index.ts` mais **n'est monté dans
-aucune route** (`app.routes.ts`/`dashboard.routes.ts`) - orphelin, non
-accessible depuis l'UI. `readme.md` §13 note que ce module devrait être migré
-vers le moteur DSL.
+Ce module (`api/src/modules/features/activity-indicator/`, route
+`/api/indicators/activity-attempts`, service `AttemptsCalculatorService`, et
+le composant frontend `features/activity-indicator/`) a été **entièrement
+retiré du code** - aucun fichier correspondant n'existe plus. Il calculait "à
+la main" (hors DSL) une moyenne de tentatives avant réussite, en extrayant
+directement `attempts` sur la première session à `grade === 100`, ce qui
+souffrait déjà du même défaut que celui corrigé dans le moteur DSL (`attempts`
+continue d'augmenter après une réussite). Sa suppression correspond bien à la
+recommandation historique du `readme.md` §13 de migrer ce calcul vers le
+moteur DSL - c'est aujourd'hui fait, via la recette et les indicateurs
+"Tentatives avant réussite" (`attempts_at_success`).
 
 ### J.2 Services frontend orphelins ou peu utilisés
 

@@ -79,9 +79,8 @@ indicateurs*.
     "version": "1.0",
     "pipeline": [
       { "type": "fetch",     "label": "Charger sessions",     "params": { "table": "SessionData", "contextFields": ["user_id","activity_id"] } },
-      { "type": "groupBy",   "label": "Grouper par exercice", "params": { "groupField": "resource_id" } },
-      { "type": "findFirst", "label": "Première réussite",    "params": { "whereField": "grade", "whereValue": 100, "sortField": "created_at" } },
-      { "type": "extract",   "label": "Tentatives",           "params": { "extractField": "attempts" } },
+      { "type": "filter",    "label": "Sessions réussies",    "params": { "field": "attempts_at_success", "operator": ">", "value": 0 } },
+      { "type": "extract",   "label": "Tentatives avant réussite", "params": { "extractField": "attempts_at_success" } },
       { "type": "aggregate", "label": "Moyenne",              "params": { "aggregateFn": "avg" } },
       { "type": "round",     "label": "Arrondir",             "params": { "decimals": 2 } }
     ]

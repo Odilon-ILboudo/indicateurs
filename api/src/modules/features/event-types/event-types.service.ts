@@ -57,6 +57,13 @@ export class EventTypesService implements OnModuleInit {
 
   async remove(id: string) {
     const evt = await this.findOne(id);
+    const dependentRules = await this.ruleRepo.count({ where: { eventTypeId: id } });
+    if (dependentRules > 0) {
+      throw new ConflictException(
+        `Impossible de supprimer "${evt.name}" : ${dependentRules} règle(s) y font encore référence. ` +
+        `Supprimez-les d'abord définitivement depuis "Événements & déclencheurs".`,
+      );
+    }
     await this.repo.remove(evt);
   }
 }

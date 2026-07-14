@@ -25,7 +25,7 @@
       (ngModelChange)="applyFilters()"
       nzButtonStyle="solid">
       <label nz-radio-button nzValue="standalone">Indicateurs uniques</label>
-      <label nz-radio-button nzValue="circles">Cercles</label>
+      <label nz-radio-button nzValue="families">Familles</label>
     </nz-radio-group>
 
     <div class="toolbar-right">
@@ -87,17 +87,17 @@
     <tbody>
       <ng-container *ngFor="let row of indicatorTable.data" [ngSwitch]="row.kind">
 
-        <!-- Ligne d'en-tête de cercle, repliable -->
-        <tr *ngSwitchCase="'circle'" class="circle-row" (click)="toggleCircle(row.circleName)">
+        <!-- Ligne d'en-tête de famille, repliable -->
+        <tr *ngSwitchCase="'family'" class="family-row" (click)="toggleFamily(row.familyName)">
           <td colspan="5">
-            <mat-icon class="circle-chevron">{{ row.expanded ? 'expand_more' : 'chevron_right' }}</mat-icon>
-            <mat-icon class="circle-icon">folder_special</mat-icon>
-            <strong>{{ row.circleName }}</strong>
+            <mat-icon class="family-chevron">{{ row.expanded ? 'expand_more' : 'chevron_right' }}</mat-icon>
+            <mat-icon class="family-icon">folder_special</mat-icon>
+            <strong>{{ row.familyName }}</strong>
             <nz-tag nzColor="purple">{{ row.members.length }} indicateur{{ row.members.length > 1 ? 's' : '' }}</nz-tag>
           </td>
         </tr>
 
-        <!-- Indicateur autonome ou membre d'un cercle déplié : même rendu qu'un indicateur unique -->
+        <!-- Indicateur autonome ou membre d'une famille dépliée : même rendu qu'un indicateur unique -->
         <ng-container *ngSwitchCase="'standalone'" [ngTemplateOutlet]="indicatorRow" [ngTemplateOutletContext]="{ $implicit: row.indicator, isMember: false }" />
         <ng-container *ngSwitchCase="'member'" [ngTemplateOutlet]="indicatorRow" [ngTemplateOutletContext]="{ $implicit: row.indicator, isMember: true }" />
 

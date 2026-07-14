@@ -65,9 +65,9 @@ interface FlatViz {
 
 interface PlatonTable { name: string; columns: { name: string; type: string }[]; }
 
-/** Données partagées par les membres d'un cercle, transmis de builder en builder. */
-export interface IndicatorCirclePreset {
-  circleName: string;
+/** Données partagées par les membres d'une famille, transmis de builder en builder. */
+export interface IndicatorFamilyPreset {
+  familyName: string;
   description: string;
   requiredEvents: string[];
   contextType: IndicatorScope;
@@ -105,15 +105,14 @@ const FORMULA_RECIPES: { name: string; desc: string; detail: { objectif: string;
     detail: {
       objectif: `Mesure la persévérance d'un apprenant sur une activité. Indique combien de fois en moyenne il a fallu tenter un exercice avant d'obtenir 100/100. Utile pour détecter les exercices difficiles ou mal calibrés.`,
       utilisation: `Idéal pour une visualisation card ou gauge. Fonctionne en contexte learner (valeur propre à l'apprenant) ou activity (vue agrégée sur tous les apprenants). Résultat : un nombre décimal, ex: 3.25.`,
-      adapter: `Changer whereValue: 100 pour un autre seuil de réussite (ex: 80). Passer aggregateFn de "avg" à "max" pour voir la pire performance. Ajouter un step filter avant groupBy pour cibler une ressource spécifique.`,
+      adapter: `S'appuie sur la colonne attempts_at_success (nombre de tentatives au moment de la 1ère réussite, calculée depuis Answers - contrairement à "attempts" qui continue d'augmenter après une réussite). Ajouter un step filter supplémentaire pour cibler une ressource spécifique. Passer aggregateFn de "avg" à "max" pour voir la pire performance.`,
     },
     pipeline: [
-      { type: 'fetch',     label: 'Charger sessions',     table: 'SessionData', contextFields: ['user_id', 'activity_id'] },
-      { type: 'groupBy',   label: 'Grouper par exercice', groupField: 'resource_id' },
-      { type: 'findFirst', label: 'Première réussite',    whereField: 'grade', whereValue: 100, sortField: 'created_at' },
-      { type: 'extract',   label: 'Tentatives',           extractField: 'attempts' },
-      { type: 'aggregate', label: 'Moyenne',              aggregateFn: 'avg' },
-      { type: 'round',     label: 'Arrondir',             decimals: 2 },
+      { type: 'fetch',   label: 'Charger sessions', table: 'SessionData', contextFields: ['user_id', 'activity_id'] },
+      { type: 'filter',  label: 'Sessions réussies', filterField: 'attempts_at_success', filterOperator: '>', filterValue: 0 },
+      { type: 'extract', label: 'Tentatives avant réussite', extractField: 'attempts_at_success' },
+      { type: 'aggregate', label: 'Moyenne',         aggregateFn: 'avg' },
+      { type: 'round',   label: 'Arrondir',           decimals: 2 },
     ],
   },
   {
@@ -243,7 +242,7 @@ interface ImportErrorDisplay {
 
   <div class="indicator-header" *ngIf="def.name">
     {{ isEditMode ? 'Édition : ' : 'Nouvel indicateur : ' }}{{ def.name }}
-    <span *ngIf="circleProgress"> - {{ circleProgress }}</span>
+    <span *ngIf="familyProgress"> - {{ familyProgress }}</span>
   </div>
 
   <nz-divider></nz-divider>
@@ -305,8 +304,8 @@ interface ImportErrorDisplay {
                 <p class="prev-value">{{ ind.contextType }}</p>
               </div>
               <div class="prev-meta-cell prev-meta-sep">
-                <span class="prev-label">Cercle</span>
-                <p class="prev-value">{{ ind.circleName || '-' }}</p>
+                <span class="prev-label">Famille</span>
+                <p class="prev-value">{{ ind.familyName || '-' }}</p>
               </div>
               <div class="prev-meta-cell prev-meta-sep">
                 <span class="prev-label">Statut</span>
@@ -1769,8 +1768,8 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
   private readonly hostEl = inject(ElementRef);
   private readonly modalData    = inject(NZ_MODAL_DATA, { optional: true }) as {
     indicator?: IndicatorDefinition;
-    circlePreset?: IndicatorCirclePreset;
-    circleQueue?: IndicatorScope[];
+    familyPreset?: IndicatorFamilyPreset;
+    familyQueue?: IndicatorScope[];
   } | null;
   private readonly indicatorSvc = inject(IndicatorService);
   private readonly messageSvc   = inject(NzMessageService);
@@ -1778,14 +1777,14 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
 
   get isEditMode(): boolean { return !!this.modalData?.indicator; }
 
-  /** Texte de progression affiché dans le header quand ce builder fait partie d'un cercle. */
-  get circleProgress(): string | null {
-    const preset = this.modalData?.circlePreset;
+  /** Texte de progression affiché dans le header quand ce builder fait partie d'une famille. */
+  get familyProgress(): string | null {
+    const preset = this.modalData?.familyPreset;
     if (!preset) return null;
-    const remaining = this.modalData?.circleQueue?.length ?? 0;
+    const remaining = this.modalData?.familyQueue?.length ?? 0;
     const total = remaining + 1;
     const current = total - remaining;
-    return `Cercle « ${preset.circleName} » - contexte ${current}/${total} (${CONTEXT_LABELS[preset.contextType]})`;
+    return `Famille « ${preset.familyName} » - contexte ${current}/${total} (${CONTEXT_LABELS[preset.contextType]})`;
   }
 
   step = 0;
@@ -2289,7 +2288,7 @@ ${this.importMode === 'yaml' ? `pipeline:
       error: () => { this.availableEventTypes = []; },
     });
     if (this.modalData?.indicator) this.hydrate(this.modalData.indicator);
-    else if (this.modalData?.circlePreset) this.applyCirclePreset(this.modalData.circlePreset);
+    else if (this.modalData?.familyPreset) this.applyFamilyPreset(this.modalData.familyPreset);
 
     this.previewCoursesLoading = true;
     this.indicatorSvc.getTeacherContext(getCurrentUserId()).subscribe({
@@ -2968,10 +2967,10 @@ ${this.importMode === 'yaml' ? `pipeline:
       interpretationHint: this.def.interpretationHint.trim() || null,
       contextType: this.def.contextType,
       requiredEvents: this.def.requiredEvents,
-      // En édition normale (hors wizard cercle), on conserve le circleName existant de l'indicateur
+      // En édition normale (hors wizard famille), on conserve le familyName existant de l'indicateur
       // pour ne pas l'effacer accidentellement à chaque sauvegarde.
-      circleName: this.modalData?.circlePreset?.circleName
-        ?? this.modalData?.indicator?.circleName
+      familyName: this.modalData?.familyPreset?.familyName
+        ?? this.modalData?.indicator?.familyName
         ?? null,
       formula: this.buildFormula(),
       thresholds: this.def.thresholds?.good != null || this.def.thresholds?.warning != null
@@ -3069,8 +3068,8 @@ ${this.importMode === 'yaml' ? `pipeline:
     };
   }
 
-  /** Pré-remplit le formulaire à partir des données partagées d'un cercle en cours de création. */
-  private applyCirclePreset(preset: IndicatorCirclePreset): void {
+  /** Pré-remplit le formulaire à partir des données partagées d'une famille en cours de création. */
+  private applyFamilyPreset(preset: IndicatorFamilyPreset): void {
     this.def.name           = preset.name;
     this.def.description    = preset.description;
     this.def.requiredEvents = [...preset.requiredEvents];

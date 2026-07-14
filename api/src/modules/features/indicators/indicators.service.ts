@@ -152,7 +152,7 @@ export class IndicatorsService {
       name: definition.name,
       description: definition.description,
       contextType: definition.contextType ?? null,
-      circleName: definition.circleName ?? null,
+      familyName: definition.familyName ?? null,
       requiredEvents: definition.requiredEvents || [],
       visualizations: definition.visualizations ?? [],
       formula: definition.formula ?? null,

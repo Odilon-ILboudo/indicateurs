@@ -10,7 +10,7 @@ import { NzModalRef, NZ_MODAL_DATA } from 'ng-zorro-antd/modal';
 import { IndicatorService } from '../../core/services/indicator.service';
 import { EventRule } from '../../core/models/indicator.model';
 
-type ModalMode = 'install' | 'uninstall';
+type ModalMode = 'install' | 'hard-delete';
 
 @Component({
   selector: 'ui-event-rule-install-modal',
@@ -24,21 +24,21 @@ type ModalMode = 'install' | 'uninstall';
         ({{ rule.eventType.name }}). <strong>Rien n'est encore exécuté</strong> - vérifiez le SQL
         ci-dessous, puis cliquez sur "Confirmer l'installation" pour l'appliquer réellement.
       </p>
-      <p class="install-intro" *ngIf="mode === 'uninstall'">
-        Voici le SQL qui serait exécuté sur la base PLaTon pour retirer le trigger de
-        <strong>{{ rule.eventType.label }}</strong> ({{ rule.eventType.name }}) - ou le réduire
-        s'il est encore partagé par d'autres règles actives sur la même table.
-        <strong>Rien n'est encore exécuté</strong> - vérifiez le SQL ci-dessous, puis cliquez sur
-        "Confirmer la suppression" pour l'appliquer réellement.
+      <p class="install-intro" *ngIf="mode === 'hard-delete'">
+        Cette règle sera <strong>supprimée définitivement</strong> (impossible à annuler - il
+        faudrait la recréer entièrement). Le trigger de <strong>{{ rule.eventType.label }}</strong>
+        ({{ rule.eventType.name }}) sera d'abord retiré (ou réduit s'il est partagé par d'autres
+        règles actives sur la même table). <strong>Rien n'est encore exécuté</strong> - vérifiez le
+        SQL ci-dessous, puis cliquez sur "Confirmer la suppression définitive".
       </p>
 
       <nz-spin [nzSpinning]="previewLoading">
-        <pre class="sql-block">{{ sql || (previewLoading ? '…' : '(aucun trigger installé - la règle sera simplement retirée)') }}</pre>
+        <pre class="sql-block">{{ sql || (previewLoading ? '…' : '(aucun trigger installé - rien à exécuter sur PLaTon)') }}</pre>
       </nz-spin>
 
       <nz-alert *ngIf="result && result.success"
         nzType="success" nzShowIcon
-        [nzMessage]="mode === 'install' ? 'Trigger installé avec succès.' : 'Règle supprimée avec succès.'">
+        [nzMessage]="mode === 'install' ? 'Trigger installé avec succès.' : 'Règle supprimée définitivement.'">
       </nz-alert>
 
       <nz-alert *ngIf="result && !result.success"
@@ -53,9 +53,9 @@ type ModalMode = 'install' | 'uninstall';
           Copier le SQL
         </button>
         <button nz-button (click)="close()">Fermer</button>
-        <button nz-button nzType="primary" [nzDanger]="mode === 'uninstall'"
+        <button nz-button nzType="primary" [nzDanger]="mode === 'hard-delete'"
           [nzLoading]="working" [disabled]="previewLoading" (click)="confirm()">
-          {{ mode === 'install' ? "Confirmer l'installation" : 'Confirmer la suppression' }}
+          {{ mode === 'install' ? "Confirmer l'installation" : 'Confirmer la suppression définitive' }}
         </button>
       </div>
     </div>
@@ -86,7 +86,7 @@ export class EventRuleInstallModalComponent implements OnInit {
   ngOnInit(): void {
     const preview = this.mode === 'install'
       ? this.indicatorSvc.previewInstallSql(this.rule.id)
-      : this.indicatorSvc.previewUninstallSql(this.rule.id);
+      : this.indicatorSvc.previewHardDeleteSql(this.rule.id);
     preview.subscribe({
       next: r => { this.sql = r.sql; this.previewLoading = false; },
       error: () => { this.previewLoading = false; },
@@ -102,13 +102,16 @@ export class EventRuleInstallModalComponent implements OnInit {
     this.working = true;
     const action = this.mode === 'install'
       ? this.indicatorSvc.installTrigger(this.rule.id)
-      : this.indicatorSvc.deleteAndUninstallEventRule(this.rule.id);
+      : this.indicatorSvc.hardDeleteEventRule(this.rule.id);
     action.subscribe({
       next: r => {
         this.working = false;
         this.sql = r.sql || this.sql;
         this.result = { success: r.success, message: r.message };
-        if (r.success) this.messageSvc.success(this.mode === 'install' ? 'Trigger installé.' : 'Règle supprimée.');
+        if (r.success) {
+          this.messageSvc.success(this.mode === 'install' ? 'Trigger installé.' : 'Règle supprimée définitivement.');
+          this.close();
+        }
       },
       error: err => {
         this.working = false;

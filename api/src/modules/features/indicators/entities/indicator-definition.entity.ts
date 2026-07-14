@@ -36,9 +36,9 @@ export class IndicatorDefinition {
   @Column({ type: 'varchar', nullable: true })
   contextType: ContextType;
 
-  /** Regroupement nominal de plusieurs indicateurs créés ensemble sous un même cercle. */
+  /** Regroupement nominal de plusieurs indicateurs créés ensemble sous une même famille. */
   @Column({ type: 'varchar', length: 255, nullable: true })
-  circleName: string | null;
+  familyName: string | null;
 
   @Column({ type: 'jsonb' })
   requiredEvents: string[];

@@ -23,7 +23,7 @@ import { NzRateModule } from 'ng-zorro-antd/rate';
 import { IndicatorService } from '../../core/services/indicator.service';
 import { IndicatorDefinition, IndicatorFeedback, IndicatorScope, EventTypeOption } from '../../core/models/indicator.model';
 import { IndicatorConfigComponent } from './indicator-config.component';
-import { IndicatorBuilderComponent, CONTEXT_LABELS, IndicatorCirclePreset } from './indicator-builder.component';
+import { IndicatorBuilderComponent, CONTEXT_LABELS, IndicatorFamilyPreset } from './indicator-builder.component';
 import { EventRuleManagerComponent } from './event-rule-manager.component';
 import { buildIndicatorDisplayRows, IndicatorDisplayRow } from '../../shared/utils/indicator-family-grouping';
 
@@ -78,36 +78,36 @@ export class LogsModalComponent {
   get logs() { return this.modalData.logs; }
 }
 
-// ── Modale : démarrage du wizard "cercle d'indicateurs" ──────────────────────
+// ── Modale : démarrage du wizard "famille d'indicateurs" ──────────────────────
 
-export interface CircleStartResult {
-  circleName: string;
+export interface FamilyStartResult {
+  familyName: string;
   description: string;
   requiredEvents: string[];
   contextTypes: IndicatorScope[];
 }
 
 @Component({
-  selector: 'ui-circle-start-modal',
+  selector: 'ui-family-start-modal',
   standalone: true,
   imports: [CommonModule, FormsModule, NzFormModule, NzInputModule, NzSelectModule, NzButtonModule, MatIconModule, NzTooltipModule],
   template: `
-    <div class="circle-start">
+    <div class="family-start">
       <p style="color:#888;font-size:13px;margin-top:0">
-        Un cercle regroupe plusieurs indicateurs créés ensemble - un par contexte sélectionné -
+        Une famille regroupe plusieurs indicateurs créés ensemble - un par contexte sélectionné -
         partageant le même nom de base, la même description et les mêmes événements déclencheurs et bien sûr, on peut les modifier sur chaque indicateur.
         Vous configurerez ensuite la visualisation et la formule de chacun, l'un après l'autre.
       </p>
 
       <nz-form-item>
         <nz-form-label [nzRequired]="true">
-          Nom du cercle
+          Nom de la famille
           <mat-icon style="font-size:14px;width:14px;height:14px;vertical-align:middle;margin-left:4px;color:#8c8c8c;cursor:help"
-            nz-tooltip="Nom commun à tous les indicateurs du cercle. Il sera affiché comme titre du groupe dans le tableau de bord."
+            nz-tooltip="Nom commun à tous les indicateurs de la famille. Il sera affiché comme titre du groupe dans le tableau de bord."
             nzTooltipPlacement="right">info_outline</mat-icon>
         </nz-form-label>
         <nz-form-control>
-          <input nz-input [(ngModel)]="circleName" placeholder="ex: Tentatives avant première réussite" />
+          <input nz-input [(ngModel)]="familyName" placeholder="ex: Tentatives avant première réussite" />
         </nz-form-control>
       </nz-form-item>
 
@@ -115,12 +115,12 @@ export interface CircleStartResult {
         <nz-form-label>
           Description
           <mat-icon style="font-size:14px;width:14px;height:14px;vertical-align:middle;margin-left:4px;color:#8c8c8c;cursor:help"
-            nz-tooltip="Explication de ce que mesure ce cercle. Partagée par tous les indicateurs, visible dans la page de sélection."
+            nz-tooltip="Explication de ce que mesure cette famille. Partagée par tous les indicateurs, visible dans la page de sélection."
             nzTooltipPlacement="right">info_outline</mat-icon>
         </nz-form-label>
         <nz-form-control>
           <textarea nz-input [(ngModel)]="description" rows="3"
-            placeholder="Décrivez ce que mesure ce cercle d'indicateurs…"></textarea>
+            placeholder="Décrivez ce que mesure cette famille d'indicateurs…"></textarea>
         </nz-form-control>
       </nz-form-item>
 
@@ -128,7 +128,7 @@ export interface CircleStartResult {
         <nz-form-label [nzRequired]="true">
           Événements déclencheurs
           <mat-icon style="font-size:14px;width:14px;height:14px;vertical-align:middle;margin-left:4px;color:#8c8c8c;cursor:help"
-            nz-tooltip="Événements PLaTon qui déclenchent le recalcul automatique des indicateurs de ce cercle. Choisissez les événements liés à ce que vous mesurez."
+            nz-tooltip="Événements PLaTon qui déclenchent le recalcul automatique des indicateurs de cette famille. Choisissez les événements liés à ce que vous mesurez."
             nzTooltipPlacement="right">info_outline</mat-icon>
         </nz-form-label>
         <nz-form-control>
@@ -162,13 +162,13 @@ export interface CircleStartResult {
       </div>
     </div>
   `,
-  styles: [`.circle-start { display:flex; flex-direction:column; }`],
+  styles: [`.family-start { display:flex; flex-direction:column; }`],
 })
-export class IndicatorCircleStartModalComponent implements OnInit {
+export class IndicatorFamilyStartModalComponent implements OnInit {
   private readonly modalRef = inject(NzModalRef);
   private readonly indicatorSvc = inject(IndicatorService);
 
-  circleName = '';
+  familyName = '';
   description = '';
   requiredEvents: string[] = [];
   contextTypes: IndicatorScope[] = [];
@@ -187,13 +187,13 @@ export class IndicatorCircleStartModalComponent implements OnInit {
   }
 
   get canStart(): boolean {
-    return !!this.circleName.trim() && this.requiredEvents.length > 0 && this.contextTypes.length > 0;
+    return !!this.familyName.trim() && this.requiredEvents.length > 0 && this.contextTypes.length > 0;
   }
 
   start(): void {
     if (!this.canStart) return;
-    const result: CircleStartResult = {
-      circleName: this.circleName.trim(),
+    const result: FamilyStartResult = {
+      familyName: this.familyName.trim(),
       description: this.description.trim(),
       requiredEvents: this.requiredEvents,
       contextTypes: this.contextTypes,
@@ -232,9 +232,9 @@ export class IndicatorCircleStartModalComponent implements OnInit {
             <mat-icon>bolt</mat-icon>
             Événements &amp; déclencheurs
           </button>
-          <button nz-button (click)="openCircleWizard()" class="icon-btn">
+          <button nz-button (click)="openFamilyWizard()" class="icon-btn">
             <mat-icon>folder_special</mat-icon>
-            Créer un cercle
+            Créer une famille
           </button>
           <button nz-button nzType="primary" (click)="openBuilder()" class="icon-btn">
             <mat-icon>add</mat-icon>
@@ -245,7 +245,7 @@ export class IndicatorCircleStartModalComponent implements OnInit {
 
       <nz-tabs [nzSelectedIndex]="groupingFilter === 'standalone' ? 0 : 1" (nzSelectedIndexChange)="onTabChange($event)">
         <nz-tab nzTitle="Indicateurs uniques"></nz-tab>
-        <nz-tab nzTitle="Cercles"></nz-tab>
+        <nz-tab nzTitle="Familles"></nz-tab>
       </nz-tabs>
 
       <nz-spin [nzSpinning]="loading">
@@ -269,24 +269,24 @@ export class IndicatorCircleStartModalComponent implements OnInit {
           <tbody>
             <ng-container *ngFor="let row of table.data" [ngSwitch]="row.kind">
 
-              <!-- Ligne d'en-tête de cercle, repliable -->
-              <tr *ngSwitchCase="'circle'" class="circle-row" (click)="toggleCircle(row.circleName)">
+              <!-- Ligne d'en-tête de famille, repliable -->
+              <tr *ngSwitchCase="'family'" class="family-row" (click)="toggleFamily(row.familyName)">
                 <td colspan="5">
                   <span style="display:inline-flex;align-items:center;gap:6px;line-height:1;width:100%">
                     <mat-icon style="font-size:18px;width:18px;height:18px;line-height:1;color:#722ed1">{{ row.expanded ? 'expand_more' : 'chevron_right' }}</mat-icon>
                     <mat-icon style="font-size:16px;width:16px;height:16px;line-height:1;color:#722ed1">folder_special</mat-icon>
-                    <strong>{{ row.circleName }}</strong>
+                    <strong>{{ row.familyName }}</strong>
                     <nz-tag nzColor="purple">{{ row.members.length }} indicateur{{ row.members.length > 1 ? 's' : '' }}</nz-tag>
                     <span style="margin-left:auto;display:inline-flex;gap:4px" (click)="$event.stopPropagation()">
-                      <mat-icon class="circle-edit-icon" (click)="renameCircle(row)" nz-tooltip="Renommer le cercle">edit</mat-icon>
-                      <mat-icon class="circle-edit-icon" (click)="openAddExistingToCircle(row.circleName)" nz-tooltip="Ajouter un indicateur existant">playlist_add</mat-icon>
-                      <mat-icon class="circle-edit-icon" (click)="createNewInCircle(row.circleName)" nz-tooltip="Créer un nouvel indicateur dans ce cercle">add_circle_outline</mat-icon>
+                      <mat-icon class="family-edit-icon" (click)="renameFamily(row)" nz-tooltip="Renommer la famille">edit</mat-icon>
+                      <mat-icon class="family-edit-icon" (click)="openAddExistingToFamily(row.familyName)" nz-tooltip="Ajouter un indicateur existant">playlist_add</mat-icon>
+                      <mat-icon class="family-edit-icon" (click)="createNewInFamily(row.familyName)" nz-tooltip="Créer un nouvel indicateur dans cette famille">add_circle_outline</mat-icon>
                     </span>
                   </span>
                 </td>
               </tr>
 
-              <!-- Indicateur autonome ou membre d'un cercle déplié : même rendu et fonctionnalités qu'un indicateur unique -->
+              <!-- Indicateur autonome ou membre d'une famille dépliée : même rendu et fonctionnalités qu'un indicateur unique -->
               <ng-container *ngSwitchCase="'standalone'" [ngTemplateOutlet]="indicatorRow" [ngTemplateOutletContext]="{ $implicit: row.indicator, isMember: false }" />
               <ng-container *ngSwitchCase="'member'" [ngTemplateOutlet]="indicatorRow" [ngTemplateOutletContext]="{ $implicit: row.indicator, isMember: true }" />
 
@@ -386,11 +386,11 @@ export class IndicatorCircleStartModalComponent implements OnInit {
                 <mat-icon *ngIf="!recalculating.has(ind.id)" style="font-size:16px;line-height:1.3">replay</mat-icon>
               </button>
 
-              <!-- Retrait du cercle (membres) vs suppression définitive (tous) -->
+              <!-- Retrait de la famille (membres) vs suppression définitive (tous) -->
               <ng-container *ngIf="isMember; else deleteBtn">
                 <button nz-button nzType="text" nzDanger nzSize="small"
-                  nz-tooltip="Retirer du cercle ou supprimer"
-                  (click)="openRemoveFromCircle(ind)">
+                  nz-tooltip="Retirer de la famille ou supprimer"
+                  (click)="openRemoveFromFamily(ind)">
                   <mat-icon style="font-size:16px;line-height:1.3">remove_circle_outline</mat-icon>
                 </button>
               </ng-container>
@@ -413,8 +413,8 @@ export class IndicatorCircleStartModalComponent implements OnInit {
 
     </div>
 
-  <ng-template #renameCircleTpl>
-    <input nz-input [(ngModel)]="renameCircleInput" placeholder="Nouveau nom du cercle" style="width:100%;margin-top:4px" />
+  <ng-template #renameFamilyTpl>
+    <input nz-input [(ngModel)]="renameFamilyInput" placeholder="Nouveau nom de la famille" style="width:100%;margin-top:4px" />
   </ng-template>
 
   <!-- Modal : prévisualisation d'un indicateur unique (s'affiche au-dessus) -->
@@ -479,10 +479,10 @@ export class IndicatorCircleStartModalComponent implements OnInit {
     </ng-container>
   </nz-modal>
 
-  <!-- Modal : ajouter un indicateur existant à un cercle -->
+  <!-- Modal : ajouter un indicateur existant à une famille -->
   <nz-modal
     [(nzVisible)]="addExistingModalVisible"
-    [nzTitle]="'Ajouter au cercle « ' + addExistingCircleName + ' »'"
+    [nzTitle]="'Ajouter à la famille « ' + addExistingFamilyName + ' »'"
     [nzFooter]="addExistingFooter"
     [nzWidth]="480"
     (nzOnCancel)="addExistingModalVisible = false">
@@ -515,16 +515,16 @@ export class IndicatorCircleStartModalComponent implements OnInit {
       <button nz-button nzType="primary"
         [disabled]="!addExistingSelectedId"
         [nzLoading]="addExistingLoading"
-        (click)="confirmAddExistingToCircle()">
-        Ajouter au cercle
+        (click)="confirmAddExistingToFamily()">
+        Ajouter à la famille
       </button>
     </ng-template>
   </nz-modal>
 
-  <!-- Modal : retirer un indicateur d'un cercle -->
+  <!-- Modal : retirer un indicateur d'une famille -->
   <nz-modal
     [(nzVisible)]="removeModalVisible"
-    nzTitle="Retirer du cercle"
+    nzTitle="Retirer de la famille"
     [nzFooter]="null"
     [nzWidth]="460"
     (nzOnCancel)="removeModalVisible = false">
@@ -533,14 +533,14 @@ export class IndicatorCircleStartModalComponent implements OnInit {
         Que souhaitez-vous faire avec <strong>« {{ removeModalIndicator?.name }} »</strong> ?
       </p>
       <div class="remove-options">
-        <div class="remove-option" (click)="confirmRemoveFromCircle('detach')" [class.remove-option--loading]="removeLoading">
+        <div class="remove-option" (click)="confirmRemoveFromFamily('detach')" [class.remove-option--loading]="removeLoading">
           <mat-icon style="color:#1677ff;font-size:22px;width:22px;height:22px;line-height:1">link_off</mat-icon>
           <div>
-            <p class="remove-option-title">Retirer du cercle</p>
+            <p class="remove-option-title">Retirer de la famille</p>
             <p class="remove-option-desc">L'indicateur reste actif et devient un indicateur unique.</p>
           </div>
         </div>
-        <div class="remove-option remove-option--danger" (click)="confirmRemoveFromCircle('delete')" [class.remove-option--loading]="removeLoading">
+        <div class="remove-option remove-option--danger" (click)="confirmRemoveFromFamily('delete')" [class.remove-option--loading]="removeLoading">
           <mat-icon style="color:#cf1322;font-size:22px;width:22px;height:22px;line-height:1">delete_forever</mat-icon>
           <div>
             <p class="remove-option-title">Supprimer définitivement</p>
@@ -644,13 +644,13 @@ export class IndicatorCircleStartModalComponent implements OnInit {
     }
     .icon-btn { display: inline-flex !important; align-items: center; gap: 6px; }
     .icon-btn mat-icon { font-size: 18px; width: 18px; height: 18px; }
-    .circle-row { cursor: pointer; background: #f9f0ff; }
-    .circle-row:hover { background: #efdbff; }
-    .circle-row td { display: flex; align-items: center; gap: 6px; }
+    .family-row { cursor: pointer; background: #f9f0ff; }
+    .family-row:hover { background: #efdbff; }
+    .family-row td { display: flex; align-items: center; gap: 6px; }
     .member-row { background: #fafafa; }
     .member-row td:first-child { padding-left: 28px; }
-    .circle-edit-icon { font-size:16px; width:16px; height:16px; color:#bbb; cursor:pointer; }
-    .circle-edit-icon:hover { color:#722ed1; }
+    .family-edit-icon { font-size:16px; width:16px; height:16px; color:#bbb; cursor:pointer; }
+    .family-edit-icon:hover { color:#722ed1; }
     .standalone-picker {
       max-height: 280px; overflow-y: auto;
       border: 1px solid #f0f0f0; border-radius: 6px;
@@ -734,33 +734,33 @@ export class AdminIndicatorManagerComponent implements OnInit {
   private readonly modalSvc     = inject(NzModalService);
   private readonly messageSvc   = inject(NzMessageService);
   private readonly cdr          = inject(ChangeDetectorRef);
-  @ViewChild('renameCircleTpl') private renameCircleTplRef!: TemplateRef<any>;
-  renameCircleInput = '';
+  @ViewChild('renameFamilyTpl') private renameFamilyTplRef!: TemplateRef<any>;
+  renameFamilyInput = '';
 
-  renameCircle(row: { circleName: string; members: IndicatorDefinition[] }): void {
-    this.renameCircleInput = row.circleName;
+  renameFamily(row: { familyName: string; members: IndicatorDefinition[] }): void {
+    this.renameFamilyInput = row.familyName;
     this.modalSvc.create({
-      nzTitle: 'Renommer le cercle',
-      nzContent: this.renameCircleTplRef,
+      nzTitle: 'Renommer la famille',
+      nzContent: this.renameFamilyTplRef,
       nzWidth: 420,
       nzCentered: true,
       nzOkText: 'Renommer',
       nzCancelText: 'Annuler',
       nzOnOk: () => {
-        const newName = this.renameCircleInput.trim();
-        if (!newName || newName === row.circleName) return Promise.resolve();
+        const newName = this.renameFamilyInput.trim();
+        if (!newName || newName === row.familyName) return Promise.resolve();
         return Promise.all(row.members.map(m =>
-          this.indicatorSvc.updateIndicator(m.id, { circleName: newName }).toPromise()
+          this.indicatorSvc.updateIndicator(m.id, { familyName: newName }).toPromise()
         )).then(() => {
           this.indicators = this.indicators.map(i =>
-            i.circleName === row.circleName ? { ...i, circleName: newName } : i
+            i.familyName === row.familyName ? { ...i, familyName: newName } : i
           );
-          if (this.expandedCircles.has(row.circleName)) {
-            this.expandedCircles.delete(row.circleName);
-            this.expandedCircles.add(newName);
+          if (this.expandedFamilies.has(row.familyName)) {
+            this.expandedFamilies.delete(row.familyName);
+            this.expandedFamilies.add(newName);
           }
           this.applyGroupingFilter();
-          this.messageSvc.success(`Cercle renommé en « ${newName} »`);
+          this.messageSvc.success(`Famille renommée en « ${newName} »`);
         }).catch(() => this.messageSvc.error('Erreur lors du renommage'));
       },
     });
@@ -768,73 +768,73 @@ export class AdminIndicatorManagerComponent implements OnInit {
 
   indicators: IndicatorDefinition[] = [];
   displayRows: IndicatorDisplayRow[] = [];
-  expandedCircles = new Set<string>();
+  expandedFamilies = new Set<string>();
   groupingFilter: 'families' | 'standalone' = 'standalone';
   loading = false;
   recalculating = new Set<string>();
   logsLoading    = new Set<string>();
 
-  // ── Gestion membres de cercle ─────────────────────────────────────────────
+  // ── Gestion membres de famille ─────────────────────────────────────────────
 
-  openAddExistingToCircle(circleName: string): void {
-    this.addExistingCircleName = circleName;
+  openAddExistingToFamily(familyName: string): void {
+    this.addExistingFamilyName = familyName;
     this.addExistingSelectedId = null;
-    this.standaloneIndicators = this.indicators.filter(i => !i.circleName);
+    this.standaloneIndicators = this.indicators.filter(i => !i.familyName);
     this.standaloneOptions = this.standaloneIndicators.map(i => ({ label: i.name, value: i.id }));
     this.addExistingModalVisible = true;
   }
 
-  confirmAddExistingToCircle(): void {
+  confirmAddExistingToFamily(): void {
     if (!this.addExistingSelectedId) return;
     this.addExistingLoading = true;
-    this.indicatorSvc.updateIndicator(this.addExistingSelectedId, { circleName: this.addExistingCircleName }).subscribe({
+    this.indicatorSvc.updateIndicator(this.addExistingSelectedId, { familyName: this.addExistingFamilyName }).subscribe({
       next: updated => {
-        this.indicators = this.indicators.map(i => i.id === updated.id ? { ...i, circleName: this.addExistingCircleName } : i);
-        this.expandedCircles.add(this.addExistingCircleName);
+        this.indicators = this.indicators.map(i => i.id === updated.id ? { ...i, familyName: this.addExistingFamilyName } : i);
+        this.expandedFamilies.add(this.addExistingFamilyName);
         this.applyGroupingFilter();
         this.addExistingLoading = false;
         this.addExistingModalVisible = false;
         this.cdr.markForCheck();
-        this.messageSvc.success(`Indicateur ajouté au cercle « ${this.addExistingCircleName} »`);
+        this.messageSvc.success(`Indicateur ajouté à la famille « ${this.addExistingFamilyName} »`);
       },
       error: () => { this.addExistingLoading = false; this.messageSvc.error('Erreur lors de l\'ajout'); },
     });
   }
 
-  createNewInCircle(circleName: string): void {
+  createNewInFamily(familyName: string): void {
     const ref = this.modalSvc.create({
-      nzTitle: `Nouvel indicateur dans « ${circleName} »`,
+      nzTitle: `Nouvel indicateur dans « ${familyName} »`,
       nzContent: IndicatorBuilderComponent,
-      nzData: { circlePreset: { circleName, contextType: 'learner', name: '', description: '', requiredEvents: [] } },
+      nzData: { familyPreset: { familyName, contextType: 'learner', name: '', description: '', requiredEvents: [] } },
       nzFooter: null,
       nzWidth: '90vw',
       nzCentered: true,
       nzBodyStyle: { 'max-height': '80vh', 'overflow-y': 'auto' },
     });
     ref.afterClose.subscribe(created => {
-      if (created) { this.load(); this.expandedCircles.add(circleName); }
+      if (created) { this.load(); this.expandedFamilies.add(familyName); }
     });
   }
 
-  openRemoveFromCircle(ind: IndicatorDefinition): void {
+  openRemoveFromFamily(ind: IndicatorDefinition): void {
     this.removeModalIndicator = ind;
     this.removeModalVisible = true;
   }
 
-  confirmRemoveFromCircle(action: 'detach' | 'delete'): void {
+  confirmRemoveFromFamily(action: 'detach' | 'delete'): void {
     const ind = this.removeModalIndicator;
     if (!ind) return;
     this.removeLoading = true;
 
     if (action === 'detach') {
-      this.indicatorSvc.updateIndicator(ind.id, { circleName: null }).subscribe({
+      this.indicatorSvc.updateIndicator(ind.id, { familyName: null }).subscribe({
         next: () => {
-          this.indicators = this.indicators.map(i => i.id === ind.id ? { ...i, circleName: null as any } : i);
+          this.indicators = this.indicators.map(i => i.id === ind.id ? { ...i, familyName: null as any } : i);
           this.applyGroupingFilter();
           this.removeLoading = false;
           this.removeModalVisible = false;
           this.cdr.markForCheck();
-          this.messageSvc.success(`« ${ind.name} » retiré du cercle - maintenant indicateur unique`);
+          this.messageSvc.success(`« ${ind.name} » retiré de la famille - maintenant indicateur unique`);
         },
         error: () => { this.removeLoading = false; this.messageSvc.error('Erreur'); },
       });
@@ -853,9 +853,9 @@ export class AdminIndicatorManagerComponent implements OnInit {
     }
   }
 
-  // Ajout d'un indicateur existant à un cercle
+  // Ajout d'un indicateur existant à une famille
   addExistingModalVisible = false;
-  addExistingCircleName = '';
+  addExistingFamilyName = '';
   addExistingSelectedId: string | null = null;
   addExistingLoading = false;
   standaloneIndicators: IndicatorDefinition[] = [];
@@ -865,7 +865,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
     return this.standaloneIndicators.find(i => i.id === this.previewedStandaloneId) ?? null;
   }
 
-  // Retrait d'un indicateur d'un cercle
+  // Retrait d'un indicateur d'une famille
   removeModalVisible = false;
   removeModalIndicator: IndicatorDefinition | null = null;
   removeLoading = false;
@@ -898,25 +898,25 @@ export class AdminIndicatorManagerComponent implements OnInit {
     });
   }
 
-  /** Bascule entre l'onglet "Indicateurs uniques" (0) et "Cercles" (1). */
+  /** Bascule entre l'onglet "Indicateurs uniques" (0) et "Familles" (1). */
   onTabChange(index: number): void {
     this.groupingFilter = index === 0 ? 'standalone' : 'families';
     this.applyGroupingFilter();
   }
 
-  /** Reconstruit `displayRows` (cercles repliables ou indicateurs uniques) selon l'onglet courant. */
+  /** Reconstruit `displayRows` (familles repliables ou indicateurs uniques) selon l'onglet courant. */
   applyGroupingFilter(): void {
     const filtered = this.groupingFilter === 'families'
-      ? this.indicators.filter(ind => !!ind.circleName)
-      : this.indicators.filter(ind => !ind.circleName);
-    this.displayRows = buildIndicatorDisplayRows(filtered, this.expandedCircles);
+      ? this.indicators.filter(ind => !!ind.familyName)
+      : this.indicators.filter(ind => !ind.familyName);
+    this.displayRows = buildIndicatorDisplayRows(filtered, this.expandedFamilies);
   }
 
-  toggleCircle(circleName: string): void {
-    if (this.expandedCircles.has(circleName)) {
-      this.expandedCircles.delete(circleName);
+  toggleFamily(familyName: string): void {
+    if (this.expandedFamilies.has(familyName)) {
+      this.expandedFamilies.delete(familyName);
     } else {
-      this.expandedCircles.add(circleName);
+      this.expandedFamilies.add(familyName);
     }
     this.applyGroupingFilter();
   }
@@ -951,29 +951,29 @@ export class AdminIndicatorManagerComponent implements OnInit {
     ref.afterClose.subscribe(saved => { if (saved) this.load(); });
   }
 
-  /** Ouvre la modale de démarrage d'un cercle, puis enchaîne le builder pour chaque contexte sélectionné. */
-  openCircleWizard(): void {
+  /** Ouvre la modale de démarrage d'une famille, puis enchaîne le builder pour chaque contexte sélectionné. */
+  openFamilyWizard(): void {
     const startRef = this.modalSvc.create({
-      nzTitle: 'Créer un cercle d\'indicateurs',
-      nzContent: IndicatorCircleStartModalComponent,
+      nzTitle: 'Créer une famille d\'indicateurs',
+      nzContent: IndicatorFamilyStartModalComponent,
       nzFooter: null,
       nzWidth: 520,
     });
-    startRef.afterClose.subscribe((result: CircleStartResult | null) => {
+    startRef.afterClose.subscribe((result: FamilyStartResult | null) => {
       if (!result || !result.contextTypes.length) return;
       const [first, ...queue] = result.contextTypes;
-      this.openCircleMember(result, first, queue);
+      this.openFamilyMember(result, first, queue);
     });
   }
 
-  /** Ouvre le builder pré-rempli pour un membre du cercle, puis enchaîne sur le suivant à la fermeture. */
-  private openCircleMember(start: CircleStartResult, contextType: IndicatorScope, queue: IndicatorScope[]): void {
-    const preset: IndicatorCirclePreset = {
-      circleName: start.circleName,
+  /** Ouvre le builder pré-rempli pour un membre de la famille, puis enchaîne sur le suivant à la fermeture. */
+  private openFamilyMember(start: FamilyStartResult, contextType: IndicatorScope, queue: IndicatorScope[]): void {
+    const preset: IndicatorFamilyPreset = {
+      familyName: start.familyName,
       description: start.description,
       requiredEvents: start.requiredEvents,
       contextType,
-      name: `${start.circleName} - ${CONTEXT_LABELS[contextType]}`,
+      name: `${start.familyName} - ${CONTEXT_LABELS[contextType]}`,
     };
     const ref = this.modalSvc.create({
       nzTitle: preset.name,
@@ -988,7 +988,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
       this.load();
       if (saved && queue.length) {
         const [next, ...rest] = queue;
-        this.openCircleMember(start, next, rest);
+        this.openFamilyMember(start, next, rest);
       }
     });
   }

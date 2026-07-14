@@ -33,8 +33,8 @@ export interface IndicatorDefinition {
   name: string;
   description: string;
   contextType: IndicatorScope;
-  /** Regroupement nominal de plusieurs indicateurs créés ensemble sous un même cercle. */
-  circleName?: string | null;
+  /** Regroupement nominal de plusieurs indicateurs créés ensemble sous une même famille. */
+  familyName?: string | null;
   formula?: IndicatorFormula | null;
   requiredEvents: string[];
   /** Tableau de visualisations (min. 1). La première est la vue "carte" par défaut. */

@@ -33,6 +33,21 @@ export class EventRulesController {
     return this.svc.remove(id);
   }
 
+  @Post(':id/reactivate')
+  reactivate(@Param('id') id: string) {
+    return this.svc.reactivate(id);
+  }
+
+  @Get(':id/preview-hard-delete-sql')
+  previewHardDeleteSql(@Param('id') id: string) {
+    return this.svc.previewHardDeleteSql(id);
+  }
+
+  @Post(':id/hard-delete')
+  hardDelete(@Param('id') id: string) {
+    return this.svc.hardDelete(id);
+  }
+
   @Get(':id/preview-sql')
   previewInstallSql(@Param('id') id: string) {
     return this.svc.previewInstallSql(id);

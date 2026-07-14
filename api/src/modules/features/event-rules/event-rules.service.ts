@@ -36,8 +36,9 @@ export class EventRulesService {
     private readonly platonDb: DataSource,
   ) {}
 
+  /** Retourne TOUTES les règles, actives ou non - la désactivation ne doit jamais les rendre invisibles. */
   findAll(): Promise<IndicatorEventRule[]> {
-    return this.repo.find({ where: { isActive: true }, order: { createdAt: 'DESC' } });
+    return this.repo.find({ order: { isActive: 'DESC', createdAt: 'DESC' } });
   }
 
   async findOne(id: string): Promise<IndicatorEventRule> {
@@ -104,6 +105,47 @@ export class EventRulesService {
     const rule = await this.findOne(id);
     rule.isActive = false;
     await this.repo.save(rule);
+  }
+
+  /** Réactive une règle désactivée. Ne réinstalle pas le trigger tout seul si `triggerInstalled`
+   *  est déjà à false (l'admin doit relancer "Installer" explicitement, comme pour une nouvelle règle). */
+  async reactivate(id: string): Promise<IndicatorEventRule> {
+    const rule = await this.findOne(id);
+    rule.isActive = true;
+    return this.repo.save(rule);
+  }
+
+  // ── Suppression DÉFINITIVE (distincte de remove() ci-dessus, qui ne fait que désactiver) ──
+  // Si le trigger est installé, le désinstalle d'abord (même DDL que deleteAndUninstall) puis
+  // supprime réellement la ligne en base. Jamais automatique - toujours un aperçu SQL + clic
+  // explicite côté admin quand un DDL est impliqué.
+
+  async previewHardDeleteSql(id: string): Promise<{ sql: string }> {
+    const rule = await this.findOne(id);
+    if (!rule.triggerInstalled) return { sql: '' };
+    const sql = await this.buildUninstallDdl(rule);
+    return { sql };
+  }
+
+  async hardDelete(id: string): Promise<{ success: boolean; message?: string; sql: string }> {
+    const rule = await this.findOne(id);
+
+    if (rule.triggerInstalled) {
+      const sql = await this.buildUninstallDdl(rule);
+      try {
+        await this.execDdl(sql);
+      } catch (err) {
+        const message = this.friendlyError(err as Error);
+        rule.lastInstallError = message;
+        await this.repo.save(rule);
+        return { success: false, message, sql };
+      }
+      await this.repo.remove(rule);
+      return { success: true, sql };
+    }
+
+    await this.repo.remove(rule);
+    return { success: true, sql: '' };
   }
 
   // ── Suppression + désinstallation du trigger (jamais automatique) ───────────

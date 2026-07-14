@@ -136,7 +136,6 @@ modules/
       ingestion.service.ts      - logique de calcul incrémental / recalcul total
     ingestion-relay/            - cron */2 * * * * * : lit platon_outbox_events → publie RabbitMQ
     aggregation/                - cron quotidien/hebdo (agrégations)
-    activity-indicator/         - endpoint legacy spécifique à un indicateur d'activité
     courses/                    - proxy lecture PLaTon : cours, sections, activités, groupes, résultats
     resources/                  - proxy lecture PLaTon : ressources, arbre de cercles
     groups/                     - groupes de TP d'un enseignant
@@ -172,7 +171,6 @@ features/
     event-rule-install-modal.component.ts - aperçu SQL + confirmation d'install/retrait
   indicator-selector/    - l'utilisateur active/désactive ses indicateurs
   indicator-detail/      - page détail d'un indicateur (tabs par visualisation)
-  activity-indicator/    - ancien composant legacy
   courses/                - pages "Cours" copiées/adaptées depuis PLaTon (voir 3.3)
   resources/              - pages "Ressources" copiées/adaptées depuis PLaTon (voir 3.3)
 shared/
@@ -245,6 +243,20 @@ Tables principales :
 | `Sessions` / `Activities` / `Resources` / `Users` / `Courses` | Tables sources |
 | `CourseGroups` (`id` UUID, `group_id` varchar, `course_id`, `name`) | Groupes de TP |
 | `CourseGroupsMember` (`group_id` varchar, `user_id`) | Appartenance aux groupes |
+
+**Colonnes ajoutées sur `SessionData` par ce projet** (pas nativement présentes
+dans PLaTon - migrations dans `api/src/scripts/migrations/`, à exécuter avec le
+rôle Postgres élevé, voir `PLATON_DB_ADMIN_*` dans `api/.env`, jamais avec le
+rôle applicatif `platon` qui n'est pas propriétaire de ces tables) :
+- **`status`** (`add-platon-status-column.sql`) - anticipation d'un futur
+  changement de schéma PLaTon, déduite de `grade`/`attempts`/`started_at`.
+  Valeurs : `non commencé | commencé | réussi | échoué | erreur`.
+- **`attempts_at_success`** (`add-platon-attempts-at-success-column.sql`) -
+  rang de la première réponse notée 100 parmi les réponses de la session
+  (calculé depuis `Answers`), `NULL` si jamais réussie. À utiliser à la place
+  de `attempts` pour tout calcul de type "tentatives avant réussite" :
+  `attempts` seul continue d'augmenter après une réussite et donne un
+  résultat faux si l'étudiant retente ensuite.
 
 **Particularités du schéma PLaTon (à connaître pour écrire des requêtes/formules)** :
 - `Activities` n'a **pas** de colonne `name` : le titre est dans
@@ -410,20 +422,26 @@ mappés vers `SessionData`/`Activities` (`LEGACY_TABLE_MAP`).
 
 ### Exemple - "Tentatives moyennes avant première réussite"
 
+Attention : `attempts` sur `SessionData` est un compteur cumulatif qui continue
+d'augmenter même après une première réussite (si l'étudiant retente encore
+après coup) - il ne faut donc jamais l'extraire directement pour mesurer "le
+nombre de tentatives qu'il a fallu pour réussir". La colonne
+`attempts_at_success` (calculée depuis `Answers`, figée au moment de la
+première réponse notée 100) porte la bonne valeur, déjà prête sur chaque
+ligne - `groupBy`/`findFirst` ne sont donc plus nécessaires, un simple filtre
+suffit :
+
 ```yaml
 pipeline:
   - type: fetch
     label: Charger sessions
     params: { table: SessionData, contextFields: [user_id, activity_id] }
-  - type: groupBy
-    label: Grouper par exercice
-    params: { groupField: resource_id }
-  - type: findFirst
-    label: Première réussite
-    params: { whereField: grade, whereValue: 100, sortField: created_at }
+  - type: filter
+    label: Sessions réussies
+    params: { field: attempts_at_success, operator: ">", value: 0 }
   - type: extract
-    label: Tentatives
-    params: { extractField: attempts }
+    label: Tentatives avant réussite
+    params: { extractField: attempts_at_success }
   - type: aggregate
     label: Moyenne
     params: { aggregateFn: avg }
@@ -807,16 +825,7 @@ GET /api/users/:id
 
 POST /api/ingest        - injection directe d'un événement (HTTP, legacy)
 POST /api/ingest/batch  - injection directe batch (HTTP, legacy)
-
-GET  /api/indicators/activity-attempts/value
-GET  /api/indicators/activity-attempts/raw
-GET  /api/indicators/activity-attempts/history
-GET  /api/indicators/activity-attempts/activities
-GET  /api/indicators/activity-attempts/ranking/:activityId
-POST /api/indicators/activity-attempts/recalc/:activityId
 ```
-(`activity-indicator` - module legacy, à corriger pour utiliser le DSL, voir
-section 13.)
 
 ---
 

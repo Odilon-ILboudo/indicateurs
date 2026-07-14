@@ -10,7 +10,6 @@ CREATE TABLE IF NOT EXISTS indicator_event_rules (
   condition           JSONB NOT NULL,
   context_mapping     JSONB NOT NULL,
   is_active           BOOLEAN NOT NULL DEFAULT true,
-  mode                VARCHAR NOT NULL DEFAULT 'generic',
   trigger_installed   BOOLEAN NOT NULL DEFAULT false,
   installed_at        TIMESTAMPTZ,
   last_applied_sql    TEXT,

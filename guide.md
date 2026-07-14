@@ -123,7 +123,8 @@ automatiquement, jusqu'au dernier (Groupe de TP).
 ### A.1 Indicateur 1/6 - Apprenant (`learner`) - LE PLUS SIMPLE
 
 **Étape 1 « Définition »** (déjà pré-remplie par le cercle) : vérifier
-nom, description, `requiredEvents = [exercise.answered]`.
+nom, description, `requiredEvents = [exercise.attempted]` (l'événement
+configuré à l'étape 0.5).
 
 **Étape 2 « Contexte »** : `contextType = learner` (pré-rempli). Une
 visualisation "Vue principale" existe par défaut - la configurer :
@@ -151,11 +152,14 @@ réussite"**. Cela applique automatiquement le pipeline :
 | # | Étape | Paramètres |
 |---|---|---|
 | 1 | `fetch` | table `SessionData`, contextFields = `user_id`, `activity_id` |
-| 2 | `groupBy` | groupField = `resource_id` |
-| 3 | `findFirst` | whereField = `grade`, whereValue = `100`, sortField = `created_at` |
-| 4 | `extract` | extractField = `attempts` |
-| 5 | `aggregate` | aggregateFn = `avg` |
-| 6 | `round` | decimals = `2` |
+| 2 | `filter` | field = `attempts_at_success`, operator = `>`, value = `0` |
+| 3 | `extract` | extractField = `attempts_at_success` |
+| 4 | `aggregate` | aggregateFn = `avg` |
+| 5 | `round` | decimals = `2` |
+
+> `attempts_at_success` (et non `attempts`) porte le nombre de tentatives au
+> moment précis de la première réussite - `attempts` seul continue
+> d'augmenter si l'étudiant retente après coup, et donnerait un résultat faux.
 
 **Tester** :
 - Dans "Tester cette formule", choisir un **Cours**, puis un
@@ -163,7 +167,7 @@ réussite"**. Cela applique automatiquement le pipeline :
 - Cliquer **"Tester"** → un résultat scalaire (nombre) s'affiche.
 - Cliquer **"Déboguer pas à pas"** → un panneau affiche le contexte effectif
   (`userId=…`, `activityId=(TARGET_ACTIVITY_ID)` si non précisé,
-  `groupId=-`) puis, pour chacune des 6 étapes : type, durée, et un aperçu
+  `groupId=-`) puis, pour chacune des 5 étapes : type, durée, et un aperçu
   tabulaire du résultat (avec "Afficher tout" si > 5 lignes).
 
 Cliquer **"Créer"** → enchaîne automatiquement sur l'indicateur "Activité".
@@ -294,7 +298,8 @@ retrouver le comportement original avant de sauvegarder.
 ### A.3 Indicateur 3/6 - Cours (`course`)
 
 **Étape 1** : nom pré-rempli `Tentatives avant réussite - Cours`,
-`requiredEvents` inchangé (`exercise.answered`).
+`requiredEvents` inchangé (l'événement configuré à l'étape 0.5, ex.
+`exercise.attempted`).
 
 **Étape 2** : `contextType = course`. Configurer **1 visualisation** - la
 formule retournant un objet structuré `{ressource: valeur}`, seul le type
@@ -533,7 +538,11 @@ indicateur"**.
 **Étape 1** :
 - Nom : `Diagnostic plateforme`
 - Description : `Nombre d'utilisateurs inscrits n'ayant jamais soumis d'exercice.`
-- **Événements déclencheurs** : `exercise.answered`
+- **Événements déclencheurs** : réutiliser l'événement configuré à l'étape
+  0.5 (ex. `exercise.attempted`) - c'est le seul événement disponible dans le
+  sélecteur tant qu'aucune règle n'a été créée pour `exercise.answered`, et
+  en créer une sur `SessionData`/`grade` dupliquerait le trigger historique
+  (voir l'avertissement de l'étape 0.5).
 
 **Étape 2** : `contextType = admin`. Configurer **2 visualisations** - la
 formule retourne un scalaire, la carte et la jauge l'affichent différemment :

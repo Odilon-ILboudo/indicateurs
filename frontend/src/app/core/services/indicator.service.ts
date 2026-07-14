@@ -361,4 +361,20 @@ export class IndicatorService {
   deleteAndUninstallEventRule(id: string): Observable<InstallTriggerResult> {
     return this.http.post<InstallTriggerResult>(`${environment.apiUrl}/event-rules/${id}/uninstall`, {});
   }
+
+  reactivateEventRule(id: string): Observable<EventRule> {
+    return this.http.post<EventRule>(`${environment.apiUrl}/event-rules/${id}/reactivate`, {});
+  }
+
+  previewHardDeleteSql(id: string): Observable<{ sql: string }> {
+    return this.http.get<{ sql: string }>(`${environment.apiUrl}/event-rules/${id}/preview-hard-delete-sql`);
+  }
+
+  hardDeleteEventRule(id: string): Observable<InstallTriggerResult> {
+    return this.http.post<InstallTriggerResult>(`${environment.apiUrl}/event-rules/${id}/hard-delete`, {});
+  }
+
+  deleteEventType(id: string): Observable<void> {
+    return this.http.delete<void>(`${environment.apiUrl}/event-types/${id}`);
+  }
 }

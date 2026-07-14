@@ -212,7 +212,7 @@ export class EventRuleBuilderComponent implements OnInit {
   private readonly modalRef = inject(NzModalRef);
   private readonly indicatorSvc = inject(IndicatorService);
   private readonly messageSvc = inject(NzMessageService);
-  private readonly modalData = inject(NZ_MODAL_DATA, { optional: true }) as { rule?: EventRule } | null;
+  private readonly modalData = inject(NZ_MODAL_DATA, { optional: true }) as { rule?: EventRule; presetEventTypeId?: string } | null;
 
   platonSchema: PlatonTable[] = [];
   schemaLoading = false;
@@ -252,6 +252,8 @@ export class EventRuleBuilderComponent implements OnInit {
       this.condition = { ...rule.condition };
       this.contextMapping = { ...rule.contextMapping };
       this.eventTypeId = rule.eventTypeId;
+    } else if (this.modalData?.presetEventTypeId) {
+      this.eventTypeId = this.modalData.presetEventTypeId;
     }
   }
 
