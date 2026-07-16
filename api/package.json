@@ -20,10 +20,11 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "generate:secret": "node ./scripts/generateSecret.js",
     "seed": "node dist/seeders",
-    "migration:generate": "typeorm migration:generate -d dist/typeorm.config.js",
-    "migration:run": "typeorm migration:run -d dist/typeorm.config.js",
-    "migration:revert": "typeorm migration:revert -d dist/typeorm.config.js",
-    "schema:sync": "typeorm schema:sync"
+    "typeorm": "ts-node --transpile-only ./node_modules/typeorm/cli.js -d src/typeorm-cli.datasource.ts",
+    "migration:generate": "yarn typeorm migration:generate",
+    "migration:create": "yarn typeorm migration:create",
+    "migration:run": "yarn typeorm migration:run",
+    "migration:revert": "yarn typeorm migration:revert"
   },
   "dependencies": {
     "@casl/ability": "^6.5.0",

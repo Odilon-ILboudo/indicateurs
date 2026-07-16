@@ -32,8 +32,10 @@ export default () => ({
     username: process.env.INDICATORS_DB_USERNAME,
     password: process.env.INDICATORS_DB_PASSWORD,
     database: process.env.INDICATORS_DB_NAME,
-    synchronize: process.env.NODE_ENV !== 'production',
-    //logging: process.env.NODE_ENV !== 'production',
+    // Toujours false : le schéma est géré par de vraies migrations TypeORM
+    // (voir bin/migration/*.sh), jamais par l'auto-sync - y compris en dev,
+    // pour ne jamais laisser le schéma dériver sans migration correspondante.
+    synchronize: false,
     logging: false,
     entities: [__dirname + '/../indicators/entities/*.entity{.ts,.js}'],
   },

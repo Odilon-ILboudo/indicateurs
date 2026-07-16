@@ -6,9 +6,9 @@ L'objectif est qu'une lecture complète de ce fichier suffise à comprendre le
 fonctionnement global du projet sans avoir à parcourir tout le code source.
 
 > Documents complémentaires :
-> - [`guide.md`](guide.md) - guide pas-à-pas pour créer et tester chaque type
+> - [`docs/guide.md`](docs/guide.md) - guide pas-à-pas pour créer et tester chaque type
 >   d'indicateur (les 6 `contextType`, toutes les fonctionnalités du DSL).
-> - [`parcours-donnees.md`](parcours-donnees.md) - pour chaque route listée en
+> - [`docs/parcours-donnees.md`](docs/parcours-donnees.md) - pour chaque route listée en
 >   §9, trace fichier par fichier et ligne par ligne le chemin complet
 >   composant frontend → service → contrôleur → service backend → accès BDD.
 
@@ -416,7 +416,7 @@ utilisé par le débogueur pas-à-pas du builder (`POST /preview-steps`).
 | `aggregate` | Agrège un `number[]`. | `aggregateFn: 'avg'\|'sum'\|'count'\|'min'\|'max'` |
 | `round` | Arrondit un nombre. | `decimals` (défaut 2) |
 | `divide` | Divise par une constante (0 si `divideBy === 0`). | `divideBy` |
-| `js` | Exécute du JS arbitraire ; `input` = sortie de l'étape précédente, doit `return` un résultat. | `code` - exécuté dans un **vrai isolate V8** (`isolated-vm`, 32 Mo, timeout 2s). Analyse statique préalable (13 patterns interdits). Voir [`js.md`](js.md) pour le détail des protections. |
+| `js` | Exécute du JS arbitraire ; `input` = sortie de l'étape précédente, doit `return` un résultat. | `code` - exécuté dans un **vrai isolate V8** (`isolated-vm`, 32 Mo, timeout 2s). Analyse statique préalable (13 patterns interdits). Voir [`docs/js.md`](docs/js.md) pour le détail des protections. |
 
 Rétro-compatibilité : les anciens noms de table `sessions`/`activities` sont
 mappés vers `SessionData`/`Activities` (`LEGACY_TABLE_MAP`).
@@ -530,7 +530,7 @@ résultats, "Afficher tout" si > 5 lignes).
 
 Un seul événement est câblé en dur dans le code : `exercise.answered`, produit
 par le trigger `trg_platon_outbox_session_data` sur `SessionData.grade`
-(installé manuellement, voir [`INGESTION.md`](INGESTION.md) étape 1). Pour
+(installé manuellement, voir [`docs/ingestion.md`](docs/ingestion.md) étape 1). Pour
 ajouter un **nouvel** événement (autre table, autre colonne, autre condition)
 sans redéploiement, l'écran admin **"Événements & déclencheurs"**
 (`event-rule-manager.component.ts`) permet de :
@@ -547,7 +547,7 @@ sans redéploiement, l'écran admin **"Événements & déclencheurs"**
 3. **Supprimer** : retire le trigger (ou le réduit s'il est partagé par
    d'autres règles actives sur la même table) puis désactive la règle.
 
-`IngestionRelayService.classify()` (voir [`INGESTION.md`](INGESTION.md) étape
+`IngestionRelayService.classify()` (voir [`docs/ingestion.md`](docs/ingestion.md) étape
 1bis) évalue les règles actives contre chaque événement générique brut
 (`event_type` préfixé `raw:`) pour déterminer le(s) événement(s) métier réel(s)
 à publier. Le chemin historique (`exercise.answered` et tout `event_type` non
@@ -932,7 +932,7 @@ Pour les visualisations `line-chart`, un sélecteur de période est affiché :
    (activity/course/group/teacher/admin). Après chaque traitement, `refreshSnapshots()`
    et `refreshActivityViews()` sont appelés en fire-and-forget. Un événement
    `indicator.updated` est émis via WebSocket (`/indicators`) pour la mise à jour
-   temps réel du frontend. Voir [`INGESTION.md`](INGESTION.md) pour le détail.
+   temps réel du frontend. Voir [`docs/ingestion.md`](docs/ingestion.md) pour le détail.
 5. Le frontend affiche la visualisation choisie (carte/jauge/courbe/barres/
    histogramme) selon les préférences (`activeVizId`/`enabledVizIds`) et les
    règles de visibilité par rôle (`RoleService`).

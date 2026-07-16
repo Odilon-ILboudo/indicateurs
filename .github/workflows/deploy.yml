@@ -1,0 +1,55 @@
+name: Déploiement production
+
+# Déclenchement manuel uniquement (onglet Actions du repo) - choix délibéré,
+# pas d'automatisation sur push. Le build a lieu directement sur le serveur
+# (bin/docker/up.sh -p -d), donc aucune image n'est poussée sur un registre :
+# ce workflow ne fait que déclencher à distance ce qu'on lancerait à la main
+# en SSH.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branche ou tag à déployer"
+        required: false
+        default: main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Déployer et vérifier sur le serveur
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          script_stop: true
+          script: |
+            cd "${{ secrets.DEPLOY_PATH }}"
+
+            # reset --hard plutôt que pull : ce checkout est réservé au
+            # déploiement (jamais édité à la main), donc aucun risque de
+            # perdre du travail - mais ça évite un conflit de merge si le
+            # working tree a dérivé (ex : migration lancée manuellement).
+            git fetch origin "${{ github.event.inputs.ref }}"
+            git checkout "${{ github.event.inputs.ref }}"
+            git reset --hard "origin/${{ github.event.inputs.ref }}"
+
+            ./bin/docker/up.sh --prod -d
+            docker compose -f docker-compose.prod.yml ps
+
+            PORT=$(grep -E '^INDICATEURS_PORT=' .env | cut -d= -f2)
+            PORT=${PORT:-4300}
+            for i in 1 2 3 4 5 6; do
+              if curl -sf "http://localhost:${PORT}/" > /dev/null; then
+                echo "OK : le frontend répond sur le port ${PORT}"
+                exit 0
+              fi
+              echo "En attente que nginx réponde (tentative $i/6)..."
+              sleep 5
+            done
+            echo "Échec : le frontend ne répond toujours pas sur le port ${PORT}" >&2
+            docker compose -f docker-compose.prod.yml logs --tail=50
+            exit 1

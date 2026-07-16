@@ -33,21 +33,19 @@ Frontend – mise à jour temps réel sans rechargement
 ### RabbitMQ
 
 ```bash
-# Lancer RabbitMQ via Docker
-docker run -d \
-  --name rabbitmq \
-  -p 5672:5672 \
-  -p 15672:15672 \
-  rabbitmq:3-management
+# Lancer RabbitMQ (et le reste de l'infra locale) via le compose du projet
+cd indicateurs && ./bin/docker/up.sh
 
 # Interface web : http://localhost:15672
-# Login : guest / guest
+# Login : voir RABBITMQ_USER/RABBITMQ_PASSWORD dans .env (jamais guest/guest,
+# voir docker.md - un conteneur "rabbitmq" lancé à la main comme ci-avant
+# entre en conflit de port avec indicateurs_rabbitmq)
 ```
 
 ### Variables d'environnement (api/.env)
 
 ```env
-RABBITMQ_URI=amqp://guest:guest@localhost:5672
+RABBITMQ_URI=amqp://indicateurs:<mot-de-passe>@localhost:5672
 ```
 
 ---
@@ -255,10 +253,8 @@ Après chaque mise à jour d'une valeur, `IngestionService` émet l'événement 
 ### Prérequis
 
 ```bash
-# Terminal 1 - démarrer RabbitMQ
-docker start rabbitmq   # si déjà créé
-# ou
-docker run -d --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
+# Terminal 1 - démarrer RabbitMQ (et le reste de l'infra locale)
+cd indicateurs && ./bin/docker/up.sh
 
 # Terminal 2 - démarrer le backend
 cd indicateurs/api && yarn start

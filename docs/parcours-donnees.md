@@ -948,7 +948,7 @@ appels indicateurs identifiés. `settings/members/members.page.ts` utilise
 
 ## I - Ingestion d'événements PLaTon
 
-Le pipeline d'ingestion est entièrement piloté par RabbitMQ. Voir [`INGESTION.md`](INGESTION.md)
+Le pipeline d'ingestion est entièrement piloté par RabbitMQ. Voir [`ingestion.md`](ingestion.md)
 pour le schéma complet, les commandes de test et les IDs de référence.
 
 ### I.1 Trigger PostgreSQL → `platon_outbox_events`

@@ -123,6 +123,17 @@ curl http://localhost:4300/                 # 200 - frontend servi
 curl http://localhost:4300/api/indicators   # 200 - vraies données retournées
 ```
 
+### 9. Résolution définitive du trou de migration (session suivante)
+
+Le contournement du point 6 (restaurer un dump qui avait déjà le schéma)
+n'aurait pas fonctionné sur un vrai premier déploiement sans dump de secours.
+Résolu en adoptant de vraies migrations TypeORM, calquées sur le
+fonctionnement de PLaTon (`platon/migrations/`) : voir la section
+[Schéma de la base `indicators` (migrations TypeORM)](docker.md#schéma-de-la-base-indicators-migrations-typeorm)
+dans `docker.md`. Le service Docker `migrate` construit désormais tout le
+schéma automatiquement sur une base neuve - plus besoin de dump de secours
+pour ça (la donnée de test, elle, reste un besoin séparé).
+
 ## État final
 
 - Postgres **natif** : arrêté, plus utilisé (tout tourne désormais dans
@@ -137,11 +148,12 @@ curl http://localhost:4300/api/indicators   # 200 - vraies données retournées
 ## Pour reproduire sur une autre machine
 
 1. Démarrer PLaTon (`platon/bin/docker/up.sh`, avec ou sans `-p`).
-2. Si une vraie base de test existe ailleurs (dump natif, autre serveur...),
-   la restaurer dans `platon_postgres` (bases `platon_db` et `indicators`)
-   avant de lancer indicateurs - sinon `init-db` part sur une base `indicators`
-   vide et l'API plantera au démarrage (pas de migration automatique en prod,
-   voir point 6 ci-dessus).
+2. Si une vraie base de test PLaTon existe ailleurs (dump natif, autre
+   serveur...), la restaurer dans `platon_postgres` (base `platon_db`) avant
+   de lancer indicateurs. **Pas nécessaire pour `indicators`** : le service
+   `migrate` construit désormais tout son schéma automatiquement sur une base
+   neuve (voir point 9 ci-dessus) - seules les données de test (indicateurs
+   déjà créés, etc.) resteraient à restaurer séparément si besoin.
 3. Créer `indicateurs/.env` à partir de `.env.example` (racine, différent de
    `api/.env`).
 4. `indicateurs/bin/docker/up.sh -p -d`.

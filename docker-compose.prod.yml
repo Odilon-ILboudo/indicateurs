@@ -4,6 +4,17 @@
 # platon-network. Les containers platon_postgres et platon_redis doivent
 # être accessibles via ce réseau.
 
+# Rotation des logs Docker (json-file) : sans ça, les logs de chaque service
+# s'accumulent indéfiniment sur le disque du serveur. Plafonne à 5 fichiers de
+# 10 Mo max par service (50 Mo). Ne couvre pas la centralisation/recherche
+# après coup (Loki/ELK) ni les alertes (Sentry) - volontairement hors scope
+# tant que la charge ne le justifie pas.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   # Service éphémère (tourne une fois, s'arrête) : crée la base "indicators" sur
   # le Postgres de PLaTon si elle n'existe pas encore. PLaTon ne provisionne que
@@ -12,6 +23,7 @@ services:
   init-db:
     image: postgres:13-alpine
     container_name: indicateurs_init_db
+    logging: *default-logging
     env_file:
       - .env
     environment:
@@ -40,6 +52,12 @@ services:
     restart: always
     image: rabbitmq:3-management
     container_name: indicateurs_rabbitmq
+    logging: *default-logging
+    environment:
+      # Ne prend effet qu'au premier démarrage sur un volume vierge - sinon
+      # (volume déjà initialisé avec guest) sans effet, voir docker-migration.md.
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-indicateurs}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     volumes:
       - rabbitmqdata:/var/lib/rabbitmq
     networks:
@@ -50,12 +68,39 @@ services:
       timeout: 5s
       retries: 5
 
+  # Service éphémère : applique les migrations TypeORM en attente (voir
+  # api/src/migrations/ et bin/migration/*.sh) avant que l'API ne démarre.
+  # Réutilise la même image que le service "api" (voir sa note "image:").
+  migrate:
+    image: indicateurs-api
+    build:
+      context: .
+      dockerfile: .docker/api/Dockerfile
+    container_name: indicateurs_migrate
+    logging: *default-logging
+    env_file:
+      - .env
+    environment:
+      PLATON_DB_HOST: platon_postgres
+      INDICATORS_DB_HOST: platon_postgres
+    command: yarn migration:run
+    depends_on:
+      init-db:
+        condition: service_completed_successfully
+    networks:
+      - platon-network
+    restart: "no"
+
   api:
     restart: always
+    # Nom stable pour que le service "migrate" ci-dessus réutilise la même
+    # image sans la reconstruire (Compose ne rebuild qu'une fois, même build:).
+    image: indicateurs-api
     build:
       context: .
       dockerfile: .docker/api/Dockerfile
     container_name: indicateurs_api
+    logging: *default-logging
     env_file:
       - .env
     environment:
@@ -66,10 +111,12 @@ services:
       # Hosts Docker : remplacent les valeurs localhost du .env
       PLATON_DB_HOST: platon_postgres
       INDICATORS_DB_HOST: platon_postgres
-      RABBITMQ_URI: amqp://guest:guest@indicateurs_rabbitmq:5672
+      RABBITMQ_URI: amqp://${RABBITMQ_USER:-indicateurs}:${RABBITMQ_PASSWORD}@indicateurs_rabbitmq:5672
       REDIS_HOST: platon_redis
     depends_on:
       init-db:
+        condition: service_completed_successfully
+      migrate:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
@@ -82,6 +129,7 @@ services:
       context: .
       dockerfile: .docker/frontend/Dockerfile
     container_name: indicateurs_nginx
+    logging: *default-logging
     ports:
       - "${INDICATEURS_PORT:-4300}:80"
     depends_on:

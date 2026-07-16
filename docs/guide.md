@@ -35,7 +35,7 @@ ne couvre pas (jointures droite/interne, code JS, import/export YAML/JSON).
 > deux visualisations d'un seul indicateur.
 
 Pour la référence complète de l'architecture, du modèle de données et du
-moteur DSL, voir [`readme.md`](readme.md) - ce guide s'appuie dessus et ne
+moteur DSL, voir [`readme.md`](../readme.md) - ce guide s'appuie dessus et ne
 répète que ce qui est nécessaire à l'action.
 
 ---

@@ -3,7 +3,7 @@
 Ce document détaille l'anatomie d'un **indicateur** (`IndicatorDefinition`) : ce
 qu'il contient, comment lire sa définition JSON, et pourquoi on peut le décrire
 comme une **ressource réutilisable**. Pour le moteur qui exécute les formules et
-le modèle Option B+, voir [`readme.md`](readme.md) §6 et §7.
+le modèle Option B+, voir [`readme.md`](../readme.md) §6 et §7.
 
 ---
 
@@ -156,11 +156,11 @@ indicateurs*.
 
 ## Pour aller plus loin
 
-- [`readme.md`](readme.md) §5 - schéma complet des 5 entités (`indicator_definitions`,
+- [`readme.md`](../readme.md) §5 - schéma complet des 5 entités (`indicator_definitions`,
   `indicator_values`, `indicator_execution_logs`,
   `indicator_snapshots`, `user_indicator_preferences`)
-- [`readme.md`](readme.md) §6 - moteur DSL : catalogue des 10 types d'étapes,
+- [`readme.md`](../readme.md) §6 - moteur DSL : catalogue des 10 types d'étapes,
   `computeView`, snapshots vivants
-- [`readme.md`](readme.md) §7 - modèle Option B+ (`contextType` + `visualizations[]`),
+- [`readme.md`](../readme.md) §7 - modèle Option B+ (`contextType` + `visualizations[]`),
   sélection de viz par l'utilisateur
-- [`readme.md`](readme.md) §8 - cercles d'indicateurs et visibilité par rôle
+- [`readme.md`](../readme.md) §8 - cercles d'indicateurs et visibilité par rôle

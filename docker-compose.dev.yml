@@ -9,9 +9,15 @@ services:
   rabbitmq:
     image: rabbitmq:3-management
     container_name: indicateurs_rabbitmq
+    environment:
+      # Ne prend effet qu'au premier démarrage sur un volume vierge - ce volume
+      # est partagé avec docker-compose.prod.yml (même nom de projet Compose),
+      # donc déjà initialisé si la stack prod a tourné au moins une fois.
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-indicateurs}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     ports:
       - "5672:5672"
-      - "15672:15672"   # UI de gestion : http://localhost:15672 (guest/guest)
+      - "15672:15672"   # UI de gestion : http://localhost:15672 (voir .env pour les identifiants)
     volumes:
       - rabbitmqdata:/var/lib/rabbitmq
     networks:
