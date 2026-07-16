@@ -8,6 +8,8 @@ Le microservice indicateurs s'appuie sur l'infrastructure Docker de PLaTon (Post
 
 Pour le détail des manipulations qui ont mené à cette configuration (migration des bases natives vers Docker, bugs rencontrés et corrigés), voir [docker-migration.md](docker-migration.md).
 
+Pour explorer les bases Postgres via l'interface web pgAdmin, voir [pgadmin.md](pgadmin.md).
+
 **Nom réel du réseau partagé** : les fichiers compose de PLaTon ne fixent pas de `name:` explicite sous `networks:`, donc Docker Compose préfixe le nom du réseau qu'il crée avec le nom du projet (dérivé du nom du dossier, ex : `platon_platon-network` si PLaTon est lancé depuis un dossier `platon/`). On ne modifie jamais les fichiers PLaTon : les deux `docker-compose.*.yml` d'indicateurs déclarent `platon-network` comme alias externe avec `name: ${PLATON_NETWORK_NAME:-platon_platon-network}`.
 
 - **Source de vérité** : la variable `PLATON_NETWORK_NAME` dans `.env` (voir `.env.example`) - à renseigner une fois par déploiement, comme `JWT_SECRET`/`PLATON_DB_PASSWORD`. Si le dossier PLaTon est un jour renommé, c'est cette ligne qu'il faut ajuster (jamais les fichiers `docker-compose.*.yml`).

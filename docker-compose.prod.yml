@@ -59,7 +59,10 @@ services:
     env_file:
       - .env
     environment:
-      NODE_ENV: production
+      # NODE_ENV vient de .env (pas figé ici) : AuthGuard vérifie
+      # cryptographiquement la signature JWT en production, ce qui échoue
+      # systématiquement en local puisqu'on s'authentifie sur le vrai PLaTon
+      # universitaire (secret de signature inconnu ici) - voir auth.guard.ts.
       # Hosts Docker : remplacent les valeurs localhost du .env
       PLATON_DB_HOST: platon_postgres
       INDICATORS_DB_HOST: platon_postgres
