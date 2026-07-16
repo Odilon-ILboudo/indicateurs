@@ -6,6 +6,15 @@ Le microservice indicateurs s'appuie sur l'infrastructure Docker de PLaTon (Post
 
 **Prérequis** : le projet PLaTon doit tourner (`bin/docker/up.sh` dans le dossier `platon/`).
 
+Pour le détail des manipulations qui ont mené à cette configuration (migration des bases natives vers Docker, bugs rencontrés et corrigés), voir [docker-migration.md](docker-migration.md).
+
+**Nom réel du réseau partagé** : les fichiers compose de PLaTon ne fixent pas de `name:` explicite sous `networks:`, donc Docker Compose préfixe le nom du réseau qu'il crée avec le nom du projet (dérivé du nom du dossier, ex : `platon_platon-network` si PLaTon est lancé depuis un dossier `platon/`). On ne modifie jamais les fichiers PLaTon : les deux `docker-compose.*.yml` d'indicateurs déclarent `platon-network` comme alias externe avec `name: ${PLATON_NETWORK_NAME:-platon_platon-network}`.
+
+- **Source de vérité** : la variable `PLATON_NETWORK_NAME` dans `.env` (voir `.env.example`) - à renseigner une fois par déploiement, comme `JWT_SECRET`/`PLATON_DB_PASSWORD`. Si le dossier PLaTon est un jour renommé, c'est cette ligne qu'il faut ajuster (jamais les fichiers `docker-compose.*.yml`).
+- **Filet de sécurité** : si `PLATON_NETWORK_NAME` n'est renseigné ni dans `.env` ni dans le shell, `bin/docker/up.sh`/`down.sh` tentent une détection automatique (`docker network ls` + filtre sur `*_platon-network`). Cette détection n'est **pas infaillible** (ambiguïté possible si plusieurs réseaux correspondent, échoue si PLaTon n'est pas encore démarré) - à ne pas considérer comme une garantie, seulement un dépannage. `.env` reste toujours prioritaire s'il est renseigné.
+
+**Base `indicators`** : le Dockerfile Postgres de PLaTon (`platon/.docker/db/Dockerfile`) ne crée que la base définie par `POSTGRES_DB` (`platon_db`) - rien côté PLaTon ne provisionne la base `indicators` attendue par `INDICATORS_DB_NAME`. Automatisé côté indicateurs (jamais de modification côté PLaTon) : le service `init-db` de `docker-compose.prod.yml` (image `postgres:13-alpine`, éphémère) attend que Postgres réponde puis crée la base si elle n'existe pas encore (idempotent - ne fait rien si elle existe déjà). `api` ne démarre qu'une fois `init-db` terminé avec succès (`depends_on: init-db: condition: service_completed_successfully`).
+
 ---
 
 ## Mode développement
@@ -40,12 +49,13 @@ L'UI de gestion RabbitMQ est accessible à : `http://localhost:15672` (identifia
 ./bin/docker/down.sh      # arrête
 ```
 
-Docker démarre **trois services** :
+Docker démarre **trois services** (plus un service éphémère de provisionnement) :
 
 ```
 Docker lance :
+  ├── indicateurs_init_db    (éphémère - crée la base "indicators" si absente, puis s'arrête)
   ├── indicateurs_rabbitmq   (interne, pas exposé)
-  ├── indicateurs_api        (interne, pas exposé directement)
+  ├── indicateurs_api        (interne, pas exposé directement - attend indicateurs_init_db)
   └── indicateurs_nginx      (exposé sur le port 4300 de la machine)
         ├── sert les fichiers Angular compilés (dist/)
         ├── proxie /api/*      → indicateurs_api:3001

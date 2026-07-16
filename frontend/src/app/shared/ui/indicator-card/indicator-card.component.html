@@ -81,6 +81,30 @@
             (click)="openConfigModal($event)">
             <mat-icon>tune</mat-icon>
           </button>
+          <mat-icon *ngIf="isPinned && !showPinButton"
+            class="pin-indicator"
+            matTooltip="Indicateur imposé par l'enseignant pour cette ressource"
+            matTooltipPosition="above">lock</mat-icon>
+          <button *ngIf="!isPinned && showPinButton"
+            class="pin-button"
+            mat-icon-button
+            matTooltip="Figer pour ce cours/cette activité"
+            matTooltipPosition="above"
+            (click)="$event.stopPropagation(); pinToggle.emit()">
+            <mat-icon>lock_open</mat-icon>
+          </button>
+          <button *ngIf="isPinned && showPinButton"
+            class="pin-button pin-button--locked"
+            mat-icon-button
+            matTooltip="Défiger"
+            matTooltipPosition="above"
+            nz-popconfirm
+            nzPopconfirmTitle="Les étudiants ne seront plus obligés d'avoir cet indicateur sur cette ressource."
+            nzPopconfirmPlacement="top"
+            (nzOnConfirm)="pinToggle.emit()"
+            (click)="$event.stopPropagation()">
+            <mat-icon>lock</mat-icon>
+          </button>
           <button *ngIf="showDeleteButton"
             class="delete-button"
             mat-icon-button

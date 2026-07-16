@@ -30,13 +30,15 @@ import {
   UiViewModeComponent,
 } from '@platon/shared/ui'
 import { NzTooltipModule } from 'ng-zorro-antd/tooltip'
+import { NzModalService } from 'ng-zorro-antd/modal'
 import { CoursePresenter } from '../course.presenter'
 
 import { IndicatorService } from '../../../../core/services/indicator.service'
 import { RoleService } from '../../../../core/services/role.service'
 import { DashboardSettingsService } from '../../../../core/services/dashboard-settings.service'
-import { DashboardContext, IndicatorDefinition } from '../../../../core/models/indicator.model'
+import { DashboardContext, IndicatorDefinition, IndicatorPin } from '../../../../core/models/indicator.model'
 import { IndicatorCardComponent } from '../../../../shared/ui/indicator-card/indicator-card.component'
+import { PinIndicatorModalComponent } from '../../../pin-indicator-modal/pin-indicator-modal.component'
 
 @Component({
   standalone: true,
@@ -75,6 +77,7 @@ export class CourseDashboardPage implements OnInit, OnDestroy {
   private readonly indicatorService = inject(IndicatorService)
   private readonly roleService = inject(RoleService)
   private readonly settingsService = inject(DashboardSettingsService)
+  private readonly modal = inject(NzModalService)
   private readonly subscriptions: Subscription[] = []
 
   protected context = this.presenter.defaultContext()
@@ -84,6 +87,12 @@ export class CourseDashboardPage implements OnInit, OnDestroy {
   protected indicatorsLoading = true
   protected courseContext: DashboardContext | null = null
   protected indicatorQueryParams: Record<string, string> = {}
+
+  // Indicateurs figés (pins enseignant) sur ce cours - indépendant des
+  // préférences perso, cf. IndicatorPinsService côté backend.
+  protected pinsByIndicatorId = new Map<string, IndicatorPin>()
+  protected canManagePins = false
+  private currentCourseId: string | null = null
   protected viewModes = [
     {
       icon: 'appstore',
@@ -128,8 +137,6 @@ export class CourseDashboardPage implements OnInit, OnDestroy {
   constructor(private readonly courseManagementTutorialService: CourseManagementTutorialService) {}
 
   ngOnInit(): void {
-    this.loadCourseIndicators()
-
     this.subscriptions.push(
       this.presenter.contextChange.subscribe(async (context) => {
         this.context = context
@@ -139,6 +146,10 @@ export class CourseDashboardPage implements OnInit, OnDestroy {
         if (context.course) {
           const courseId = context.course.id
           const courseName = context.course.name
+
+          this.currentCourseId = courseId
+          this.canManagePins = context.course.permissions?.update ?? false
+          this.loadCourseIndicators(courseId)
 
           this.courseContext = { scope: 'course', scopeId: courseId, userId: '' }
           this.indicatorQueryParams = { from: 'course', courseId, courseName }
@@ -155,18 +166,33 @@ export class CourseDashboardPage implements OnInit, OnDestroy {
     this.subscriptions.forEach((s) => s.unsubscribe())
   }
 
-  private loadCourseIndicators(): void {
+  private loadCourseIndicators(courseId: string): void {
     this.indicatorsLoading = true
     this.subscriptions.push(
       combineLatest([
         this.indicatorService.loadIndicators(),
         this.settingsService.getSettings(),
+        this.indicatorService.listPins('course', courseId),
       ]).subscribe({
-        next: ([indicators, settings]) => {
-          this.courseIndicators = indicators.filter(ind =>
-            ind.contextType === 'course' &&
-            this.roleService.canSeeIndicatorContext(ind.contextType) &&
-            settings.activeIndicators.includes(ind.id))
+        next: ([indicators, settings, pins]) => {
+          this.pinsByIndicatorId = new Map(pins.map(p => [p.indicatorId, p]))
+
+          // Union : indicateurs activés perso par l'utilisateur (il faut d'abord
+          // l'activer soi-même, comme n'importe quel indicateur, pour le voir ici)
+          // + indicateurs déjà figés par un enseignant sur ce cours précis (jamais
+          // l'inverse - les deux sources restent indépendantes, cf.
+          // IndicatorPinsService côté backend). Le bouton "Figer" n'apparaît donc
+          // que sur un indicateur déjà visible, pas sur tout le catalogue.
+          const byId = new Map<string, IndicatorDefinition>()
+          for (const ind of indicators) {
+            if (ind.contextType !== 'course') continue
+            const personallyActive =
+              this.roleService.canSeeIndicatorContext(ind.contextType, ind.visibilityRoles) &&
+              settings.activeIndicators.includes(ind.id)
+            if (personallyActive || this.pinsByIndicatorId.has(ind.id)) byId.set(ind.id, ind)
+          }
+          this.courseIndicators = Array.from(byId.values())
+
           this.indicatorsLoading = false
           this.changeDetectorRef.markForCheck()
         },
@@ -176,6 +202,29 @@ export class CourseDashboardPage implements OnInit, OnDestroy {
         },
       }),
     )
+  }
+
+  protected onPinToggle(indicator: IndicatorDefinition): void {
+    const courseId = this.currentCourseId
+    if (!courseId) return
+
+    if (this.pinsByIndicatorId.has(indicator.id)) {
+      this.indicatorService.deletePin(indicator.id, 'course', courseId).subscribe(() => {
+        this.loadCourseIndicators(courseId)
+      })
+      return
+    }
+
+    const modalRef = this.modal.create({
+      nzTitle: `Figer "${indicator.name}"`,
+      nzContent: PinIndicatorModalComponent,
+      nzData: { indicator, contextType: 'course', contextId: courseId },
+      nzFooter: null,
+      nzWidth: 480,
+    })
+    modalRef.afterClose.subscribe((result) => {
+      if (result) this.loadCourseIndicators(courseId)
+    })
   }
 
   private checkForCourseTutorial(): void {

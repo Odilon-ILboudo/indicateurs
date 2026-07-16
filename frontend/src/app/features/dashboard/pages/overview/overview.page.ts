@@ -75,7 +75,7 @@ export class OverviewPage implements OnInit, OnDestroy {
     this.subscriptions.push(
       this.indicatorService.loadIndicators().subscribe(indicators => {
         this.indicators = indicators.filter(ind =>
-          ind.contextType === this.context.scope && this.roleService.canSeeIndicatorContext(ind.contextType));
+          ind.contextType === this.context.scope && this.roleService.canSeeIndicatorContext(ind.contextType, ind.visibilityRoles));
         this.loading = false;
         this.changeDetectorRef.markForCheck();
       })

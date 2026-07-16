@@ -12,11 +12,13 @@ import { IndicatorSnapshot } from './entities/indicator-snapshot.entity';
 import { IndicatorFeedback } from './entities/indicator-feedback.entity';
 import { IndicatorNotification } from './entities/indicator-notification.entity';
 import { UserIndicatorPreference } from '../user-preferences/entities/user-indicator-preference.entity';
+import { IndicatorPin } from '../indicator-pins/indicator-pin.entity';
+import { IndicatorPinsService } from '../indicator-pins/indicator-pins.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature(
-      [IndicatorDefinition, IndicatorValue, IndicatorExecutionLog, IndicatorSnapshot, IndicatorFeedback, IndicatorNotification, UserIndicatorPreference],
+      [IndicatorDefinition, IndicatorValue, IndicatorExecutionLog, IndicatorSnapshot, IndicatorFeedback, IndicatorNotification, UserIndicatorPreference, IndicatorPin],
       'indicators',
     ),
     EventEmitterModule.forRoot(),
@@ -25,6 +27,7 @@ import { UserIndicatorPreference } from '../user-preferences/entities/user-indic
   providers: [
     IndicatorsService,
     FormulaInterpreterService,
+    IndicatorPinsService,
   ],
   exports: [
     IndicatorsService,

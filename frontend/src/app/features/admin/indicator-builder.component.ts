@@ -27,6 +27,7 @@ import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import * as yaml from 'js-yaml';
 import { IndicatorService } from '../../core/services/indicator.service';
 import { IndicatorDefinition, IndicatorScope, ViewVisualizationType, TeacherCourse, CourseActivity } from '../../core/models/indicator.model';
+import { ReuseIndicatorModalComponent, ReuseIndicatorResult } from './reuse-indicator-modal.component';
 import { getCurrentUserId } from '../../core/auth/current-user';
 
 // ── Types DSL ────────────────────────────────────────────────────────────────
@@ -136,7 +137,7 @@ const FORMULA_RECIPES: { name: string; desc: string; detail: { objectif: string;
     detail: {
       objectif: `Compte le nombre d'exercices distincts pour lesquels l'apprenant a obtenu 100/100 au moins une fois. Mesure la progression dans l'activité et peut être rapporté au total d'exercices pour obtenir un taux de complétion.`,
       utilisation: `card ou gauge. Contexte learner. Résultat : un entier, ex: 5. Peut être combiné avec un second indicateur "total d'exercices" pour afficher un ratio.`,
-      adapter: `Changer filterValue: 100 pour un autre seuil (ex: 80 pour "exercices quasi-réussis"). Ajouter un join sur Resources puis un groupBy pour ventiler par catégorie d'exercice. Remplacer count par countUnique si des doublons de sessions peuvent fausser le comptage.`,
+      adapter: `Changer filterValue: 100 pour un autre seuil (ex: 80 pour "exercices quasi-réussis"). Ajouter un join sur Resources puis un groupBy pour ventiler par catégorie d'exercice.`,
     },
     pipeline: [
       { type: 'fetch',     label: 'Charger sessions', table: 'SessionData', contextFields: ['user_id', 'activity_id'] },
@@ -175,24 +176,29 @@ return result;` },
   },
   {
     name: 'Tentatives par étudiant (groupe)',
-    desc: 'Total des tentatives par étudiant d\'un groupe de TP, avec noms lisibles (bar-chart)',
+    desc: 'Moyenne des tentatives par étudiant d\'un groupe de TP, avec noms lisibles (bar-chart)',
     detail: {
-      objectif: `Vue enseignant sur l'activité d'un groupe de TP. Chaque barre représente un étudiant du groupe et sa hauteur le total de ses tentatives. Permet de repérer les étudiants très actifs, absents, ou en difficulté d'un seul regard.`,
-      utilisation: `Conçu pour un bar-chart. Nécessite le contexte group avec useGroupContext: true dans le step fetch. Le join sur Users permet d'afficher les prénoms/noms à la place des IDs. Résultat : { "Jean Dupont": 12, "Marie Martin": 7, ... }.`,
-      adapter: `Remplacer attempts par grade dans le step js et calculer une moyenne pour obtenir la note moyenne par étudiant du groupe. Ajouter un filter pour ne compter que les sessions réussies. Changer le label en row.email si on préfère les adresses email aux noms complets.`,
+      objectif: `Vue enseignant sur l'activité d'un groupe de TP. Chaque barre représente un étudiant du groupe et sa hauteur la moyenne de ses tentatives par exercice. Une moyenne plutôt qu'un total évite de pénaliser un étudiant simplement parce qu'il a fait plus d'exercices que les autres.`,
+      utilisation: `Conçu pour un bar-chart. Nécessite le contexte group avec useGroupContext: true dans le step fetch. Le join sur Users permet d'afficher les prénoms/noms à la place des IDs. Résultat : { "Jean Dupont": 3.5, "Marie Martin": 1.8, ... }.`,
+      adapter: `Remplacer attempts par grade dans le step js pour obtenir la note moyenne par étudiant du groupe. Ajouter un filter pour ne compter que les sessions réussies. Changer le label en row.email si on préfère les adresses email aux noms complets.`,
     },
     pipeline: [
       { type: 'fetch', label: 'Charger sessions du groupe', table: 'SessionData', contextFields: ['group_id', 'activity_id'], useGroupContext: true },
       { type: 'join',  label: 'Joindre noms des étudiants', joinTable: 'Users', joinLeftKey: 'user_id', joinRightKey: 'id' },
-      { type: 'js',    label: 'Total par étudiant', jsCode:
-`const totals = {};
+      { type: 'js',    label: 'Moyenne par étudiant', jsCode:
+`const groups = {};
 for (const row of input) {
   const attempts = parseFloat(row.attempts);
   if (isNaN(attempts)) continue;
   const label = (row.first_name && row.last_name) ? row.first_name + ' ' + row.last_name : row.user_id;
-  totals[label] = (totals[label] || 0) + attempts;
+  if (!groups[label]) groups[label] = [];
+  groups[label].push(attempts);
 }
-return totals;` },
+const out = {};
+for (const [label, vals] of Object.entries(groups)) {
+  out[label] = Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100;
+}
+return out;` },
     ],
   },
 ];
@@ -249,6 +255,37 @@ interface ImportErrorDisplay {
 
   <!-- ── ÉTAPE 1 ─────────────────────────────────────────────────────── -->
   <div *ngIf="step === 0" class="step-content">
+
+    <!-- Réutiliser un indicateur existant (capitalisation) -->
+    <div class="reuse-section" *ngIf="!modalData?.indicator">
+      <button nz-button nzType="dashed" (click)="showReusePanel = !showReusePanel">
+        <span nz-icon nzType="copy"></span>
+        Réutiliser un indicateur existant
+      </button>
+
+      <div *ngIf="showReusePanel" class="reuse-panel">
+        <p class="section-hint">
+          Choisissez un indicateur pour copier son pipeline comme point de départ - une
+          fenêtre s'ouvrira pour prévisualiser et ajuster son contexte avant de
+          l'appliquer.
+        </p>
+        <div class="param-row">
+          <label>Indicateur source</label>
+          <nz-select [(ngModel)]="reuseSourceId" nzShowSearch nzAllowClear
+            nzPlaceHolder="Choisir un indicateur..." style="width:320px"
+            (ngModelChange)="onSelectReuseSource($event)">
+            <nz-option *ngFor="let ind of reusableIndicators" [nzValue]="ind.id" [nzLabel]="ind.name"></nz-option>
+          </nz-select>
+        </div>
+        <p class="section-hint" *ngIf="def.baseIndicatorId">
+          "{{ reuseAppliedName }}" copié comme point de départ (nom, description,
+          contexte, seuils, visualisations et pipeline) - tout reste modifiable
+          librement dans les étapes suivantes.
+        </p>
+      </div>
+      <nz-divider></nz-divider>
+    </div>
+
     <nz-form-item>
       <nz-form-label [nzRequired]="true">Nom de l'indicateur <mat-icon class="info-icon" nz-tooltip="Nom unique affiché dans le tableau de bord et les listes. Doit être court et descriptif. Ex : 'Tentatives avant réussite'." nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
       <nz-form-control>
@@ -359,7 +396,7 @@ interface ImportErrorDisplay {
                 </div>
                 <div class="prev-threshold prev-threshold--danger">
                   <mat-icon>cancel</mat-icon>
-                  <span>Critique <strong>&gt; {{ ind.thresholds!.warning ?? ind.thresholds!.good }}</strong></span>
+                  <span>Critique <strong>&gt; {{ ind.thresholds!.critical ?? ind.thresholds!.warning ?? ind.thresholds!.good }}</strong></span>
                 </div>
               </div>
             </div>
@@ -483,7 +520,7 @@ interface ImportErrorDisplay {
       <div class="section-label">
         Seuil de performance
         <mat-icon class="info-icon"
-          nz-tooltip="Optionnel. Définit 3 zones colorées : ● Bon (vert) : valeur ≤ seuil Bon - ● Moyen (orange) : valeur entre Bon et Moyen - ● Difficile (rouge) : valeur > seuil Moyen. La zone Difficile est déduite automatiquement, il n'y a pas de champ à remplir pour elle. Colore la valeur dans la carte et affiche la légende dans le panneau latéral."
+          nz-tooltip="Optionnel. Définit 3 zones colorées : ● Bon (vert) : valeur ≤ seuil Bon - ● Moyen (orange) : valeur entre Bon et Moyen - ● Critique (rouge) : valeur > seuil Moyen. Le seuil Critique est optionnel et sert de repère dans la légende - la carte est de toute façon rouge au-delà du seuil Moyen, que Critique soit renseigné ou non. Colore la valeur dans la carte et affiche la légende dans le panneau latéral."
           nzTooltipPlacement="right">info_outline</mat-icon>
       </div>
       <div class="threshold-row">
@@ -500,6 +537,14 @@ interface ImportErrorDisplay {
           <nz-input-number
             [ngModel]="def.thresholds?.warning ?? null"
             (ngModelChange)="onThresholdWarningChange($event)"
+            [nzMin]="0" nzSize="small" nzPlaceHolder="-">
+          </nz-input-number>
+        </div>
+        <div class="threshold-item">
+          <label><span class="dot dot-red"></span> Critique &gt;</label>
+          <nz-input-number
+            [ngModel]="def.thresholds?.critical ?? null"
+            (ngModelChange)="onThresholdCriticalChange($event)"
             [nzMin]="0" nzSize="small" nzPlaceHolder="-">
           </nz-input-number>
         </div>
@@ -879,6 +924,26 @@ interface ImportErrorDisplay {
           </div>
         </div>
         <div *ngIf="debugError" class="preview-error">{{ debugError }}</div>
+      </div>
+    </ng-container>
+
+    <!-- Restriction de visibilité (optionnel, uniquement course/activity) -->
+    <ng-container *ngIf="def.contextType === 'course' || def.contextType === 'activity'">
+      <nz-divider nzDashed></nz-divider>
+      <div class="global-threshold-section">
+        <div class="section-label">
+          <span style="color:#ff4d4f;font-weight:600">Restreindre la visibilité</span>
+          <mat-icon class="info-icon"
+            nz-tooltip="Optionnel. Un indicateur de contexte Cours ou Activité est visible par tous les rôles par défaut. Si son résultat expose des données nominatives (ex. performance détaillée par étudiant), sélectionnez ici les seuls rôles autorisés à le voir - par exemple Enseignant + Admin, pour l'exclure des étudiants."
+            nzTooltipPlacement="right">info_outline</mat-icon>
+        </div>
+        <nz-select
+          [(ngModel)]="def.visibilityRoles"
+          nzMode="multiple"
+          nzPlaceHolder="Aucune restriction (visible par tous les rôles)"
+          style="width:100%">
+          <nz-option *ngFor="let r of visibilityRoleOptions" [nzValue]="r.value" [nzLabel]="r.label"></nz-option>
+        </nz-select>
       </div>
     </ng-container>
 
@@ -1374,6 +1439,18 @@ interface ImportErrorDisplay {
     .global-threshold-section {
       padding: 4px 0 8px;
     }
+
+    .reuse-section { margin-bottom: 12px; }
+    .reuse-panel {
+      margin-top: 10px;
+      padding: 12px 14px;
+      border: 1px dashed #d9d9d9;
+      border-radius: 6px;
+      background: #fafafa;
+    }
+    .reuse-preview { margin: 8px 0 4px; }
+    .reuse-step-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .section-hint { color: #888; font-size: 12px; margin: 4px 0 10px; }
     .global-threshold-section .section-label {
       font-size: 13px;
       font-weight: 500;
@@ -2231,6 +2308,78 @@ ${this.importMode === 'yaml' ? `pipeline:
     { value: 'activity_id', label: 'activity_id - activité sélectionnée' },
     { value: 'course_id',   label: 'course_id - cours sélectionné' },
   ];
+
+  // ── Réutiliser un indicateur existant (capitalisation) ─────────────────────
+  reusableIndicators: IndicatorDefinition[] = [];
+  showReusePanel = false;
+  reuseSourceId: string | null = null;
+  reuseAppliedName: string | null = null;
+
+  onSelectReuseSource(id: string | null): void {
+    const src = this.reusableIndicators.find(i => i.id === id);
+    if (!src) return;
+
+    const ref = this.modalSvc.create<ReuseIndicatorModalComponent, { source: IndicatorDefinition }>({
+      nzTitle: 'Réutiliser un indicateur existant',
+      nzContent: ReuseIndicatorModalComponent,
+      nzData: { source: src },
+      nzFooter: null,
+      nzWidth: 560,
+    });
+    ref.afterClose.subscribe((result: ReuseIndicatorResult | null | undefined) => {
+      if (result) {
+        this.composeFromReuseSource(src, result);
+      } else {
+        this.reuseSourceId = null;
+      }
+    });
+  }
+
+  private composeFromReuseSource(src: IndicatorDefinition, override: ReuseIndicatorResult): void {
+    // Étape 1 (Général)
+    this.def.name               = `${src.name} (copie)`;
+    this.def.description        = src.description || '';
+    this.def.interpretationHint = src.interpretationHint || '';
+    this.def.requiredEvents     = [...(src.requiredEvents || [])];
+
+    // Étape 2 (Contexte / seuils / visualisations)
+    this.def.contextType = src.contextType ?? 'learner';
+    this.def.thresholds  = src.thresholds
+      ? { good: src.thresholds.good ?? null, warning: src.thresholds.warning ?? null, critical: src.thresholds.critical ?? null }
+      : null;
+    const vizs = src.visualizations ?? [];
+    this.vizList = vizs.length > 0
+      ? vizs.map(v => ({
+          id:    crypto.randomUUID(),
+          label: v.label ?? 'Vue',
+          type:  v.type ?? 'card',
+          icon:  v.icon ?? 'analytics',
+          color: v.color ?? '#722ed1',
+          unit:  v.unit ?? '',
+        }))
+      : [this.newViz('Vue principale', 'card')];
+
+    // Étape 3 (Formule)
+    if (!src.formula?.pipeline?.length) {
+      this.def.baseIndicatorId = src.id;
+      this.reuseAppliedName = src.name;
+      this.messageSvc.success(`"${src.name}" copié comme point de départ.`);
+      return;
+    }
+
+    const cloned = src.formula.pipeline.map((s: any) => ({ ...s, params: { ...s.params } }));
+    const fetchStep: any = cloned.find((s: any) => s.type === 'fetch');
+    if (fetchStep) {
+      const fields = [...override.contextFields];
+      if (override.useGroupContext) fields.push('group_id');
+      fetchStep.params = { ...fetchStep.params, contextFields: fields };
+    }
+
+    this.pipeline = cloned.map((s: any) => this.dehydrateStep(s));
+    this.def.baseIndicatorId = src.id;
+    this.reuseAppliedName = src.name;
+    this.messageSvc.success(`"${src.name}" copié comme point de départ.`);
+  }
   readonly availableIcons = [
     'trending_up', 'trending_down', 'star', 'repeat', 'check_circle',
     'access_time', 'analytics', 'speed', 'emoji_events', 'school',
@@ -2261,8 +2410,16 @@ ${this.importMode === 'yaml' ? `pipeline:
     interpretationHint: string;
     requiredEvents: string[];
     contextType: IndicatorScope;
-    thresholds: { good: number | null; warning: number | null } | null;
-  } = { name: '', description: '', interpretationHint: '', requiredEvents: [], contextType: 'learner', thresholds: null };
+    thresholds: { good: number | null; warning: number | null; critical: number | null } | null;
+    visibilityRoles: string[] | null;
+    baseIndicatorId: string | null;
+  } = { name: '', description: '', interpretationHint: '', requiredEvents: [], contextType: 'learner', thresholds: null, visibilityRoles: null, baseIndicatorId: null };
+
+  readonly visibilityRoleOptions: { value: string; label: string }[] = [
+    { value: 'student', label: 'Étudiant' },
+    { value: 'teacher', label: 'Enseignant' },
+    { value: 'admin', label: 'Admin' },
+  ];
 
   vizList: FlatViz[] = [this.newViz('Vue principale', 'card')];
 
@@ -2289,6 +2446,14 @@ ${this.importMode === 'yaml' ? `pipeline:
     });
     if (this.modalData?.indicator) this.hydrate(this.modalData.indicator);
     else if (this.modalData?.familyPreset) this.applyFamilyPreset(this.modalData.familyPreset);
+
+    this.indicatorSvc.loadAllForAdmin().subscribe({
+      next: all => {
+        this.reusableIndicators = all.filter(i => i.id !== this.modalData?.indicator?.id);
+        this.cdr.detectChanges();
+      },
+      error: () => { this.reusableIndicators = []; },
+    });
 
     this.previewCoursesLoading = true;
     this.indicatorSvc.getTeacherContext(getCurrentUserId()).subscribe({
@@ -2407,14 +2572,20 @@ ${this.importMode === 'yaml' ? `pipeline:
 
   onThresholdGoodChange(val: number | null): void {
     if (val === null) { this.clearThresholds(); return; }
-    if (!this.def.thresholds) this.def.thresholds = { good: null, warning: null };
+    if (!this.def.thresholds) this.def.thresholds = { good: null, warning: null, critical: null };
     this.def.thresholds.good = val;
   }
 
   onThresholdWarningChange(val: number | null): void {
     if (val === null) { if (this.def.thresholds) this.def.thresholds.warning = null; return; }
-    if (!this.def.thresholds) this.def.thresholds = { good: null, warning: null };
+    if (!this.def.thresholds) this.def.thresholds = { good: null, warning: null, critical: null };
     this.def.thresholds.warning = val;
+  }
+
+  onThresholdCriticalChange(val: number | null): void {
+    if (val === null) { if (this.def.thresholds) this.def.thresholds.critical = null; return; }
+    if (!this.def.thresholds) this.def.thresholds = { good: null, warning: null, critical: null };
+    this.def.thresholds.critical = val;
   }
 
   clearThresholds(): void {
@@ -2973,9 +3144,17 @@ ${this.importMode === 'yaml' ? `pipeline:
         ?? this.modalData?.indicator?.familyName
         ?? null,
       formula: this.buildFormula(),
-      thresholds: this.def.thresholds?.good != null || this.def.thresholds?.warning != null
-        ? { good: this.def.thresholds?.good ?? undefined, warning: this.def.thresholds?.warning ?? undefined }
+      thresholds: this.def.thresholds?.good != null || this.def.thresholds?.warning != null || this.def.thresholds?.critical != null
+        ? {
+            good: this.def.thresholds?.good ?? undefined,
+            warning: this.def.thresholds?.warning ?? undefined,
+            critical: this.def.thresholds?.critical ?? undefined,
+          }
         : null,
+      visibilityRoles: this.def.visibilityRoles && this.def.visibilityRoles.length > 0
+        ? this.def.visibilityRoles
+        : null,
+      baseIndicatorId: this.def.baseIndicatorId ?? null,
       visualizations: this.vizList.map(v => ({
         id: v.id,
         label: v.label,
@@ -3082,9 +3261,11 @@ ${this.importMode === 'yaml' ? `pipeline:
     this.def.interpretationHint = ind.interpretationHint || '';
     this.def.requiredEvents     = ind.requiredEvents || [];
     this.def.contextType        = ind.contextType ?? 'learner';
+    this.def.visibilityRoles    = ind.visibilityRoles || null;
+    this.def.baseIndicatorId    = ind.baseIndicatorId || null;
 
     this.def.thresholds = ind.thresholds
-      ? { good: ind.thresholds.good ?? null, warning: ind.thresholds.warning ?? null }
+      ? { good: ind.thresholds.good ?? null, warning: ind.thresholds.warning ?? null, critical: ind.thresholds.critical ?? null }
       : null;
 
     const vizs = ind.visualizations ?? [];

@@ -42,6 +42,10 @@
                     [context]="activityContext"
                     [clickable]="true"
                     [queryParams]="indicatorQueryParams"
+                    [isPinned]="pinsByIndicatorId.has(ind.id)"
+                    [showPinButton]="canManagePins"
+                    [thresholdsOverride]="pinsByIndicatorId.get(ind.id)?.thresholdsOverride ?? null"
+                    (pinToggle)="onPinToggle(ind)"
                   />
                 </nz-col>
               </nz-row>

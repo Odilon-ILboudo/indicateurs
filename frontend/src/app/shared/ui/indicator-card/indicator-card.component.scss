@@ -258,7 +258,7 @@
       gap: 2px;
     }
 
-    .edit-button, .delete-button {
+    .edit-button, .delete-button, .pin-button {
       opacity: 1;
       transition: all 0.2s ease;
       padding: 0;
@@ -285,6 +285,25 @@
       color: #ff4d4f;
       mat-icon { color: #ff4d4f; }
       &:hover { background: rgba(255, 77, 79, 0.1); border-radius: 4px; }
+    }
+
+    .pin-button {
+      color: #8c8c8c;
+      mat-icon { color: #8c8c8c; }
+      &:hover { background: rgba(140, 140, 140, 0.1); border-radius: 4px; }
+
+      &.pin-button--locked {
+        color: #fa8c16;
+        mat-icon { color: #fa8c16; }
+        &:hover { background: rgba(250, 140, 22, 0.1); }
+      }
+    }
+
+    .pin-indicator {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+      color: #fa8c16;
     }
   }
 

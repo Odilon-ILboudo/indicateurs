@@ -2,7 +2,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, BehaviorSubject, map, of, tap } from 'rxjs';
-import { CourseActivity, IndicatorDefinition, IndicatorFeedback, IndicatorFeedbacksResult, IndicatorNotification, IndicatorSnapshot, IndicatorValue, StepDebugResult, TeacherCourse, ViewResult, EventTypeOption, EventRule, CreateEventRuleBody, InstallTriggerResult } from '../models/indicator.model';
+import { CourseActivity, IndicatorDefinition, IndicatorFeedback, IndicatorFeedbacksResult, IndicatorNotification, IndicatorSnapshot, IndicatorValue, StepDebugResult, TeacherCourse, ViewResult, EventTypeOption, EventRule, CreateEventRuleBody, InstallTriggerResult, IndicatorPin, IndicatorPinContextType, IndicatorThresholds } from '../models/indicator.model';
 import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
@@ -217,6 +217,31 @@ export class IndicatorService {
 
   deleteSnapshot(indicatorId: string, snapshotId: string): Observable<void> {
     return this.http.delete<void>(`${this.apiUrl}/${indicatorId}/snapshots/${snapshotId}`);
+  }
+
+  // ── Pins (figer un indicateur sur un cours/activité) ─────────────────────
+  // Totalement indépendant des préférences perso (ci-dessous) : aucune écriture
+  // croisée entre les deux, cf. IndicatorPinsService côté backend.
+
+  listPins(contextType: IndicatorPinContextType, contextId: string): Observable<IndicatorPin[]> {
+    return this.http.get<IndicatorPin[]>(
+      `${this.apiUrl}/pins?contextType=${contextType}&contextId=${encodeURIComponent(contextId)}`,
+    );
+  }
+
+  createPin(
+    indicatorId: string,
+    contextType: IndicatorPinContextType,
+    contextId: string,
+    thresholdsOverride?: IndicatorThresholds | null,
+  ): Observable<IndicatorPin> {
+    return this.http.post<IndicatorPin>(`${this.apiUrl}/${indicatorId}/pins`, { contextType, contextId, thresholdsOverride });
+  }
+
+  deletePin(indicatorId: string, contextType: IndicatorPinContextType, contextId: string): Observable<void> {
+    return this.http.delete<void>(
+      `${this.apiUrl}/${indicatorId}/pins?contextType=${contextType}&contextId=${encodeURIComponent(contextId)}`,
+    );
   }
 
   // ── Préférences viz (persistées en BDD via user-preferences) ─────────────

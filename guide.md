@@ -97,7 +97,12 @@ répète que ce qui est nécessaire à l'action.
    qui porte le rang de la première réponse notée 100, calculé depuis la
    table `Answers`. `attempts` seul continue d'augmenter après une réussite
    (si l'étudiant retente ensuite) et ne peut donc pas mesurer "le nombre de
-   tentatives qu'il a fallu pour réussir".
+   tentatives qu'il a fallu pour réussir". Un trigger sur `Answers`
+   (`trg_platon_attempts_at_success`, même script) la maintient à jour en
+   continu - c'est distinct de l'événement `exercise.attempted` configuré
+   ci-dessous, qui ne fait que déclencher le *recalcul* de l'indicateur
+   (l'un garde la donnée juste, l'autre notifie qu'il faut relire la
+   donnée).
 
 ➡️ **Pour toute la phase de création (étapes A à C ci-dessous), restez en
 rôle Admin.**

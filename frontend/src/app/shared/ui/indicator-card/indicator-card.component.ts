@@ -16,7 +16,7 @@ import { NzMessageService } from 'ng-zorro-antd/message';
 import { FormsModule } from '@angular/forms';
 import { IndicatorService } from '../../../core/services/indicator.service';
 import { IndicatorSocketService } from '../../../core/services/indicator-socket.service';
-import { DashboardContext, IndicatorDefinition, IndicatorValue, IndicatorVisualization } from '../../../core/models/indicator.model';
+import { DashboardContext, IndicatorDefinition, IndicatorThresholds, IndicatorValue, IndicatorVisualization } from '../../../core/models/indicator.model';
 import { getCurrentUserId } from '../../../core/auth/current-user';
 import { IndicatorConfigModalComponent } from './indicator-config-modal.component';
 import { ModalDataService } from './modal-data.service';
@@ -49,12 +49,23 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
   @Input() displayTitle?: string;
   /** Affiche un bouton de suppression dans le card-context (à côté du bouton paramètres). */
   @Input() showDeleteButton = false;
+  /** Indicateur figé (pin enseignant) pour le cours/l'activité affiché - actif et non
+   *  désactivable pour tous les membres, indépendamment des préférences perso. */
+  @Input() isPinned = false;
+  /** Affiche le bouton figer/défiger (visible seulement si l'utilisateur courant a un
+   *  droit d'écriture sur ce cours/cette activité - calculé par la page parente). */
+  @Input() showPinButton = false;
+  /** Seuils propres au pin, en override des seuils par défaut de l'indicateur (optionnel). */
+  @Input() thresholdsOverride?: IndicatorThresholds | null;
 
   @Output() valueChange = new EventEmitter<IndicatorValue>();
   /** Émis avec le nouveau titre quand l'utilisateur confirme l'édition inline. */
   @Output() titleChange = new EventEmitter<string>();
   /** Émis quand l'utilisateur confirme la suppression via le popconfirm interne. */
   @Output() deleteClick = new EventEmitter<void>();
+  /** Émis pour figer (si pas encore épinglé) ou défiger (confirmation déjà faite via
+   *  popconfirm interne si épinglé) cet indicateur sur le contexte courant. */
+  @Output() pinToggle = new EventEmitter<void>();
 
   @ViewChild('titleInput') private titleInputRef?: ElementRef<HTMLInputElement>;
 
@@ -234,7 +245,7 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
   getThresholdColor(): string {
     if (!this.value) return '#d9d9d9';
     const val = this.value.value;
-    const t = this.indicator?.thresholds;
+    const t = this.thresholdsOverride ?? this.indicator?.thresholds;
     if (!t || (t.good == null && t.warning == null)) return '#d9d9d9';
     if (t.good != null && val <= t.good)       return '#52c41a';
     if (t.warning != null && val <= t.warning) return '#fa8c16';

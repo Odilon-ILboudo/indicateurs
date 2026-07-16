@@ -9,8 +9,9 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner'
 
 import { firstValueFrom } from 'rxjs'
 import { User, UserRoles } from '../../core/auth/auth.types'
+import { environment } from '../../../environments/environment'
 
-const PLATON_BASE_URL = 'https://platon.univ-eiffel.fr'
+const PLATON_BASE_URL = environment.platonBaseUrl
 
 @Component({
   standalone: true,

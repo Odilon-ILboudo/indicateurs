@@ -437,7 +437,10 @@ export class CoursesService {
       permissions: {
         answer: true,
         update: hasWritePermission,
-        viewStats: hasWritePermission,
+        // Un étudiant doit pouvoir consulter les statistiques de ses propres
+        // activités, pas seulement l'enseignant - contrairement à update/
+        // viewResource, qui restent réservés à l'admin/enseignant du cours.
+        viewStats: true,
         viewResource: hasWritePermission,
       },
     };

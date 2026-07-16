@@ -28,6 +28,14 @@ export interface ViewResult {
   metadata: Record<string, any>;
 }
 
+/** `critical` est une borne purement documentaire (légende) : au-delà de
+ *  `warning`, la carte est de toute façon rouge, avec ou sans `critical`. */
+export interface IndicatorThresholds {
+  good?: number;
+  warning?: number;
+  critical?: number;
+}
+
 export interface IndicatorDefinition {
   id: string;
   name: string;
@@ -40,9 +48,18 @@ export interface IndicatorDefinition {
   /** Tableau de visualisations (min. 1). La première est la vue "carte" par défaut. */
   visualizations: IndicatorVisualization[];
   /** Seuils de performance partagés par toutes les visualisations (optionnel). */
-  thresholds?: { good?: number; warning?: number } | null;
+  thresholds?: IndicatorThresholds | null;
   /** Aide à l'analyse : texte libre expliquant comment interpréter les résultats (optionnel). */
   interpretationHint?: string | null;
+  /** Restreint la visibilité de cet indicateur à des rôles précis, en override de la règle
+   *  par défaut du contextType (optionnel). */
+  visibilityRoles?: string[] | null;
+  /** Indicateur à partir duquel celui-ci a été créé (traçabilité uniquement, aucun lien
+   *  vivant après la création). */
+  baseIndicatorId?: string | null;
+  /** Ligne technique représentant une famille vide (pas d'indicateur réel pour l'instant) -
+   *  jamais visible des utilisateurs finaux, uniquement dans la gestion admin. */
+  isFamilyPlaceholder?: boolean;
   usageCount?: number;
   isActive: boolean;
   metadata?: Record<string, any>;
@@ -191,5 +208,23 @@ export interface InstallTriggerResult {
   success: boolean;
   message?: string;
   sql: string;
+}
+
+// ── Figer un indicateur sur un cours/activité (pins enseignant) ─────────────
+
+export type IndicatorPinContextType = 'course' | 'activity';
+
+/** Un enseignant fige un indicateur existant sur un cours/une activité précis :
+ *  tous les membres l'ont alors actif et non désactivable, avec des seuils
+ *  propres à ce contexte. Totalement indépendant des préférences perso
+ *  (`user_indicator_preferences`) : aucune écriture croisée entre les deux. */
+export interface IndicatorPin {
+  id: string;
+  indicatorId: string;
+  contextType: IndicatorPinContextType;
+  contextId: string;
+  thresholdsOverride: IndicatorThresholds | null;
+  pinnedByUserId: string;
+  createdAt?: string;
 }
 

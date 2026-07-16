@@ -157,6 +157,11 @@ export class IndicatorsService {
       visualizations: definition.visualizations ?? [],
       formula: definition.formula ?? null,
       isActive: definition.isActive ?? false,
+      isFamilyPlaceholder: definition.isFamilyPlaceholder ?? false,
+      interpretationHint: definition.interpretationHint ?? null,
+      thresholds: definition.thresholds ?? null,
+      visibilityRoles: definition.visibilityRoles ?? null,
+      baseIndicatorId: definition.baseIndicatorId ?? null,
     });
     const saved = await this.indicatorModel.save(indicator);
 

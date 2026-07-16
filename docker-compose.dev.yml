@@ -27,4 +27,7 @@ volumes:
 
 networks:
   platon-network:
-    external: true   # réseau créé par le docker-compose.dev.yml de PLaTon
+    external: true
+    # Voir la remarque dans docker-compose.prod.yml - PLATON_NETWORK_NAME est
+    # détecté automatiquement par bin/docker/up.sh, ce nom n'est qu'un repli.
+    name: ${PLATON_NETWORK_NAME:-platon_platon-network}

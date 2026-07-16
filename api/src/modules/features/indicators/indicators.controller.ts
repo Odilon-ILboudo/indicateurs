@@ -1,18 +1,26 @@
 // src/modules/features/indicators/indicators.controller.ts
 import {
   Controller, Get, Post, Patch, Delete, UseGuards,
-  Body, Param, Query, BadRequestException,
+  Body, Param, Query, Req, BadRequestException,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { IndicatorsService } from './indicators.service';
 import { FormulaInterpreterService } from './interpreter/formula-interpreter.service';
+import { IndicatorPinsService } from '../indicator-pins/indicator-pins.service';
+import { IndicatorPinContextType } from '../indicator-pins/indicator-pin.entity';
 import { AdminGuard } from '../../core/guards/admin.guard';
-import { AuthGuard } from '../../core/auth/auth.guard';
+import { AuthGuard, AuthenticatedUser } from '../../core/auth/auth.guard';
+
+interface AuthenticatedRequest extends Request {
+  user?: AuthenticatedUser;
+}
 
 @Controller('indicators')
 export class IndicatorsController {
   constructor(
     private readonly indicatorsService: IndicatorsService,
     private readonly formulaInterpreter: FormulaInterpreterService,
+    private readonly pinsService: IndicatorPinsService,
   ) {}
 
   // ── Lecture ──────────────────────────────────────────────────────────────
@@ -65,6 +73,19 @@ export class IndicatorsController {
   @Get('course/:courseId/students')
   async getCourseStudents(@Param('courseId') courseId: string) {
     return this.indicatorsService.getCourseStudents(courseId);
+  }
+
+  /** Liste les indicateurs figés (pins enseignant) sur un cours/une activité précis. */
+  @Get('pins')
+  @UseGuards(AuthGuard)
+  async listPins(
+    @Query('contextType') contextType: IndicatorPinContextType,
+    @Query('contextId') contextId: string,
+  ) {
+    if (!contextType || !contextId) {
+      throw new BadRequestException('contextType et contextId sont requis');
+    }
+    return this.pinsService.listPins(contextType, contextId);
   }
 
   /**
@@ -256,6 +277,38 @@ export class IndicatorsController {
     @Body() body: { title: string; message: string },
   ) {
     return this.indicatorsService.sendNotification(id, body.title, body.message);
+  }
+
+  // ── Pins (figer un indicateur sur un cours/activité) ────────────────────────
+  // Pas d'AdminGuard : le contrôle fin (admin OU enseignant avec droit d'écriture
+  // sur le cours) est fait dans IndicatorPinsService#assertCanManagePins.
+
+  @Post(':id/pins')
+  @UseGuards(AuthGuard)
+  async createPin(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: { contextType: IndicatorPinContextType; contextId: string; thresholdsOverride?: { good?: number; warning?: number; critical?: number } | null },
+  ) {
+    if (!body.contextType || !body.contextId) {
+      throw new BadRequestException('contextType et contextId sont requis');
+    }
+    return this.pinsService.createPin(request.user!.id, id, body.contextType, body.contextId, body.thresholdsOverride);
+  }
+
+  @Delete(':id/pins')
+  @UseGuards(AuthGuard)
+  async deletePin(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Query('contextType') contextType: IndicatorPinContextType,
+    @Query('contextId') contextId: string,
+  ) {
+    if (!contextType || !contextId) {
+      throw new BadRequestException('contextType et contextId sont requis');
+    }
+    await this.pinsService.deletePin(request.user!.id, id, contextType, contextId);
+    return { success: true };
   }
 
   /** Liste toutes les notifications (onglet utilisateur à venir). */

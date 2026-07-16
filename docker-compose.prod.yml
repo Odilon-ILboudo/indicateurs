@@ -5,6 +5,37 @@
 # être accessibles via ce réseau.
 
 services:
+  # Service éphémère (tourne une fois, s'arrête) : crée la base "indicators" sur
+  # le Postgres de PLaTon si elle n'existe pas encore. PLaTon ne provisionne que
+  # sa propre base (POSTGRES_DB) - on ne modifie jamais ses fichiers, donc cette
+  # étape se fait ici plutôt qu'un CREATE DATABASE manuel oublié en déploiement.
+  init-db:
+    image: postgres:13-alpine
+    container_name: indicateurs_init_db
+    env_file:
+      - .env
+    environment:
+      PLATON_DB_HOST: platon_postgres
+      PGPASSWORD: ${PLATON_DB_PASSWORD}
+    entrypoint:
+      - sh
+      - -c
+      - |
+        until pg_isready -h "$$PLATON_DB_HOST" -U "$$PLATON_DB_USERNAME" -q; do
+          echo "En attente de Postgres ($$PLATON_DB_HOST)..."
+          sleep 2
+        done
+        exists=$$(psql -h "$$PLATON_DB_HOST" -U "$$PLATON_DB_USERNAME" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$$INDICATORS_DB_NAME'")
+        if [ "$$exists" = "1" ]; then
+          echo "Base $$INDICATORS_DB_NAME déjà présente."
+        else
+          echo "Création de la base $$INDICATORS_DB_NAME..."
+          psql -h "$$PLATON_DB_HOST" -U "$$PLATON_DB_USERNAME" -d postgres -c "CREATE DATABASE \"$$INDICATORS_DB_NAME\""
+        fi
+    networks:
+      - platon-network
+    restart: "no"
+
   rabbitmq:
     restart: always
     image: rabbitmq:3-management
@@ -35,6 +66,8 @@ services:
       RABBITMQ_URI: amqp://guest:guest@indicateurs_rabbitmq:5672
       REDIS_HOST: platon_redis
     depends_on:
+      init-db:
+        condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
     networks:
@@ -58,4 +91,10 @@ volumes:
 
 networks:
   platon-network:
-    external: true   # réseau partagé avec PLaTon
+    external: true
+    # Compose ne fixe pas de `name:` côté PLaTon, donc le réseau qu'il crée
+    # réellement est préfixé par le nom du projet (dérivé du nom du dossier).
+    # On ne modifie jamais les fichiers PLaTon : PLATON_NETWORK_NAME est détecté
+    # automatiquement par bin/docker/up.sh (docker network ls), avec ce nom par
+    # défaut comme repli si la détection échoue - voir docker.md.
+    name: ${PLATON_NETWORK_NAME:-platon_platon-network}

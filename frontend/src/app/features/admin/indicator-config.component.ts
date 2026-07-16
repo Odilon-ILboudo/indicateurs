@@ -102,8 +102,16 @@ import { IndicatorDefinition } from '../../core/models/indicator.model';
           <nz-input-number [(ngModel)]="config.thresholds.warning" [nzMin]="0" [nzMax]="100" style="width: 100%"></nz-input-number>
         </nz-form-control>
       </nz-form-item>
-      
-      
+
+      <!-- Critique -->
+      <nz-form-item>
+        <nz-form-label>Critique (≥)</nz-form-label>
+        <nz-form-control>
+          <nz-input-number [(ngModel)]="config.thresholds.critical" [nzMin]="0" [nzMax]="100" style="width: 100%"></nz-input-number>
+        </nz-form-control>
+      </nz-form-item>
+
+
       <!-- Actions -->
       <div class="form-actions">
         <button nz-button (click)="close()">Annuler</button>
@@ -152,7 +160,7 @@ export class IndicatorConfigComponent implements OnInit {
     icon: 'analytics',
     color: '#1890ff',
     unit: '',
-    thresholds: { good: null as number | null, warning: null as number | null }
+    thresholds: { good: null as number | null, warning: null as number | null, critical: null as number | null }
   };
 
   ngOnInit(): void {
@@ -168,6 +176,7 @@ export class IndicatorConfigComponent implements OnInit {
       this.config.thresholds = {
         good: this.indicator.thresholds?.good ?? null,
         warning: this.indicator.thresholds?.warning ?? null,
+        critical: this.indicator.thresholds?.critical ?? null,
       };
     }
   }
@@ -177,11 +186,17 @@ export class IndicatorConfigComponent implements OnInit {
     const updatedVizs = this.indicator.visualizations?.map((v, i) =>
       i === 0 ? { ...v, icon: this.config.icon, color: this.config.color, unit: this.config.unit } : v
     ) ?? [];
-    const hasThresholds = this.config.thresholds.good != null || this.config.thresholds.warning != null;
+    const hasThresholds = this.config.thresholds.good != null || this.config.thresholds.warning != null || this.config.thresholds.critical != null;
     const updates = {
       name: this.config.name,
       description: this.config.description,
-      thresholds: hasThresholds ? { good: this.config.thresholds.good ?? undefined, warning: this.config.thresholds.warning ?? undefined } : null,
+      thresholds: hasThresholds
+        ? {
+            good: this.config.thresholds.good ?? undefined,
+            warning: this.config.thresholds.warning ?? undefined,
+            critical: this.config.thresholds.critical ?? undefined,
+          }
+        : null,
       visualizations: updatedVizs.length ? updatedVizs : [{
         id: viz0?.id ?? crypto.randomUUID(),
         label: viz0?.label ?? 'Vue',

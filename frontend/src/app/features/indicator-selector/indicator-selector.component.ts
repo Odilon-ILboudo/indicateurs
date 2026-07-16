@@ -126,6 +126,10 @@ const CTX_ICONS: Record<string, string> = {
           <mat-icon>folder_special</mat-icon>
           Famille : {{ ind.familyName }}
         </span>
+        <span class="family-badge" *ngIf="baseIndicatorName">
+          <mat-icon>content_copy</mat-icon>
+          Basé sur : {{ baseIndicatorName }}
+        </span>
         <p class="ind-description" *ngIf="ind.description; else noDesc">{{ ind.description }}</p>
         <ng-template #noDesc>
           <p class="ind-description empty">Aucune description renseignée</p>
@@ -541,10 +545,15 @@ const CTX_ICONS: Record<string, string> = {
   `],
 })
 export class IndicatorViewModalComponent {
-  readonly modalData = inject(NZ_MODAL_DATA) as { indicator: IndicatorDefinition };
+  readonly modalData = inject(NZ_MODAL_DATA) as { indicator: IndicatorDefinition; allIndicators?: IndicatorDefinition[] };
   private readonly roleService = inject(RoleService);
 
   get ind(): IndicatorDefinition { return this.modalData.indicator; }
+
+  get baseIndicatorName(): string | null {
+    if (!this.ind.baseIndicatorId) return null;
+    return this.modalData.allIndicators?.find(i => i.id === this.ind.baseIndicatorId)?.name ?? null;
+  }
 
   get triggerLabels(): string[] {
     const events = this.ind.requiredEvents ?? [];
@@ -640,7 +649,7 @@ export class IndicatorSelectorComponent implements OnInit {
 
   applyFilters(): void {
     let filtered = [...this.allIndicators]
-      .filter(ind => this.roleService.canSeeIndicatorContext(ind.contextType));
+      .filter(ind => this.roleService.canSeeIndicatorContext(ind.contextType, ind.visibilityRoles));
 
     if (this.filters.scope !== 'all') {
       filtered = filtered.filter(ind => ind.contextType === this.filters.scope);
@@ -707,7 +716,7 @@ export class IndicatorSelectorComponent implements OnInit {
     this.modalService.create({
       nzTitle: indicator.name,
       nzContent: IndicatorViewModalComponent,
-      nzData: { indicator },
+      nzData: { indicator, allIndicators: this.allIndicators },
       nzFooter: null,
       nzWidth: 860,
       nzCentered: true,

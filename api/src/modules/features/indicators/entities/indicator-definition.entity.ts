@@ -40,6 +40,12 @@ export class IndicatorDefinition {
   @Column({ type: 'varchar', length: 255, nullable: true })
   familyName: string | null;
 
+  /** Indicateur à partir duquel celui-ci a été créé (capitalisation) - traçabilité
+   *  uniquement, aucun lien vivant~: modifier l'indicateur de base n'a plus aucun
+   *  effet après la création. */
+  @Column({ type: 'varchar', nullable: true })
+  baseIndicatorId: string | null;
+
   @Column({ type: 'jsonb' })
   requiredEvents: string[];
 
@@ -50,6 +56,14 @@ export class IndicatorDefinition {
   @Column({ default: true })
   isActive: boolean;
 
+  /** Ligne technique qui ne représente aucun indicateur réel~: sert uniquement à faire
+   *  exister une famille vide (pas de table Famille dédiée - familyName est un simple
+   *  champ partagé). Toujours isActive=false, jamais affichée aux utilisateurs finaux
+   *  (déjà exclue de GET /indicators), visible uniquement dans la gestion admin, et
+   *  supprimée automatiquement dès qu'un premier vrai indicateur rejoint la famille. */
+  @Column({ default: false })
+  isFamilyPlaceholder: boolean;
+
   @Column({ default: 0 })
   usageCount: number;
 
@@ -57,13 +71,22 @@ export class IndicatorDefinition {
   @Column({ type: 'jsonb', nullable: true })
   formula: FormulaDefinition | null;
 
-  /** Seuils de performance partagés par toutes les visualisations (optionnel). */
+  /** Seuils de performance partagés par toutes les visualisations (optionnel).
+   *  `critical` est une borne purement documentaire (légende) : au-delà de
+   *  `warning`, la carte est de toute façon rouge, avec ou sans `critical`. */
   @Column({ type: 'jsonb', nullable: true })
-  thresholds: { good?: number; warning?: number } | null;
+  thresholds: { good?: number; warning?: number; critical?: number } | null;
 
   /** Aide à l'analyse : texte libre expliquant comment interpréter les résultats (optionnel). */
   @Column({ type: 'text', nullable: true })
   interpretationHint: string | null;
+
+  /** Restreint la visibilité de cet indicateur à des rôles précis, en override de la règle
+   *  par défaut du contextType (optionnel). Utile pour un indicateur course/activity dont le
+   *  résultat est nominatif (ex. performance détaillée par étudiant) et ne doit donc pas être
+   *  proposé aux étudiants malgré la visibilité "tous" par défaut de ces contextes. */
+  @Column({ type: 'jsonb', nullable: true })
+  visibilityRoles: string[] | null;
 
   @CreateDateColumn()
   createdAt: Date;

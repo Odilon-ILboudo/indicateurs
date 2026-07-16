@@ -27,8 +27,12 @@ export function buildIndicatorDisplayRows(
         familyIndex.set(ind.familyName, idx);
         rows.push({ kind: 'family', familyName: ind.familyName, members: [], expanded: expandedFamilies.has(ind.familyName) });
       }
-      (rows[idx] as { kind: 'family'; members: IndicatorDefinition[] }).members.push(ind);
-    } else {
+      // Une ligne "placeholder" fait exister la famille (via familyIndex ci-dessus) mais ne
+      // représente aucun indicateur réel - elle ne doit jamais apparaître comme membre.
+      if (!ind.isFamilyPlaceholder) {
+        (rows[idx] as { kind: 'family'; members: IndicatorDefinition[] }).members.push(ind);
+      }
+    } else if (!ind.isFamilyPlaceholder) {
       rows.push({ kind: 'standalone', indicator: ind });
     }
   }

@@ -21,7 +21,7 @@ import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzTabsModule } from 'ng-zorro-antd/tabs';
 import { NzRateModule } from 'ng-zorro-antd/rate';
 import { IndicatorService } from '../../core/services/indicator.service';
-import { IndicatorDefinition, IndicatorFeedback, IndicatorScope, EventTypeOption } from '../../core/models/indicator.model';
+import { IndicatorDefinition, IndicatorFeedback, IndicatorScope } from '../../core/models/indicator.model';
 import { IndicatorConfigComponent } from './indicator-config.component';
 import { IndicatorBuilderComponent, CONTEXT_LABELS, IndicatorFamilyPreset } from './indicator-builder.component';
 import { EventRuleManagerComponent } from './event-rule-manager.component';
@@ -35,7 +35,7 @@ import { buildIndicatorDisplayRows, IndicatorDisplayRow } from '../../shared/uti
   imports: [CommonModule, NzEmptyModule],
   template: `
     <div class="logs-wrap" *ngIf="logs?.length; else empty">
-      <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <table style="width:100%;min-width:900px;border-collapse:collapse;font-size:12px">
         <thead>
           <tr style="background:#fafafa;border-bottom:1px solid #f0f0f0">
             <th style="padding:6px 8px;text-align:left">Date</th>
@@ -49,19 +49,19 @@ import { buildIndicatorDisplayRows, IndicatorDisplayRow } from '../../shared/uti
           <tr *ngFor="let log of logs"
             style="border-bottom:1px solid #f0f0f0"
             [style.background]="log.error ? '#fff2f0' : 'white'">
-            <td style="padding:5px 8px">{{ log.executedAt | date:'dd/MM HH:mm:ss' }}</td>
-            <td style="padding:5px 8px;font-family:monospace;color:#666">
-              {{ log.userId | slice:0:12 }}{{ (log.userId?.length ?? 0) > 12 ? '…' : '' }}
+            <td style="padding:5px 8px;white-space:nowrap">{{ log.executedAt | date:'dd/MM HH:mm:ss' }}</td>
+            <td style="padding:5px 8px;font-family:monospace;color:#666;word-break:break-all">
+              {{ log.userId }}
             </td>
-            <td style="padding:5px 8px;text-align:right;font-weight:500">
+            <td style="padding:5px 8px;text-align:right;font-weight:500;white-space:nowrap">
               <span *ngIf="log.value !== null && log.value !== undefined">
                 {{ log.value | number:'1.0-2' }}
               </span>
               <span *ngIf="log.value === null || log.value === undefined" style="color:#bbb">-</span>
             </td>
-            <td style="padding:5px 8px;text-align:right;color:#888">{{ log.durationMs }} ms</td>
-            <td style="padding:5px 8px;color:#ff4d4f;font-size:11px">
-              {{ log.error | slice:0:60 }}{{ (log.error?.length ?? 0) > 60 ? '…' : '' }}
+            <td style="padding:5px 8px;text-align:right;color:#888;white-space:nowrap">{{ log.durationMs }} ms</td>
+            <td style="padding:5px 8px;color:#ff4d4f;font-size:11px;word-break:break-word">
+              {{ log.error }}
             </td>
           </tr>
         </tbody>
@@ -71,7 +71,7 @@ import { buildIndicatorDisplayRows, IndicatorDisplayRow } from '../../shared/uti
       <nz-empty nzNotFoundContent="Aucun log d'exécution pour cet indicateur."></nz-empty>
     </ng-template>
   `,
-  styles: [`.logs-wrap { max-height:65vh; overflow-y:auto; }`],
+  styles: [`.logs-wrap { max-height:65vh; overflow-y:auto; overflow-x:auto; }`],
 })
 export class LogsModalComponent {
   readonly modalData = inject(NZ_MODAL_DATA) as { logs: any[] };
@@ -83,7 +83,6 @@ export class LogsModalComponent {
 export interface FamilyStartResult {
   familyName: string;
   description: string;
-  requiredEvents: string[];
   contextTypes: IndicatorScope[];
 }
 
@@ -94,9 +93,11 @@ export interface FamilyStartResult {
   template: `
     <div class="family-start">
       <p style="color:#888;font-size:13px;margin-top:0">
-        Une famille regroupe plusieurs indicateurs créés ensemble - un par contexte sélectionné -
-        partageant le même nom de base, la même description et les mêmes événements déclencheurs et bien sûr, on peut les modifier sur chaque indicateur.
-        Vous configurerez ensuite la visualisation et la formule de chacun, l'un après l'autre.
+        Une famille regroupe plusieurs indicateurs créés ensemble, un par contexte sélectionné,
+        partageant le même nom de base et la même description - et bien sûr, on peut les modifier
+        sur chaque indicateur. Les événements déclencheurs se définissent individuellement, pour
+        chaque indicateur, à l'étape suivante. Vous configurerez ensuite la visualisation et la
+        formule de chacun, l'un après l'autre.
       </p>
 
       <nz-form-item>
@@ -125,30 +126,15 @@ export interface FamilyStartResult {
       </nz-form-item>
 
       <nz-form-item>
-        <nz-form-label [nzRequired]="true">
-          Événements déclencheurs
-          <mat-icon style="font-size:14px;width:14px;height:14px;vertical-align:middle;margin-left:4px;color:#8c8c8c;cursor:help"
-            nz-tooltip="Événements PLaTon qui déclenchent le recalcul automatique des indicateurs de cette famille. Choisissez les événements liés à ce que vous mesurez."
-            nzTooltipPlacement="right">info_outline</mat-icon>
-        </nz-form-label>
-        <nz-form-control>
-          <nz-select [(ngModel)]="requiredEvents" nzMode="multiple"
-            nzPlaceHolder="Choisir un ou plusieurs événements" style="width:100%" [nzLoading]="eventTypesLoading">
-            <nz-option *ngFor="let evt of availableEventTypes" [nzValue]="evt.name" [nzLabel]="evt.name + ' - ' + evt.label"></nz-option>
-          </nz-select>
-        </nz-form-control>
-      </nz-form-item>
-
-      <nz-form-item>
-        <nz-form-label [nzRequired]="true">
+        <nz-form-label>
           Contextes à couvrir
           <mat-icon style="font-size:14px;width:14px;height:14px;vertical-align:middle;margin-left:4px;color:#8c8c8c;cursor:help"
-            nz-tooltip="Sélectionnez les rôles ou niveaux pour lesquels cet indicateur sera disponible. Un indicateur distinct sera créé pour chaque contexte choisi."
+            nz-tooltip="Sélectionnez les rôles ou niveaux pour lesquels cet indicateur sera disponible. Un indicateur distinct sera créé pour chaque contexte choisi. Laissez vide pour créer la famille sans indicateur pour l'instant - vous pourrez lui en ajouter plus tard."
             nzTooltipPlacement="right">info_outline</mat-icon>
         </nz-form-label>
         <nz-form-control>
           <nz-select [(ngModel)]="contextTypes" nzMode="multiple"
-            nzPlaceHolder="Sélectionnez un ou plusieurs contextes" style="width:100%">
+            nzPlaceHolder="Optionnel - laissez vide pour une famille sans indicateur" style="width:100%">
             <nz-option *ngFor="let c of contextOptions" [nzValue]="c.value" [nzLabel]="c.label"></nz-option>
           </nz-select>
         </nz-form-control>
@@ -157,37 +143,25 @@ export interface FamilyStartResult {
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
         <button nz-button (click)="cancel()">Annuler</button>
         <button nz-button nzType="primary" [disabled]="!canStart" (click)="start()">
-          Configurer les indicateurs
+          {{ contextTypes.length ? 'Configurer les indicateurs' : 'Créer la famille vide' }}
         </button>
       </div>
     </div>
   `,
   styles: [`.family-start { display:flex; flex-direction:column; }`],
 })
-export class IndicatorFamilyStartModalComponent implements OnInit {
+export class IndicatorFamilyStartModalComponent {
   private readonly modalRef = inject(NzModalRef);
-  private readonly indicatorSvc = inject(IndicatorService);
 
   familyName = '';
   description = '';
-  requiredEvents: string[] = [];
   contextTypes: IndicatorScope[] = [];
-  availableEventTypes: EventTypeOption[] = [];
-  eventTypesLoading = false;
 
   readonly contextOptions: { value: IndicatorScope; label: string }[] =
     (Object.keys(CONTEXT_LABELS) as IndicatorScope[]).map(value => ({ value, label: CONTEXT_LABELS[value] }));
 
-  ngOnInit(): void {
-    this.eventTypesLoading = true;
-    this.indicatorSvc.getEventTypes(true).subscribe({
-      next: types => { this.availableEventTypes = types; this.eventTypesLoading = false; },
-      error: () => { this.availableEventTypes = []; this.eventTypesLoading = false; },
-    });
-  }
-
   get canStart(): boolean {
-    return !!this.familyName.trim() && this.requiredEvents.length > 0 && this.contextTypes.length > 0;
+    return !!this.familyName.trim();
   }
 
   start(): void {
@@ -195,7 +169,6 @@ export class IndicatorFamilyStartModalComponent implements OnInit {
     const result: FamilyStartResult = {
       familyName: this.familyName.trim(),
       description: this.description.trim(),
-      requiredEvents: this.requiredEvents,
       contextTypes: this.contextTypes,
     };
     this.modalRef.close(result);
@@ -789,6 +762,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
     this.addExistingLoading = true;
     this.indicatorSvc.updateIndicator(this.addExistingSelectedId, { familyName: this.addExistingFamilyName }).subscribe({
       next: updated => {
+        this.cleanupFamilyPlaceholder(this.addExistingFamilyName);
         this.indicators = this.indicators.map(i => i.id === updated.id ? { ...i, familyName: this.addExistingFamilyName } : i);
         this.expandedFamilies.add(this.addExistingFamilyName);
         this.applyGroupingFilter();
@@ -812,7 +786,11 @@ export class AdminIndicatorManagerComponent implements OnInit {
       nzBodyStyle: { 'max-height': '80vh', 'overflow-y': 'auto' },
     });
     ref.afterClose.subscribe(created => {
-      if (created) { this.load(); this.expandedFamilies.add(familyName); }
+      if (created) {
+        this.cleanupFamilyPlaceholder(familyName);
+        this.load();
+        this.expandedFamilies.add(familyName);
+      }
     });
   }
 
@@ -951,7 +929,8 @@ export class AdminIndicatorManagerComponent implements OnInit {
     ref.afterClose.subscribe(saved => { if (saved) this.load(); });
   }
 
-  /** Ouvre la modale de démarrage d'une famille, puis enchaîne le builder pour chaque contexte sélectionné. */
+  /** Ouvre la modale de démarrage d'une famille, puis enchaîne le builder pour chaque contexte
+   *  sélectionné - ou crée directement une famille vide si aucun contexte n'a été choisi. */
   openFamilyWizard(): void {
     const startRef = this.modalSvc.create({
       nzTitle: 'Créer une famille d\'indicateurs',
@@ -960,18 +939,47 @@ export class AdminIndicatorManagerComponent implements OnInit {
       nzWidth: 520,
     });
     startRef.afterClose.subscribe((result: FamilyStartResult | null) => {
-      if (!result || !result.contextTypes.length) return;
+      if (!result) return;
+      if (!result.contextTypes.length) { this.createEmptyFamily(result); return; }
       const [first, ...queue] = result.contextTypes;
       this.openFamilyMember(result, first, queue);
     });
   }
 
-  /** Ouvre le builder pré-rempli pour un membre de la famille, puis enchaîne sur le suivant à la fermeture. */
+  /** Crée une famille sans indicateur réel pour l'instant (ligne technique isFamilyPlaceholder,
+   *  toujours isActive=false donc invisible des utilisateurs finaux) - à compléter plus tard via
+   *  "Ajouter un indicateur" sur la ligne de famille. */
+  private createEmptyFamily(result: FamilyStartResult): void {
+    this.indicatorSvc.createIndicator({
+      name: `${result.familyName} (famille)`,
+      familyName: result.familyName,
+      description: result.description,
+      isActive: false,
+      isFamilyPlaceholder: true,
+      requiredEvents: [],
+      visualizations: [],
+    }).subscribe({
+      next: () => {
+        this.messageSvc.success(`Famille "${result.familyName}" créée, sans indicateur pour l'instant.`);
+        this.load();
+      },
+      error: () => this.messageSvc.error('Impossible de créer la famille.'),
+    });
+  }
+
+  /** Supprime le placeholder de famille vide dès qu'un premier vrai indicateur la rejoint. */
+  private cleanupFamilyPlaceholder(familyName: string): void {
+    const placeholder = this.indicators.find(i => i.familyName === familyName && i.isFamilyPlaceholder);
+    if (placeholder) this.indicatorSvc.deleteIndicator(placeholder.id).subscribe();
+  }
+
+  /** Ouvre le builder pré-rempli pour un membre de la famille, puis enchaîne sur le suivant à la
+   *  fermeture. Supprime au passage le placeholder de famille vide si c'est le premier vrai membre. */
   private openFamilyMember(start: FamilyStartResult, contextType: IndicatorScope, queue: IndicatorScope[]): void {
     const preset: IndicatorFamilyPreset = {
       familyName: start.familyName,
       description: start.description,
-      requiredEvents: start.requiredEvents,
+      requiredEvents: [],
       contextType,
       name: `${start.familyName} - ${CONTEXT_LABELS[contextType]}`,
     };
@@ -985,6 +993,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
       nzBodyStyle: { 'max-height': '80vh', 'overflow-y': 'auto' },
     });
     ref.afterClose.subscribe(saved => {
+      if (saved) this.cleanupFamilyPlaceholder(start.familyName);
       this.load();
       if (saved && queue.length) {
         const [next, ...rest] = queue;
@@ -1015,7 +1024,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
           nzContent: LogsModalComponent,
           nzData: { logs },
           nzFooter: null,
-          nzWidth: 720,
+          nzWidth: 1000,
         });
       },
       error: () => {

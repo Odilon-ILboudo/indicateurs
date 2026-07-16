@@ -18,6 +18,7 @@ import { NzInputNumberModule } from 'ng-zorro-antd/input-number'
 import { NzDividerModule } from 'ng-zorro-antd/divider'
 import { NzEmptyModule } from 'ng-zorro-antd/empty'
 import { NzSpinModule } from 'ng-zorro-antd/spin'
+import { NzModalService } from 'ng-zorro-antd/modal'
 
 import { DurationPipe, UiLayoutBlockComponent } from '@platon/shared/ui'
 import { CourseActivityCardComponent } from '@platon/feature/course/browser'
@@ -35,8 +36,9 @@ import { PeerTreeComponent } from '@platon/feature/peer/browser'
 import { IndicatorService } from '../../../../core/services/indicator.service'
 import { RoleService } from '../../../../core/services/role.service'
 import { DashboardSettingsService } from '../../../../core/services/dashboard-settings.service'
-import { DashboardContext, IndicatorDefinition } from '../../../../core/models/indicator.model'
+import { DashboardContext, IndicatorDefinition, IndicatorPin } from '../../../../core/models/indicator.model'
 import { IndicatorCardComponent } from '../../../../shared/ui/indicator-card/indicator-card.component'
+import { PinIndicatorModalComponent } from '../../../pin-indicator-modal/pin-indicator-modal.component'
 import { GroupSnapshotsPanelComponent } from './group-snapshots-panel.component'
 import { ActivityPresenter } from './activity.presenter'
 
@@ -90,6 +92,7 @@ export class CourseActivityPage implements OnInit, OnDestroy {
   private readonly indicatorService = inject(IndicatorService)
   private readonly roleService = inject(RoleService)
   private readonly settingsService = inject(DashboardSettingsService)
+  private readonly modal = inject(NzModalService)
   private readonly subscriptions: Subscription[] = []
   private readonly today = new Date()
 
@@ -104,6 +107,12 @@ export class CourseActivityPage implements OnInit, OnDestroy {
   protected indicatorsLoading = true
   protected activityContext: DashboardContext | null = null
   protected indicatorQueryParams: Record<string, string> = {}
+
+  // Indicateurs figés (pins enseignant) sur cette activité - indépendant des
+  // préférences perso, cf. IndicatorPinsService côté backend.
+  protected pinsByIndicatorId = new Map<string, IndicatorPin>()
+  protected canManagePins = false
+  private currentActivityId: string | null = null
 
   protected KCileInsightsOption: { selectedBucket: number; possibleBucket: NzSelectOptionInterface[] } = {
     selectedBucket: 10,
@@ -122,8 +131,6 @@ export class CourseActivityPage implements OnInit, OnDestroy {
   protected columnOrder?: string[]
 
   ngOnInit(): void {
-    this.loadActivityIndicators()
-
     this.subscriptions.push(
       this.presenter.contextChange.subscribe((context) => {
         this.context = context
@@ -135,6 +142,10 @@ export class CourseActivityPage implements OnInit, OnDestroy {
           const courseId = context.course?.id ?? ''
           const activityName = context.activity.title ?? ''
           const courseName = context.course?.name ?? ''
+
+          this.currentActivityId = activityId
+          this.canManagePins = context.activity.permissions?.update ?? false
+          this.loadActivityIndicators(activityId)
 
           // Contexte pour les indicator cards
           this.activityContext = {
@@ -169,20 +180,36 @@ export class CourseActivityPage implements OnInit, OnDestroy {
     this.subscriptions.forEach((s) => s.unsubscribe())
   }
 
-  private loadActivityIndicators(): void {
+  private loadActivityIndicators(activityId: string): void {
     this.indicatorsLoading = true
     this.subscriptions.push(
       combineLatest([
         this.indicatorService.loadIndicators(),
         this.settingsService.getSettings(),
         this.roleService.role$,
+        this.indicatorService.listPins('activity', activityId),
       ]).subscribe({
-        next: ([indicators, settings]) => {
+        next: ([indicators, settings, , pins]) => {
+          this.pinsByIndicatorId = new Map(pins.map(p => [p.indicatorId, p]))
+
           const visible = indicators.filter(ind =>
-            this.roleService.canSeeIndicatorContext(ind.contextType) &&
+            this.roleService.canSeeIndicatorContext(ind.contextType, ind.visibilityRoles) &&
             settings.activeIndicators.includes(ind.id))
-          this.activityIndicators = visible.filter(ind => ind.contextType === 'activity')
           this.groupIndicators = visible.filter(ind => ind.contextType === 'group')
+
+          // Union : indicateurs activés perso par l'utilisateur (il faut d'abord
+          // l'activer soi-même, comme n'importe quel indicateur, pour le voir ici)
+          // + indicateurs déjà figés par un enseignant sur cette activité précise
+          // (jamais l'inverse - les deux sources restent indépendantes, cf.
+          // IndicatorPinsService côté backend). Le bouton "Figer" n'apparaît donc
+          // que sur un indicateur déjà visible, pas sur tout le catalogue.
+          const byId = new Map<string, IndicatorDefinition>()
+          for (const ind of visible.filter(ind => ind.contextType === 'activity')) byId.set(ind.id, ind)
+          for (const ind of indicators) {
+            if (ind.contextType === 'activity' && this.pinsByIndicatorId.has(ind.id)) byId.set(ind.id, ind)
+          }
+          this.activityIndicators = Array.from(byId.values())
+
           this.indicatorsLoading = false
           this.changeDetectorRef.markForCheck()
         },
@@ -192,6 +219,29 @@ export class CourseActivityPage implements OnInit, OnDestroy {
         },
       }),
     )
+  }
+
+  protected onPinToggle(indicator: IndicatorDefinition): void {
+    const activityId = this.currentActivityId
+    if (!activityId) return
+
+    if (this.pinsByIndicatorId.has(indicator.id)) {
+      this.indicatorService.deletePin(indicator.id, 'activity', activityId).subscribe(() => {
+        this.loadActivityIndicators(activityId)
+      })
+      return
+    }
+
+    const modalRef = this.modal.create({
+      nzTitle: `Figer "${indicator.name}"`,
+      nzContent: PinIndicatorModalComponent,
+      nzData: { indicator, contextType: 'activity', contextId: activityId },
+      nzFooter: null,
+      nzWidth: 480,
+    })
+    modalRef.afterClose.subscribe((result) => {
+      if (result) this.loadActivityIndicators(activityId)
+    })
   }
 
   protected async onDateChange(dates: Date[]): Promise<void> {
