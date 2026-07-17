@@ -16,7 +16,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: production
+    # environment: production # si on a une environnment GitHub avec protection de branche.
     steps:
       - name: Déployer et vérifier sur le serveur
         uses: appleboy/ssh-action@v1.2.0
