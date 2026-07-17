@@ -23,7 +23,7 @@ toute la chaîne de fichiers sans avoir à grep le projet.
 8. [G - Cours](#g--cours)
 9. [H - Ressources](#h--ressources)
 10. [I - Ingestion d'événements PLaTon](#i--ingestion-dévénements-platon)
-11. [J - Modules legacy / orphelins](#j--modules-legacy--orphelins)
+11. [J - Services frontend notables](#j--services-frontend-notables)
 12. [Annexe - Tables et entités référencées](#annexe--tables-et-entités-référencées)
 
 ---
@@ -263,11 +263,10 @@ parent (voir F pour `from: 'activity'` / `from: 'group-snapshot'`).
 sur tout le contrôleur (voir readme.md §12).
 
 > Le `?userId=` visible dans les appels ci-dessous est toujours envoyé par le
-> frontend (`indicator.service.ts`), mais le backend l'**ignore** depuis
-> l'audit de sécurité : l'utilisateur ciblé est systématiquement
-> `request.user.id` (identité vérifiée/décodée depuis le token). Avant, ce
-> paramètre client était utilisé tel quel - IDOR permettant de lire/modifier
-> les préférences de n'importe qui.
+> frontend (`indicator.service.ts`), mais le backend l'**ignore** : l'utilisateur
+> ciblé est systématiquement `request.user.id` (identité vérifiée/décodée
+> depuis le token), jamais ce paramètre client - l'utiliser tel quel ouvrirait
+> un IDOR permettant de lire/modifier les préférences de n'importe qui.
 
 ### D.1 Activer / désactiver un indicateur - `IndicatorSelectorComponent`
 
@@ -385,8 +384,8 @@ visible pour `canManageIndicators`/`canCreateIndicators` (`RoleService`).
    (modale CRUD complète, voir tableau ci-dessous) ; recharge `load()` si la
    modale retourne "saved".
 5. `openFamilyWizard()` / `openFamilyMember()` : enchaîne plusieurs
-   `IndicatorBuilderComponent` (un par contexte de le cercle) - voir
-   `project_indicateur_famille_feature` pour le détail fonctionnel.
+   `IndicatorBuilderComponent` (un par contexte de la famille) - voir
+   readme.md §8 pour le détail fonctionnel.
 
 ### `IndicatorBuilderComponent` - `features/admin/indicator-builder.component.ts`
 
@@ -932,10 +931,7 @@ Là aussi, la plupart des opérations d'écriture (`update`, `delete`, `join`,
   `parent_id`) ; `member`/`watcher`/`waiting` lus directement sur la ressource
   (`ResourceMembers`/`ResourceWatchers`) ; `read` toujours `true`. Règle
   répliquée de PLaTon (`permissions.service.ts#userPermissionsOnResource`).
-  Mapping `mapResource(row, permissions)`. Avant l'audit de sécurité,
-  `write`/`member`/`watcher`/`waiting` étaient codés en dur à `false` pour
-  tout le monde (aucun risque, mais UX trop restrictive puisque ce module
-  reste lecture seule côté backend).
+  Mapping `mapResource(row, permissions)`.
 - `resourceService.tree()` → **`GET /api/v1/resources/tree`** (H.1).
 
 Sous-pages `features/resources/resource/{overview,browse,settings,events}` :
@@ -1041,32 +1037,8 @@ En production, les événements arrivent exclusivement par le pipeline RabbitMQ 
 
 ---
 
-## J - Modules legacy / orphelins
+## J - Services frontend notables
 
-### J.1 `activity-attempts` (legacy, supprimé)
-
-Ce module (`api/src/modules/features/activity-indicator/`, route
-`/api/indicators/activity-attempts`, service `AttemptsCalculatorService`, et
-le composant frontend `features/activity-indicator/`) a été **entièrement
-retiré du code** - aucun fichier correspondant n'existe plus. Il calculait "à
-la main" (hors DSL) une moyenne de tentatives avant réussite, en extrayant
-directement `attempts` sur la première session à `grade === 100`, ce qui
-souffrait déjà du même défaut que celui corrigé dans le moteur DSL (`attempts`
-continue d'augmenter après une réussite). Sa suppression correspond bien à la
-recommandation historique du `readme.md` §13 de migrer ce calcul vers le
-moteur DSL - c'est aujourd'hui fait, via la recette et les indicateurs
-"Tentatives avant réussite" (`attempts_at_success`).
-
-### J.2 Services frontend orphelins ou peu utilisés
-
-- **`core/services/group.service.ts`** : service inutilisé et supprimé.
-  Le backend correspondant `/api/groups?teacherId=` et
-  `/api/groups/members?groupId=` a également été retiré.
-
-  "Courses" c ON c.id = cg.course_id WHERE c.owner_id = $1`) et
-  `PlatonService.getUserIdsByGroup` (`platon.service.ts`,
-  `SELECT cgm.user_id FROM "CourseGroupsMember" cgm JOIN "CourseGroups" cg ON
-  cg.group_id = cgm.group_id WHERE cg.id = $1`).
 - **`core/services/user.service.ts`** : `getUserById(id)` →
   `GET /api/users/:id`. **Utilisé** par `sidebar.component.ts` et
   `toolbar.component.ts` (`await this.userService.getUserById(this.USER_ID).toPromise()`)
@@ -1097,7 +1069,7 @@ moteur DSL - c'est aujourd'hui fait, via la recette et les indicateurs
 | Entité | Table | Écrite par |
 |---|---|---|
 | `IndicatorDefinition` | `indicator_definitions` | `create`/`update`/`toggleStatus`/`delete` (E.1), `incrementUsageCount`/`decrementUsageCount` (D) |
-| `IndicatorValue` | `indicator_values` | `computeView` (B.2), `calculateAndStoreValue` (D.1), `recalculate` (E.3), `processIndicatorUpdate` (I.3), `saveIndicatorValue` legacy (J.1) |
+| `IndicatorValue` | `indicator_values` | `computeView` (B.2), `calculateAndStoreValue` (D.1), `recalculate` (E.3), `processIndicatorUpdate` (I.3) |
 | `IndicatorExecutionLog` | `indicator_execution_logs` | écrite à l'intérieur de `interpret()` (B.2 étape 9, E.3, F.3) si `context.indicatorId` fourni ; lue par `getExecutionLogs` (E.4) |
 | `IndicatorSnapshot` | `indicator_snapshots` | CRUD F.2, lue/rafraîchie par `refreshSnapshots` (F.3) |
 | `UserIndicatorPreference` | `user_indicator_preferences` | CRUD D |

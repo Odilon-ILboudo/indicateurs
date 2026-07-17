@@ -154,10 +154,10 @@ if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(col)) {
 conditions.push(`"${col}" = $${idx++}`);
 ```
 
-Même regex que pour les tables. Contrairement à une version précédente qui
-ignorait silencieusement les colonnes invalides (ce qui pouvait produire des
-résultats incorrects sans erreur visible), la version actuelle **lève une erreur
-explicite**. Le nom valide est également encadré de guillemets doubles.
+Même regex que pour les tables. Toute colonne invalide **lève une erreur
+explicite**, plutôt que d'être ignorée silencieusement (ce qui produirait des
+résultats incorrects sans erreur visible). Le nom valide est également
+encadré de guillemets doubles.
 
 #### Niveau 3 - Requêtes paramétrées pour les valeurs
 

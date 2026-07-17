@@ -22,7 +22,7 @@ fonctionnement global du projet sans avoir à parcourir tout le code source.
 6. [Moteur DSL - calcul des indicateurs](#6-moteur-dsl--calcul-des-indicateurs)
 6bis. [Déclencheurs dynamiques (event-rules)](#6bis-déclencheurs-dynamiques-event-rules)
 7. [Modèle - contextType + visualizations](#7-modèle-option-b--contexttype--visualizations)
-8. [Cercles d'indicateurs et visibilité par rôle](#8-familles-dindicateurs-et-visibilité-par-rôle)
+8. [Familles d'indicateurs et visibilité par rôle](#8-familles-dindicateurs-et-visibilité-par-rôle)
 9. [Routes API](#9-routes-api)
 10. [Frontend](#10-frontend)
 11. [Flux métier de bout en bout](#11-flux-métier-de-bout-en-bout)
@@ -176,7 +176,7 @@ features/
 shared/
   ui/indicator-card/ + statistic-card/ + layout-block/
   pipes/duration.pipe.ts
-  utils/indicator-family-grouping.ts  - regroupement par cercle (section 8)
+  utils/indicator-family-grouping.ts  - regroupement par famille (section 8)
   styles/                 - SCSS, thèmes Material clair/sombre, ng-zorro
 ```
 
@@ -285,16 +285,19 @@ La définition d'un indicateur.
 |---|---|---|
 | `id` | uuid | identifiant |
 | `name` | string (unique) | nom affiché |
-| `description` | text | description |
+| `description` | text \| null | description |
 | `contextType` | `'learner'\|'teacher'\|'admin'\|'course'\|'activity'\|'group'` | contexte unique de cet indicateur (voir section 7) |
-| `circleName` | string \| null | regroupement nominal de plusieurs indicateurs créés ensemble (section 8) |
+| `familyName` | string \| null | regroupement nominal de plusieurs indicateurs créés ensemble sous une même famille (section 8) |
+| `baseIndicatorId` | string \| null | indicateur à partir duquel celui-ci a été créé (capitalisation) - traçabilité uniquement, aucun lien vivant : modifier l'indicateur de base n'a plus aucun effet après la création |
 | `requiredEvents` | jsonb (string[]) | événements PLaTon qui déclenchent un recalcul |
 | `visualizations` | jsonb (`IndicatorVisualization[]`) | une ou plusieurs visualisations - représentations visuelles différentes d'une même formule (section 7) |
-| `formula` | jsonb \| null | **formule unique partagée par toutes les visualisations** (1 indicateur = 1 formule) |
-| `thresholds` | jsonb \| null | seuils de performance globaux `{ good?: number; warning?: number }` - colore la valeur (vert/orange/rouge) et affiche la légende dans le détail ; optionnel |
-| `interpretationHint` | text \| null | aide à l'analyse : texte libre expliquant comment interpréter les résultats, affiché dans le panneau latéral du détail ; optionnel |
 | `isActive` | boolean | actif / désactivé |
+| `isFamilyPlaceholder` | boolean | ligne technique qui ne représente aucun indicateur réel - sert uniquement à faire exister une famille vide (pas de table dédiée, `familyName` est un simple champ partagé). Toujours `isActive=false`, jamais affichée aux utilisateurs finaux, supprimée automatiquement dès qu'un premier vrai indicateur rejoint la famille |
 | `usageCount` | number | compteur d'utilisation |
+| `formula` | jsonb \| null | **formule unique partagée par toutes les visualisations** (1 indicateur = 1 formule) |
+| `thresholds` | jsonb \| null | seuils de performance partagés `{ good?: number; warning?: number; critical?: number }` - colore la valeur (vert/orange/rouge) et affiche la légende dans le détail. `critical` est une borne purement documentaire (légende) : au-delà de `warning`, la carte est de toute façon rouge, avec ou sans `critical` ; optionnel |
+| `interpretationHint` | text \| null | aide à l'analyse : texte libre expliquant comment interpréter les résultats, affiché dans le panneau latéral du détail ; optionnel |
+| `visibilityRoles` | jsonb (string[]) \| null | restreint la visibilité de cet indicateur à des rôles précis, en override de la règle par défaut du `contextType` - utile pour un indicateur course/activity dont le résultat est nominatif et ne doit donc pas être proposé aux étudiants malgré la visibilité "tous" par défaut de ces contextes ; optionnel |
 
 ### `IndicatorValue` (table `indicator_values`)
 
@@ -345,6 +348,26 @@ Une règle de classification : transforme un changement brut sur une table PLaTo
 "Par groupe" de la page activité). Contrainte unique
 `(indicatorId, contextType, contextId, activityId)` - anti-doublon. Champs :
 `contextId` (= `groupId`), `activityId`, `title`.
+
+### `IndicatorPin` (table `indicator_pins`)
+
+Permet à un enseignant de figer un indicateur existant sur un cours ou une
+activité précis : tous les membres l'ont alors actif et non désactivable,
+avec des seuils propres à ce contexte. Contrainte unique
+`(indicatorId, contextType, contextId)`.
+
+| Champ | Rôle |
+|---|---|
+| `indicatorId` | indicateur figé |
+| `contextType` | `'course'` \| `'activity'` |
+| `contextId` | identifiant du cours ou de l'activité |
+| `thresholdsOverride` | seuils propres à ce contexte `{ good?, warning?, critical? }`, remplacent ceux de l'indicateur ; optionnel |
+| `pinnedByUserId` | enseignant à l'origine de l'épinglage |
+
+Totalement indépendant de `UserIndicatorPreference` - aucune écriture croisée
+entre les deux, pour ne jamais faire fuiter un indicateur épinglé sur les
+autres cours/activités d'un membre, ni laisser une désactivation personnelle
+effacer un indicateur figé par l'enseignant.
 
 ### `UserIndicatorPreference` (table `user_indicator_preferences`)
 
@@ -628,22 +651,22 @@ réussite, Note moyenne, Taux de réussite, Notes moyennes par ressource - avec
 
 ---
 
-## 8. Cercles d'indicateurs et visibilité par rôle
+## 8. Familles d'indicateurs et visibilité par rôle
 
-### Cercles (`circleName`)
+### Familles (`familyName`)
 
 Le modèle Option B+ impose 1 indicateur = 1 `contextType`. Pour couvrir un même
 "thème" (ex. *Tentatives avant réussite*) sur plusieurs contextes
 (`learner`/`course`/`group`/`activity`), on crée **plusieurs indicateurs
-partageant le même `circleName`**, créés/édités ensemble depuis le wizard.
+partageant le même `familyName`**, créés/édités ensemble depuis le wizard.
 
 `buildIndicatorDisplayRows(indicators, expandedFamilies)`
 (`shared/utils/indicator-family-grouping.ts`) regroupe la liste affichée :
-les membres d'un cercle apparaissent sous une **ligne d'en-tête repliable**
+les membres d'une famille apparaissent sous une **ligne d'en-tête repliable**
 (chevron, badge "N indicateurs"), insérée à la première occurrence du nom de
-cercle ; les indicateurs sans cercle restent à leur place. Réutilisé dans
+famille ; les indicateurs sans famille restent à leur place. Réutilisé dans
 `IndicatorSelectorComponent` et `AdminIndicatorManagerComponent`, avec un filtre
-"Cercles / indicateurs uniques / tous".
+"Familles / indicateurs uniques / tous".
 
 ### Visibilité par rôle (`RoleService.canSeeIndicatorContext`)
 
@@ -662,9 +685,8 @@ cercle ; les indicateurs sans cercle restent à leur place. Réutilisé dans
 ### Comment changer de rôle pour tester
 
 L'authentification se fait par SSO réel vers PLaTon (section 12) - il n'existe
-plus de mécanisme de simulation de rôle côté frontend (l'ancien
-`environment.defaultUserId` a été retiré). Pour tester sous un rôle donné, se
-connecter avec un compte PLaTon réel possédant ce rôle, et se
+aucun mécanisme de simulation de rôle côté frontend. Pour tester sous un rôle
+donné, se connecter avec un compte PLaTon réel possédant ce rôle, et se
 déconnecter/reconnecter avec un autre compte pour changer de rôle.
 
 ### Contextes orphelins `teacher`/`admin`
@@ -693,6 +715,7 @@ GET  /indicators/schema                - tables/colonnes PLaTon disponibles (fil
 GET  /indicators/teacher/:teacherId/context  - cours + groupes d'un enseignant
 GET  /indicators/course/:courseId/activities - activités d'un cours
 GET  /indicators/course/:courseId/students   - étudiants d'un cours
+GET  /indicators/pins?contextType=&contextId=  - indicateurs figés sur un cours/une activité
 GET  /indicators/:id
 GET  /indicators/:id/context-configs   - alias de compat : { contextType, visualizations, formula }
 GET  /indicators/:id/values?contextType=&contextId=&period=&limit=
@@ -705,6 +728,8 @@ POST /indicators/preview               - { formula, context } → { result } (ex
 POST /indicators/preview-steps         - idem mais pas-à-pas (debug)
 POST /indicators/:id/compute-view      - { contextType, contextId, vizId?, activityId? }
 POST /indicators/:id/recalculate       - (admin)
+POST /indicators/:id/pins              - { contextType, contextId, thresholdsOverride? } - figer (admin ou enseignant*)
+DELETE /indicators/:id/pins?contextType=&contextId=  - défiger (admin ou enseignant*)
 
 PATCH  /indicators/:id                 - (admin)
 PATCH  /indicators/:id/status          - (admin)
@@ -721,6 +746,11 @@ DELETE /indicators/:id/feedback/:feedbackId - (admin)
 
 > (admin) = protégé par `AuthGuard` + `AdminGuard` (rôle `admin` requis, voir
 > section 12). Les autres routes d'`indicators` restent ouvertes.
+>
+> (admin ou enseignant*) : pas d'`AdminGuard` sur ces deux routes - seul
+> `AuthGuard` s'applique, le contrôle fin (admin **ou** enseignant avec droit
+> d'écriture sur le cours concerné) est fait dans
+> `IndicatorPinsService#assertCanManagePins`.
 
 > Important : dans le contrôleur, les routes littérales (`schema`, `all`,
 > `teacher/:id/context`, `course/:id/activities`, `course/:id/students`,
@@ -738,10 +768,10 @@ DELETE /preferences/:indicatorId
 ```
 
 Protégé par `AuthGuard` (voir section 12) : l'utilisateur cible est toujours
-`request.user.id` (identité vérifiée/décodée depuis le token), et non plus un
-`?userId=` fourni par le client comme avant l'audit de sécurité - ça fermait un
-IDOR qui permettait de lire/modifier les préférences de n'importe qui en
-changeant cet identifiant dans l'URL.
+`request.user.id` (identité vérifiée/décodée depuis le token), jamais un
+`?userId=` fourni par le client - accepter un identifiant client ouvrirait un
+IDOR permettant de lire/modifier les préférences de n'importe qui en changeant
+cet identifiant dans l'URL.
 
 Si `userRole === 'teacher' | 'admin'`, `calculateAndStoreValue` (calcul learner)
 est skippé - pas de ligne `indicator_value` learner créée pour un enseignant.
@@ -771,8 +801,6 @@ calculer les vraies permissions (`permissions.update`/`delete` pour un cours,
 `permissions.update`/`viewStats`/`viewResource` pour une activité) - owner du
 cours, rôle global `admin`, ou membre `teacher` du cours (règle répliquée de
 PLaTon, voir `course.expander.ts` et `course-member.service.ts` côté PLaTon).
-Avant l'audit de sécurité, ces champs étaient codés en dur à `true` pour
-n'importe quel utilisateur.
 
 ### Ressources (`/api/v1/resources`, `resources.controller.ts`)
 
@@ -976,13 +1004,13 @@ sinon 403.
 
 ### Ce que ça protège concrètement
 
-| Zone | Avant l'audit | Maintenant |
-|---|---|---|
-| Permissions cours/activités | codées en dur à `true` pour tout le monde | calculées (owner/admin/teacher membre), voir §9 |
-| Permissions ressources | codées en dur à `false` pour tout le monde | calculées en lecture (owner/admin/membre de cercle), voir §9 |
-| Mutations indicateurs/event-types | `AdminGuard` stub (`return true`), non branché | rôle `admin` réellement vérifié |
-| Préférences utilisateur | `userId` accepté tel quel depuis le client (IDOR) | forcé à `request.user.id` |
-| Session expirée | ignorée, aucune conséquence | 401 → `auth.interceptor.ts` vide le `localStorage` et redirige vers `/authentification` |
+| Zone | Protection actuelle |
+|---|---|
+| Permissions cours/activités | calculées (owner/admin/teacher membre), voir §9 |
+| Permissions ressources | calculées en lecture (owner/admin/membre de cercle), voir §9 |
+| Mutations indicateurs/event-types | rôle `admin` réellement vérifié (`AdminGuard`) |
+| Préférences utilisateur | `userId` toujours forcé à `request.user.id`, jamais accepté depuis le client |
+| Session expirée | 401 → `auth.interceptor.ts` vide le `localStorage` et redirige vers `/authentification` |
 
 ### Limite connue
 

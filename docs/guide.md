@@ -47,12 +47,11 @@ répète que ce qui est nécessaire à l'action.
 2. Toute la création/gestion d'indicateurs se fait dans
    **Tableau de bord → Indicateurs** (`/dashboard/indicators`), section
    admin (`AdminIndicatorManagerComponent`).
-3. **Connexion et changement de rôle** : l'application utilise désormais une
+3. **Connexion et changement de rôle** : l'application utilise une
    authentification SSO réelle vers PLaTon (`AuthentificationPage` redirige
    vers `https://platon.univ-eiffel.fr/login`, récupère le token au retour,
    puis lit le rôle du profil PLaTon associé - voir `readme.md` §12).
-   Il n'existe plus de mécanisme de simulation de rôle côté frontend
-   (l'ancien `defaultUserId` dans `environment.ts` a été retiré). Pour
+   Il n'existe aucun mécanisme de simulation de rôle côté frontend. Pour
    tester ce guide sous un rôle donné (étudiant, enseignant, admin), il faut
    se connecter avec un **compte PLaTon réel possédant ce rôle**, et se
    déconnecter/reconnecter avec un autre compte pour changer de rôle. Ce
@@ -64,16 +63,15 @@ répète que ce qui est nécessaire à l'action.
      les boutons "Nouvel indicateur" et "Créer une famille". Un enseignant
      n'a **aucun accès**, même en lecture, à cette table de gestion - il ne
      voit que le sélecteur d'indicateurs, comme un étudiant.
-5. **Prérequis événements** : depuis le retrait du seed automatique legacy
-   (2026-07-07), le sélecteur "Événements déclencheurs" du wizard n'accepte
-   plus de saisie libre - il ne propose que les événements **configurés et
-   installés** via l'écran **"Événements & déclencheurs"**
+5. **Prérequis événements** : le sélecteur "Événements déclencheurs" du wizard
+   n'accepte aucune saisie libre - il ne propose que les événements
+   **configurés et installés** via l'écran **"Événements & déclencheurs"**
    (`event-rule-manager.component.ts`, accessible depuis `/dashboard/indicators`
    en rôle Admin). Le trigger historique de `exercise.answered`
-   (`trg_platon_outbox_session_data` sur `SessionData.grade`) fonctionne
-   toujours tout seul, mais n'est plus référencé par aucune règle - il
-   n'apparaît donc plus dans ce sélecteur tant qu'une règle n'a pas été créée
-   **et installée** pour lui.
+   (`trg_platon_outbox_session_data` sur `SessionData.grade`) tourne de façon
+   autonome, indépendamment de tout event-rule : il n'apparaît dans ce
+   sélecteur qu'une fois qu'une règle équivalente a été créée **et installée**
+   pour lui.
    > ⚠️ **Piège à éviter** : créer une règle sur `SessionData`/`grade` puis
    > l'installer ajoute un **second** trigger générique en plus du trigger
    > historique - chaque réponse d'étudiant produirait alors **deux**

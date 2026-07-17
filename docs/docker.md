@@ -6,7 +6,7 @@ Le microservice indicateurs s'appuie sur l'infrastructure Docker de PLaTon (Post
 
 **Prérequis** : le projet PLaTon doit tourner (`bin/docker/up.sh` dans le dossier `platon/`).
 
-Pour le détail des manipulations qui ont mené à cette configuration (migration des bases natives vers Docker, bugs rencontrés et corrigés), voir [docker-migration.md](docker-migration.md).
+Pour migrer une base Postgres native (hors Docker) vers `platon_postgres`, voir le guide de reproduction [docker-migration.md](docker-migration.md).
 
 Pour explorer les bases Postgres via l'interface web pgAdmin, voir [pgadmin.md](pgadmin.md).
 

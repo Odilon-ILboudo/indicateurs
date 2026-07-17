@@ -156,11 +156,12 @@ indicateurs*.
 
 ## Pour aller plus loin
 
-- [`readme.md`](../readme.md) §5 - schéma complet des 5 entités (`indicator_definitions`,
-  `indicator_values`, `indicator_execution_logs`,
-  `indicator_snapshots`, `user_indicator_preferences`)
+- [`readme.md`](../readme.md) §5 - schéma complet des entités (`indicator_definitions`,
+  `indicator_values`, `indicator_execution_logs`, `indicator_feedback`,
+  `indicator_notifications`, `indicator_event_types`, `indicator_event_rules`,
+  `indicator_snapshots`, `indicator_pins`, `user_indicator_preferences`)
 - [`readme.md`](../readme.md) §6 - moteur DSL : catalogue des 10 types d'étapes,
   `computeView`, snapshots vivants
 - [`readme.md`](../readme.md) §7 - modèle Option B+ (`contextType` + `visualizations[]`),
   sélection de viz par l'utilisateur
-- [`readme.md`](../readme.md) §8 - cercles d'indicateurs et visibilité par rôle
+- [`readme.md`](../readme.md) §8 - familles d'indicateurs et visibilité par rôle

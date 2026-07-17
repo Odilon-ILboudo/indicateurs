@@ -167,14 +167,13 @@ tables PLaTon. Deux options :
 
 ### Événement historique `exercise.answered`
 
-Le trigger `trg_platon_outbox_session_data` (étape 1 ci-dessus) continue de
-fonctionner **sans aucun changement** - rien dans ce mécanisme n'y touche.
-Mais depuis le retrait de la ligne "legacy" du catalogue (2026-07-07), aucune
-`IndicatorEventRule` ne le référence plus par défaut : `exercise.answered`
-n'apparaît donc plus dans le sélecteur "configuré" du wizard d'indicateur tant
-qu'une règle équivalente n'est pas recréée via "Nouvelle règle" (table
-`SessionData`, colonne `grade`, condition `always`, mapping `user_id`/
-`course_id`/`activity_id`/`id`) puis installée.
+Le trigger `trg_platon_outbox_session_data` (étape 1 ci-dessus) tourne de
+façon autonome, indépendamment de tout `IndicatorEventRule` - rien dans ce
+mécanisme n'y touche. Aucune règle ne le référence par défaut :
+`exercise.answered` n'apparaît dans le sélecteur "configuré" du wizard
+d'indicateur qu'une fois qu'une règle équivalente est créée via "Nouvelle
+règle" (table `SessionData`, colonne `grade`, condition `always`, mapping
+`user_id`/`course_id`/`activity_id`/`id`) puis installée.
 
 ---
 
