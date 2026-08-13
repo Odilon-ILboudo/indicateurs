@@ -158,6 +158,7 @@ export class IndicatorsService {
       visualizations: definition.visualizations ?? [],
       formula: definition.formula ?? null,
       isActive: definition.isActive ?? false,
+      isComplete: definition.isComplete ?? false,
       isFamilyPlaceholder: definition.isFamilyPlaceholder ?? false,
       interpretationHint: definition.interpretationHint ?? null,
       thresholds: definition.thresholds ?? null,

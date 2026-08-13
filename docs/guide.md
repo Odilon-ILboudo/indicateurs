@@ -31,6 +31,16 @@ coller → "Appliquer" → "Créer"). Le format exact est celui validé par
 > (ex. "moyenne globale" et "par exercice") sont donc **deux indicateurs
 > distincts**, jamais deux visualisations d'un seul indicateur.
 
+> **Plusieurs visualisations, seulement si la formule produit un scalaire.**
+> `card` et `gauge` affichent toutes les deux un simple nombre - la même
+> formule peut donc avoir les deux à la fois (deux façons de regarder la même
+> valeur). `bar-chart` (objet `{clé: valeur}`) et `histogram` (tableau
+> `[{bucket, count}]`) produisent une donnée structurée qu'une `card`/`gauge`
+> ne sait pas afficher : ces cas restent à une seule visualisation, ce n'est
+> pas un oubli. Dans ce guide, tous les cas "moyenne globale" (1, 3, 5, 9, 13,
+> 17, 21, 22) ont donc une seconde visualisation `gauge` en plus de la `card`
+> ; les cas "par exercice/activité" et "répartition" n'en ont qu'une.
+
 ---
 
 ## 0. Correctif bloquant à faire AVANT de créer quoi que ce soit
@@ -123,7 +133,10 @@ table de gestion).
   "contextType": "learner",
   "requiredEvents": ["exercice.completed"],
   "thresholds": { "good": 2, "warning": 4 },
-  "visualizations": [{ "label": "Tentatives avant réussite", "type": "card", "unit": "tentatives" }],
+  "visualizations": [
+    { "label": "Tentatives avant réussite", "type": "card", "unit": "tentatives" },
+    { "label": "Tentatives avant réussite (jauge)", "type": "gauge", "unit": "tentatives" }
+  ],
   "pipeline": [
     { "type": "fetch", "label": "Charger sessions", "params": { "table": "SessionData", "contextFields": ["user_id", "activity_id"] } },
     { "type": "filter", "label": "Sessions réussies", "params": { "field": "attempts_at_success", "operator": ">", "value": 0 } },
@@ -180,7 +193,10 @@ cliquez "Recalculer" côté admin pour ne pas attendre).
   "contextType": "learner",
   "requiredEvents": [],
   "thresholds": { "good": 2, "warning": 4 },
-  "visualizations": [{ "label": "Tentatives avant réussite (cours)", "type": "card", "unit": "tentatives" }],
+  "visualizations": [
+    { "label": "Tentatives avant réussite (cours)", "type": "card", "unit": "tentatives" },
+    { "label": "Tentatives avant réussite (cours, jauge)", "type": "gauge", "unit": "tentatives" }
+  ],
   "pipeline": [
     { "type": "fetch", "label": "Charger sessions", "params": { "table": "SessionData", "contextFields": ["user_id", "course_id"] } },
     { "type": "filter", "label": "Sessions réussies", "params": { "field": "attempts_at_success", "operator": ">", "value": 0 } },
@@ -228,7 +244,10 @@ frontend plutôt que dans la formule).
   "contextType": "group",
   "requiredEvents": ["exercice.completed"],
   "thresholds": { "good": 2, "warning": 4 },
-  "visualizations": [{ "label": "Tentatives avant réussite (groupe)", "type": "card", "unit": "tentatives" }],
+  "visualizations": [
+    { "label": "Tentatives avant réussite (groupe)", "type": "card", "unit": "tentatives" },
+    { "label": "Tentatives avant réussite (groupe, jauge)", "type": "gauge", "unit": "tentatives" }
+  ],
   "pipeline": [
     { "type": "fetch", "label": "Charger sessions du groupe", "params": { "table": "SessionData", "contextFields": ["group_id", "activity_id"] } },
     { "type": "filter", "label": "Sessions réussies", "params": { "field": "attempts_at_success", "operator": ">", "value": 0 } },
@@ -302,7 +321,10 @@ Remplacer `"contextFields": ["group_id", "activity_id"]` par
 ci-dessus (cas 5→9, 6→10, 7→11, 8→12), et pour les cas 10/11 (par activité),
 remplacer `row.resource_name || row.resource_id` par `row.activity_id` (même
 limite d'absence de nom lisible qu'au cas 4). Noms et descriptions à adapter
-("... sur tout le cours" au lieu de "... sur cette activité").
+("... sur tout le cours" au lieu de "... sur cette activité"). Cas 9 (moyenne
+globale, scalaire) : ajouter la seconde visualisation `gauge`, comme le cas 5.
+Cas 10/11/12 (structurés) : une seule visualisation, comme leurs équivalents
+activité.
 
 > **Aucun de ces 8 cas (5 à 12) n'existe encore en base** - à créer un par un
 > si besoin, pas de recette automatique dans le builder pour l'instant.
@@ -323,7 +345,10 @@ référence :
   "contextType": "activity",
   "requiredEvents": ["exercice.completed"],
   "thresholds": { "good": 2, "warning": 4 },
-  "visualizations": [{ "label": "Tentatives avant réussite (activité)", "type": "card", "unit": "tentatives" }],
+  "visualizations": [
+    { "label": "Tentatives avant réussite (activité)", "type": "card", "unit": "tentatives" },
+    { "label": "Tentatives avant réussite (activité, jauge)", "type": "gauge", "unit": "tentatives" }
+  ],
   "pipeline": [
     { "type": "fetch", "label": "Charger sessions", "params": { "table": "SessionData", "contextFields": ["activity_id"] } },
     { "type": "filter", "label": "Sessions réussies", "params": { "field": "attempts_at_success", "operator": ">", "value": 0 } },
@@ -412,7 +437,8 @@ n'a de nom directement exploitable dans une formule).
   via un `js` (`join(Resources)` + regroupement) - ce n'est **pas** une vraie
   moyenne globale au sens de ce cas. À vérifier/recréer avec le pipeline
   simple `fetch→filter→extract→aggregate(avg)→round` si le besoin est
-  vraiment "une seule valeur pour tout le cours".
+  vraiment "une seule valeur pour tout le cours". Scalaire, donc même
+  principe que le cas 5 : ajouter la seconde visualisation `gauge`.
 - **Cas 18** (par activité) : à créer, `js` groupé par `activity_id`.
 - **Cas 19** (répartition par activité, contournement 2D) : à créer,
   nominatif indirect.
@@ -437,7 +463,10 @@ sur les indicateurs `teacher` réels déjà en base, qui ont tous
   "contextType": "teacher",
   "requiredEvents": ["exercice.completed"],
   "thresholds": { "good": 2, "warning": 4 },
-  "visualizations": [{ "label": "Tentatives avant réussite (plateforme)", "type": "card", "unit": "tentatives" }],
+  "visualizations": [
+    { "label": "Tentatives avant réussite (plateforme)", "type": "card", "unit": "tentatives" },
+    { "label": "Tentatives avant réussite (plateforme, jauge)", "type": "gauge", "unit": "tentatives" }
+  ],
   "pipeline": [
     { "type": "fetch", "label": "Charger sessions", "params": { "table": "SessionData", "contextFields": [] } },
     { "type": "filter", "label": "Sessions réussies", "params": { "field": "attempts_at_success", "operator": ">", "value": 0 } },
@@ -460,7 +489,10 @@ Même limite et même pipeline que le cas 21, seul `contextType` change :
   "contextType": "admin",
   "requiredEvents": ["exercice.completed"],
   "thresholds": { "good": 2, "warning": 4 },
-  "visualizations": [{ "label": "Tentatives avant réussite (plateforme)", "type": "card", "unit": "tentatives" }],
+  "visualizations": [
+    { "label": "Tentatives avant réussite (plateforme)", "type": "card", "unit": "tentatives" },
+    { "label": "Tentatives avant réussite (plateforme, jauge)", "type": "gauge", "unit": "tentatives" }
+  ],
   "pipeline": [
     { "type": "fetch", "label": "Charger sessions", "params": { "table": "SessionData", "contextFields": [] } },
     { "type": "filter", "label": "Sessions réussies", "params": { "field": "attempts_at_success", "operator": ">", "value": 0 } },

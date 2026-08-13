@@ -220,7 +220,7 @@ export class IndicatorFamilyStartModalComponent {
         </nz-tabs>
         <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:#595959">
           Statut
-          <mat-icon class="info-icon" nz-tooltip="Filtre sur le statut actif/inactif (pas sur des champs manquants) : &quot;Complets&quot; = indicateurs actifs, &quot;Incomplets&quot; = inactifs (brouillons non finalisés, ou réactivation à faire après une édition). Se combine avec l'onglet Uniques/Familles sélectionné à gauche." nzTooltipPlacement="top">info_outline</mat-icon>
+          <mat-icon class="info-icon" nz-tooltip="Filtre sur la complétude réelle du formulaire (nom, contexte, au moins une visualisation, pipeline valide) : &quot;Incomplets&quot; = enregistrés via &quot;Sauvegarder le brouillon&quot; sans terminer le wizard, ou un champ obligatoire manquant. Indépendant du statut actif/inactif (interrupteur de publication séparé). Se combine avec l'onglet Uniques/Familles sélectionné à gauche." nzTooltipPlacement="top">info_outline</mat-icon>
         </span>
         <nz-select [(ngModel)]="completenessFilter" (ngModelChange)="applyGroupingFilter()" style="width:160px">
           <nz-option nzValue="all" nzLabel="Tous"></nz-option>
@@ -290,7 +290,7 @@ export class IndicatorFamilyStartModalComponent {
               <div>
                 <div style="font-weight:500;display:flex;align-items:center;gap:6px">
                   {{ ind.name }}
-                  <nz-tag *ngIf="!ind.isActive" nzColor="red" nz-tooltip="Indicateur non finalisé (brouillon)">Incomplet</nz-tag>
+                  <nz-tag *ngIf="!ind.isComplete" nzColor="red" nz-tooltip="Enregistré via &quot;Sauvegarder le brouillon&quot; sans terminer le wizard, ou un champ obligatoire manque">Incomplet</nz-tag>
                   <nz-tag *ngIf="pinCountsByIndicatorId[ind.id]" nzColor="purple"
                     nz-tooltip="Nombre de cours/activités où cet indicateur est figé par un enseignant">
                     <span nz-icon nzType="lock"></span> Figé sur {{ pinCountsByIndicatorId[ind.id] }} ressource{{ pinCountsByIndicatorId[ind.id] > 1 ? 's' : '' }}
@@ -930,14 +930,15 @@ export class AdminIndicatorManagerComponent implements OnInit {
   }
 
   /** Reconstruit `displayRows` (familles repliables ou indicateurs uniques) selon l'onglet
-   *  courant, combiné au filtre Complet/Incomplet (isActive). */
+   *  courant, combiné au filtre Complet/Incomplet (isComplete - indépendant de isActive,
+   *  l'interrupteur de publication manuelle). */
   applyGroupingFilter(): void {
     let filtered = this.groupingFilter === 'families'
       ? this.indicators.filter(ind => !!ind.familyName)
       : this.indicators.filter(ind => !ind.familyName);
     if (this.completenessFilter !== 'all') {
       filtered = filtered.filter(ind =>
-        this.completenessFilter === 'complete' ? ind.isActive : !ind.isActive);
+        this.completenessFilter === 'complete' ? ind.isComplete : !ind.isComplete);
     }
     this.displayRows = buildIndicatorDisplayRows(filtered, this.expandedFamilies);
   }

@@ -3333,6 +3333,16 @@ pipeline:
       return;
     }
 
+    // Complet uniquement si enregistré via le bouton final (étape 2 - le bouton "Sauvegarder
+    // le brouillon" n'existe qu'aux étapes 0-1, les deux sont mutuellement exclusifs) ET que
+    // les champs requis sont bien présents. Le pipeline est déjà garanti sans étape à moitié
+    // remplie par la boucle de validation ci-dessus - il ne reste qu'à vérifier qu'il n'est
+    // pas vide.
+    const isComplete = this.step === 2
+      && !!this.def.contextType
+      && this.vizList.length > 0
+      && this.pipeline.length > 0;
+
     this.saving = true;
 
     const payload = {
@@ -3369,6 +3379,7 @@ pipeline:
         unit: v.unit,
       })),
       isActive: false,
+      isComplete,
     };
 
     const save$ = this.isEditMode

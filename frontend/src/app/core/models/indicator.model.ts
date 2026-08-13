@@ -79,6 +79,10 @@ export interface IndicatorDefinition {
   isFamilyPlaceholder?: boolean;
   usageCount?: number;
   isActive: boolean;
+  /** Complétude réelle du formulaire (nom, contexte, ≥1 visualisation, pipeline valide),
+   *  indépendante de `isActive` qui reste un interrupteur manuel de publication. Fixée à la
+   *  sauvegarde par indicator-builder.component.ts#submit() selon le bouton utilisé. */
+  isComplete: boolean;
   metadata?: Record<string, any>;
 }
 

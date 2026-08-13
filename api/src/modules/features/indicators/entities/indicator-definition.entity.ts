@@ -56,6 +56,16 @@ export class IndicatorDefinition {
   @Column({ default: true })
   isActive: boolean;
 
+  /** Complétude réelle du formulaire (nom, contexte, au moins une visualisation, pipeline non
+   *  vide et sans étape à moitié remplie), indépendante de `isActive`~: `isActive` reste un
+   *  interrupteur manuel de publication (toujours false à la création, à activer explicitement
+   *  depuis la gestion admin), tandis que `isComplete` reflète si l'indicateur a été enregistré
+   *  via le bouton final du wizard ("Créer l'indicateur"/"Enregistrer") avec tous les champs
+   *  requis, plutôt que via "Sauvegarder le brouillon" en cours de route. Piloté côté frontend
+   *  par `indicator-builder.component.ts#submit()`. */
+  @Column({ default: false })
+  isComplete: boolean;
+
   /** Ligne technique qui ne représente aucun indicateur réel~: sert uniquement à faire
    *  exister une famille vide (pas de table Famille dédiée - familyName est un simple
    *  champ partagé). Toujours isActive=false, jamais affichée aux utilisateurs finaux

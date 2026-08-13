@@ -91,6 +91,7 @@ export class CreateIndicatorDto {
   visualizations?: VisualizationDto[];
 
   @IsOptional() @IsBoolean() isActive?: boolean;
+  @IsOptional() @IsBoolean() isComplete?: boolean;
   @IsOptional() @IsBoolean() isFamilyPlaceholder?: boolean;
 
   @IsOptional()
