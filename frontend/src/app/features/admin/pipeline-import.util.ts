@@ -357,6 +357,11 @@ function validatePipelineColumns(pipeline: PipelineStep[], platonSchema: PlatonT
           throw new PipelineError(`${ctx} : table "${s.table}" introuvable dans le schéma PLaTon.`, tableNames, 'Tables disponibles', s.table);
         const cols = colsOf(s.table!);
         for (const f of s.contextFields ?? []) {
+          // "group_id" n'est jamais une vraie colonne : c'est un mot-clé spécial (wantsGroup,
+          // voir formula-interpreter.service.ts#executeFetch) qui déclenche une jointure vers
+          // CourseGroupsMember/CourseGroups plutôt qu'un filtre direct - à ne pas valider contre
+          // le schéma réel de la table, quelle que soit la table interrogée.
+          if (f === 'group_id') continue;
           if (!cols.has(f))
             throw new PipelineError(`${ctx} : colonne de contexte "${f}" introuvable dans "${s.table}".`, [...cols], 'Colonnes disponibles', f);
         }
