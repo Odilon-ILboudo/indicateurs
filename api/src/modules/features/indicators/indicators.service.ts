@@ -149,6 +149,11 @@ export class IndicatorsService {
   }
 
   async create(definition: CreateIndicatorDto): Promise<IndicatorDefinition> {
+    const existing = await this.indicatorModel.findOne({ where: { name: definition.name } });
+    if (existing) {
+      throw new ConflictException(`Un indicateur nommé "${definition.name}" existe déjà.`);
+    }
+
     const indicator = this.indicatorModel.create({
       name: definition.name,
       description: definition.description,
