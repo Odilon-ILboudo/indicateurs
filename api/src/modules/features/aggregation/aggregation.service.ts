@@ -1,6 +1,8 @@
 // src/aggregation/aggregation.service.ts
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Cron, CronExpression, SchedulerRegistry } from '@nestjs/schedule';
+import { CronJob } from 'cron';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { IndicatorDefinition } from '../indicators/entities/indicator-definition.entity';
@@ -8,7 +10,7 @@ import { IndicatorValue } from '../indicators/entities/indicator-value.entity';
 import { IndicatorsService } from '../indicators/indicators.service';
 
 @Injectable()
-export class AggregationService {
+export class AggregationService implements OnModuleInit {
   private readonly logger = new Logger(AggregationService.name);
   private isRecalculatingTriggerless = false;
 
@@ -18,13 +20,25 @@ export class AggregationService {
     @InjectRepository(IndicatorValue, 'indicators')
     private indicatorValueModel: Repository<IndicatorValue>,
     private readonly indicatorsService: IndicatorsService,
+    private readonly schedulerRegistry: SchedulerRegistry,
+    private readonly config: ConfigService,
   ) {}
+
+  /** Enregistrement dynamique (plutôt que @Cron statique) pour que la fréquence soit lue depuis
+   *  la config (TRIGGERLESS_RECALC_CRON, voir configuration.ts) - un décorateur @Cron ne peut
+   *  pas lire le ConfigService, ses arguments sont évalués à la définition de la classe. */
+  onModuleInit(): void {
+    const expression = this.config.get<string>('aggregation.triggerlessRecalcCron') || CronExpression.EVERY_MINUTE;
+    const job = new CronJob(expression, () => this.recalculateTriggerlessIndicators());
+    this.schedulerRegistry.addCronJob('recalculateTriggerlessIndicators', job);
+    job.start();
+    this.logger.log(`Recalcul périodique (sans déclencheur) programmé : "${expression}"`);
+  }
 
   /** Indicateurs actifs sans événement déclencheur (case "Activer des événements déclencheurs"
    *  décochée dans le wizard) : pas de mise à jour temps réel possible, donc recalcul périodique
    *  via recalculate() - même logique de calcul que le flux événementiel, juste déclenchée par
-   *  le temps plutôt que par un événement PLaTon. */
-  @Cron(CronExpression.EVERY_MINUTE)
+   *  le temps plutôt que par un événement PLaTon. Fréquence configurable, voir onModuleInit(). */
   async recalculateTriggerlessIndicators() {
     if (this.isRecalculatingTriggerless) return;
     this.isRecalculatingTriggerless = true;

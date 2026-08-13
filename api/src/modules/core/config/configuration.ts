@@ -51,6 +51,10 @@ export default () => ({
   aggregation: {
     dailyHour: parseInt(process.env.DAILY_AGGREGATION_HOUR || '1', 10),
     weeklyDayOfWeek: parseInt(process.env.WEEKLY_AGGREGATION_DAY || '1', 10),
+    // Fréquence du recalcul périodique des indicateurs actifs sans déclencheur (voir
+    // AggregationService.recalculateTriggerlessIndicators) - expression cron standard.
+    // Défaut : toutes les minutes, comme avant l'introduction de cette variable.
+    triggerlessRecalcCron: process.env.TRIGGERLESS_RECALC_CRON || '*/1 * * * *',
   },
 
   rabbitmq: {
