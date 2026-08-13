@@ -314,17 +314,87 @@ frontend plutôt que dans la formule).
 `userIds` (identifiants bruts) suffit - `computeView` résout les noms
 automatiquement, pas besoin de `join` sur `Users`.
 
-### Cas 9 à 12 - mêmes 4 déclinaisons, sur tout le cours
+### Cas 9 - moyenne globale, sur tout le cours
 
-Remplacer `"contextFields": ["group_id", "activity_id"]` par
-`"contextFields": ["group_id", "course_id"]` dans chacun des 4 pipelines
-ci-dessus (cas 5→9, 6→10, 7→11, 8→12), et pour les cas 10/11 (par activité),
-remplacer `row.resource_name || row.resource_id` par `row.activity_id` (même
-limite d'absence de nom lisible qu'au cas 4). Noms et descriptions à adapter
-("... sur tout le cours" au lieu de "... sur cette activité"). Cas 9 (moyenne
-globale, scalaire) : ajouter la seconde visualisation `gauge`, comme le cas 5.
-Cas 10/11/12 (structurés) : une seule visualisation, comme leurs équivalents
-activité.
+```json
+{
+  "name": "Tentatives avant réussite - Groupe (cours entier, moyenne globale)",
+  "description": "Nombre moyen de tentatives avant la première réussite, tous étudiants et activités du groupe confondus, sur tout le cours.",
+  "interpretationHint": "Vue d'ensemble du groupe sur tout le cours, moins sensible aux variations d'une seule activité.",
+  "contextType": "group",
+  "requiredEvents": ["exercice.completed"],
+  "thresholds": { "good": 2, "warning": 4 },
+  "visualizations": [
+    { "label": "Tentatives avant réussite (groupe, cours)", "type": "card", "unit": "tentatives" },
+    { "label": "Tentatives avant réussite (groupe, cours, jauge)", "type": "gauge", "unit": "tentatives" }
+  ],
+  "pipeline": [
+    { "type": "fetch", "label": "Charger sessions du groupe", "params": { "table": "SessionData", "contextFields": ["group_id", "course_id"] } },
+    { "type": "filter", "label": "Sessions réussies", "params": { "field": "attempts_at_success", "operator": ">", "value": 0 } },
+    { "type": "extract", "label": "Tentatives avant réussite", "params": { "extractField": "attempts_at_success" } },
+    { "type": "aggregate", "label": "Moyenne", "params": { "aggregateFn": "avg" } },
+    { "type": "round", "label": "Arrondir", "params": { "decimals": 2 } }
+  ]
+}
+```
+
+### Cas 10 - détaillée par activité, sur tout le cours
+
+```json
+{
+  "name": "Tentatives avant réussite - Groupe (cours entier, par activité)",
+  "description": "Nombre moyen de tentatives avant la première réussite, détaillé par activité, pour ce groupe sur tout le cours.",
+  "interpretationHint": "Situe les activités les plus difficiles pour ce groupe sur l'ensemble du cours.",
+  "contextType": "group",
+  "requiredEvents": ["exercice.completed"],
+  "visualizations": [{ "label": "Tentatives par activité", "type": "bar-chart", "unit": "tentatives" }],
+  "pipeline": [
+    { "type": "fetch", "label": "Charger sessions du groupe", "params": { "table": "SessionData", "contextFields": ["group_id", "course_id"] } },
+    { "type": "filter", "label": "Sessions réussies", "params": { "field": "attempts_at_success", "operator": ">", "value": 0 } },
+    { "type": "js", "label": "Moyenne par activité", "params": { "code": "const groups = {};\nfor (const row of input) {\n  const key = row.activity_id;\n  if (!groups[key]) groups[key] = [];\n  const v = parseInt(row.attempts_at_success);\n  if (!isNaN(v)) groups[key].push(v);\n}\nconst out = {};\nfor (const [key, vals] of Object.entries(groups)) {\n  out[key] = Math.round((vals.reduce((a,b)=>a+b,0)/vals.length)*100)/100;\n}\nreturn out;" } }
+  ]
+}
+```
+Regroupé par `activity_id` brut (UUID) - même limite d'absence de nom
+lisible qu'au cas 4 (`Activities` n'a pas de colonne `name` exploitable).
+
+### Cas 11 - répartition détaillée par activité (contournement 2D)
+
+```json
+{
+  "name": "Tentatives avant réussite - Groupe (cours entier, répartition par activité)",
+  "description": "Répartition des étudiants du groupe par nombre de tentatives avant réussite, détaillée par activité, sur tout le cours.",
+  "interpretationHint": "Combine activité et nombre de tentatives, à l'échelle du cours entier.",
+  "contextType": "group",
+  "requiredEvents": ["exercice.completed"],
+  "visualizations": [{ "label": "Répartition par activité", "type": "bar-chart", "unit": "étudiants" }],
+  "pipeline": [
+    { "type": "fetch", "label": "Charger sessions du groupe", "params": { "table": "SessionData", "contextFields": ["group_id", "course_id"] } },
+    { "type": "filter", "label": "Sessions réussies", "params": { "field": "attempts_at_success", "operator": ">", "value": 0 } },
+    { "type": "js", "label": "Répartition composite", "params": { "code": "const out = {};\nfor (const row of input) {\n  const act = row.activity_id;\n  const v = parseInt(row.attempts_at_success);\n  if (isNaN(v)) continue;\n  const key = `${act} (${v} tentative${v > 1 ? 's' : ''})`;\n  out[key] = (out[key] || 0) + 1;\n}\nreturn out;" } }
+  ]
+}
+```
+Même contournement que le cas 7 (clé composite) et même limite de nom
+lisible que le cas 10.
+
+### Cas 12 - répartition globale, toutes activités confondues
+
+```json
+{
+  "name": "Tentatives avant réussite - Groupe (cours entier, répartition globale)",
+  "description": "Répartition des étudiants du groupe par nombre moyen de tentatives avant la première réussite, toutes activités du cours confondues.",
+  "interpretationHint": "Répartition du groupe sur l'ensemble du cours - une hétérogénéité qui persiste sur plusieurs activités mérite un signalement particulier.",
+  "contextType": "group",
+  "requiredEvents": ["exercice.completed"],
+  "visualizations": [{ "label": "Répartition des effectifs", "type": "histogram", "unit": "tentatives" }],
+  "pipeline": [
+    { "type": "fetch", "label": "Charger sessions du groupe", "params": { "table": "SessionData", "contextFields": ["group_id", "course_id"] } },
+    { "type": "filter", "label": "Sessions réussies", "params": { "field": "attempts_at_success", "operator": ">", "value": 0 } },
+    { "type": "js", "label": "Répartition par moyenne étudiant", "params": { "code": "const perStudent = {};\nfor (const row of input) {\n  if (!perStudent[row.user_id]) perStudent[row.user_id] = [];\n  perStudent[row.user_id].push(parseInt(row.attempts_at_success) || 0);\n}\nconst buckets = {};\nfor (const [uid, vals] of Object.entries(perStudent)) {\n  const avg = Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);\n  if (!buckets[avg]) buckets[avg] = [];\n  buckets[avg].push(uid);\n}\nreturn Object.entries(buckets)\n  .map(([bucket, userIds]) => ({ bucket: parseInt(bucket), count: userIds.length, userIds }))\n  .sort((a,b) => a.bucket - b.bucket);" } }
+  ]
+}
+```
 
 > **Aucun de ces 8 cas (5 à 12) n'existe encore en base** - à créer un par un
 > si besoin, pas de recette automatique dans le builder pour l'instant.
