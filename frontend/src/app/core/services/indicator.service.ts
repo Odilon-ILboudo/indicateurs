@@ -158,7 +158,7 @@ export class IndicatorService {
   /**
    * Calcule la formule d'un indicateur pour un contexte donné et persiste le résultat.
    * - learner  : contextId = userId
-   * - group    : contextId = groupId, activityId requis
+   * - group    : contextId = groupId, activityId OU courseId (voir isCourseAware)
    * - course   : contextId = courseId, activityId requis
    * - activity : contextId = activityId
    */
@@ -168,21 +168,40 @@ export class IndicatorService {
     contextId: string,
     activityId?: string,
     vizId?: string,
+    courseId?: string,
   ): Observable<ViewResult> {
     return this.http.post<ViewResult>(`${this.apiUrl}/${indicatorId}/compute-view`, {
       contextType,
       contextId,
       ...(activityId ? { activityId } : {}),
       ...(vizId    ? { vizId }    : {}),
+      ...(courseId ? { courseId } : {}),
     });
   }
 
-  getTeacherContext(teacherId: string): Observable<TeacherCourse[]> {
-    return this.http.get<TeacherCourse[]>(`${this.apiUrl}/teacher/${teacherId}/context`);
+  /** Recherche des cours par nom (toutes ressources PLaTon, pas seulement celles de
+   *  l'utilisateur courant) - 10 résultats par page côté backend. `query` vide renvoie les
+   *  premiers cours par ordre alphabétique. `offset` pour charger la page suivante. */
+  searchCourses(query: string, offset = 0): Observable<TeacherCourse[]> {
+    return this.http.get<TeacherCourse[]>(`${this.apiUrl}/courses/search?q=${encodeURIComponent(query)}&offset=${offset}`);
   }
 
   getCourseActivities(courseId: string): Observable<CourseActivity[]> {
     return this.http.get<CourseActivity[]>(`${this.apiUrl}/course/${courseId}/activities`);
+  }
+
+  /** Groupes de TP du cours - endpoint déjà utilisé pour la gestion des membres (courses.service.ts
+   *  côté API), réutilisé ici plutôt que de dépendre du cache de recherche de cours (qui peut ne
+   *  plus contenir le cours sélectionné une fois la liste rechargée). */
+  getCourseGroups(courseId: string): Observable<{ id: string; name: string }[]> {
+    // "id" ici = CourseGroups.id (même champ que renvoyait déjà PlatonService#searchCourses
+    // pour ses groupes en cache) - pas group_id, un identifiant différent.
+    // L'endpoint renvoie { resources, total } (comme searchMembers) - pas un tableau brut.
+    return this.http.get<{ resources: { id: string; groupId: string; courseId: string; name: string }[]; total: number }>(
+      `${environment.apiUrl}/v1/courses/${courseId}/groups`,
+    ).pipe(
+      map(res => res.resources.map(g => ({ id: g.id, name: g.name }))),
+    );
   }
 
   getCourseStudents(courseId: string): Observable<{ id: string; name: string }[]> {
@@ -195,15 +214,16 @@ export class IndicatorService {
 
   // ── Snapshots ─────────────────────────────────────────────────────────────
 
-  getSnapshots(indicatorId: string, activityId: string): Observable<IndicatorSnapshot[]> {
+  getSnapshots(indicatorId: string, scope: { activityId: string } | { courseId: string }): Observable<IndicatorSnapshot[]> {
+    const [key, value] = Object.entries(scope)[0];
     return this.http.get<IndicatorSnapshot[]>(
-      `${this.apiUrl}/${indicatorId}/snapshots?activityId=${encodeURIComponent(activityId)}`,
+      `${this.apiUrl}/${indicatorId}/snapshots?${key}=${encodeURIComponent(value)}`,
     );
   }
 
   createSnapshot(
     indicatorId: string,
-    body: { contextType: string; contextId: string; activityId: string; title: string },
+    body: { contextType: string; contextId: string; activityId?: string; courseId?: string; title: string },
   ): Observable<IndicatorSnapshot> {
     return this.http.post<IndicatorSnapshot>(`${this.apiUrl}/${indicatorId}/snapshots`, body);
   }
@@ -227,6 +247,11 @@ export class IndicatorService {
     return this.http.get<IndicatorPin[]>(
       `${this.apiUrl}/pins?contextType=${contextType}&contextId=${encodeURIComponent(contextId)}`,
     );
+  }
+
+  /** Nombre de pins par indicateur (tous cours/activités confondus), pour le label admin. */
+  countPinsByIndicator(): Observable<Record<string, number>> {
+    return this.http.get<Record<string, number>>(`${this.apiUrl}/pins/counts`);
   }
 
   createPin(

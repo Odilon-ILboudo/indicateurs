@@ -219,6 +219,8 @@
     font-size: 32px !important;
     width: 32px !important;
     height: 32px !important;
+    /* Couleur pilotée par [style.color]="displayColor" dans le template - le gris ici ne sert
+       que de repli si jamais aucune couleur n'était calculée. */
     color: #bfbfbf;
   }
   
@@ -345,24 +347,26 @@
   }
 }
 
-// Dark mode support (optionnel)
-@media (prefers-color-scheme: dark) {
+// Thème sombre : dépend du thème CHOISI DANS L'APP (classe .dark-theme posée sur <body> par
+// toolbar.component.ts), pas de la préférence système - @media (prefers-color-scheme) ignorait
+// ce choix explicite (ex: app en clair + OS en sombre = carte sombre à tort).
+:host-context(.dark-theme) {
   .indicator-card {
     background: linear-gradient(135deg, #1f1f1f 0%, #2a2a2a 100%);
     border-color: rgba(255, 255, 255, 0.08);
-    
+
     .value {
       color: #ffffff;
     }
-    
+
     .title {
       color: #e8e8e8;
     }
-    
+
     .unit, .card-context {
       color: #a6a6a6;
     }
-    
+
     .loading-overlay {
       background: rgba(31, 31, 31, 0.8);
     }

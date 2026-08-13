@@ -42,8 +42,6 @@ export default () => ({
 
   jwtSecret: process.env.JWT_SECRET || 'secret',
 
-  targetActivityId: process.env.TARGET_ACTIVITY_ID,
-
   redis: {
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),

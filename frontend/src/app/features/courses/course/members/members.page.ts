@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common'
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnDestroy, OnInit, inject } from '@angular/core'
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnDestroy, OnInit, ViewChild, inject } from '@angular/core'
 import { Subscription } from 'rxjs'
 
 import { MatCardModule } from '@angular/material/card'
@@ -50,6 +50,8 @@ export class CourseMembersPage implements OnInit, OnDestroy {
   private readonly subscriptions: Subscription[] = []
   private readonly presenter = inject(CoursePresenter)
   private readonly changeDetectorRef = inject(ChangeDetectorRef)
+
+  @ViewChild('searchbar') private searchbarRef?: CourseMemberSearchBarComponent
 
   protected context = this.presenter.defaultContext()
   protected members: CourseMember[] = []
@@ -110,16 +112,21 @@ export class CourseMembersPage implements OnInit, OnDestroy {
         })
       })
     )
+    // Le composant de recherche (#searchbar) ne se rafraîchit jamais tout seul après un ajout -
+    // sans cet appel, le nouveau membre n'apparaît nulle part tant qu'on ne recharge pas la page.
+    this.searchbarRef?.refresh()
   }
 
   protected async remove(member: CourseMember) {
     await this.presenter.deleteMember(member)
+    this.searchbarRef?.refresh()
   }
 
   protected async updateRole(event: ChangeRoleEvent) {
     const { member, newRole, previousRole } = event
     try {
       await this.presenter.updateMemberRole(member, newRole)
+      this.searchbarRef?.refresh()
     } catch (error) {
       const updatedMember = { ...member, role: previousRole }
       this.members = this.members.map((m) => (m.id === member.id ? updatedMember : m))

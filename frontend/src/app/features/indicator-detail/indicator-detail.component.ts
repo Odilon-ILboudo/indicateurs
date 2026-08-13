@@ -18,7 +18,8 @@ import type { EChartsOption } from 'echarts';
 
 import { IndicatorService } from '../../core/services/indicator.service';
 import { RoleService } from '../../core/services/role.service';
-import { IndicatorDefinition, IndicatorVisualization, ViewResult } from '../../core/models/indicator.model';
+import { IndicatorDefinition, IndicatorVisualization, ViewResult, contextIcon } from '../../core/models/indicator.model';
+import { buildIndicatorChartOptions } from '../../shared/utils/indicator-chart-options.util';
 import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
 import { NzRateModule } from 'ng-zorro-antd/rate';
 import { NzButtonModule } from 'ng-zorro-antd/button';
@@ -53,6 +54,8 @@ export class IndicatorDetailComponent implements OnInit {
   private readonly modalService = inject(NzModalService);
   private readonly cdr = inject(ChangeDetectorRef);
 
+  readonly contextIcon = contextIcon;
+
   // ── Feedback ──────────────────────────────────────────────────────────────
   feedbackModalVisible = false;
   feedbackRating = 0;
@@ -64,8 +67,13 @@ export class IndicatorDetailComponent implements OnInit {
   activeContextType: string = 'learner';
   activeContextId: string = getCurrentUserId();
   activeActivityId: string | undefined = undefined;
+  // Uniquement pour un indicateur `group` course-aware (isCourseAware) - voir groupSnapshotIsCourseScoped.
+  activeCourseId: string | undefined = undefined;
 
   courseContextCourseName = '';
+  // Id du cours pour le lien "Retour au cours" - distinct de activeContextId, qui vaut l'id de
+  // l'utilisateur (pas celui du cours) pour un indicateur personnel course-aware.
+  courseContextCourseId = '';
   hasCourseContext = false;
 
   activityCourseName = '';
@@ -80,6 +88,8 @@ export class IndicatorDetailComponent implements OnInit {
   groupSnapshotCourseId = '';
   groupSnapshotActivityId = '';
   hasGroupSnapshotContext = false;
+  // true = snapshot de groupe scopé à tout le cours (pas d'activité précise), voir isCourseAware().
+  groupSnapshotIsCourseScoped = false;
 
   // Résultats indexés par vizId
   results: Record<string, ViewResult> = {};
@@ -134,15 +144,17 @@ export class IndicatorDetailComponent implements OnInit {
 
     const q = this.route.snapshot.queryParams;
 
-    if (q['from'] === 'group-snapshot' && q['groupId'] && q['activityId']) {
+    if (q['from'] === 'group-snapshot' && q['groupId'] && (q['activityId'] || q['courseId'])) {
       this.activeContextType = 'group';
       this.activeContextId = q['groupId'];
+      this.groupSnapshotIsCourseScoped = !q['activityId'];
       this.activeActivityId = q['activityId'];
+      this.activeCourseId = this.groupSnapshotIsCourseScoped ? q['courseId'] : undefined;
       this.groupSnapshotGroupName = q['groupName'] ?? 'Groupe';
       this.groupSnapshotActivityName = q['activityName'] ?? 'Activité';
       this.groupSnapshotCourseName = q['courseName'] ?? 'Cours';
       this.groupSnapshotCourseId = q['courseId'] ?? '';
-      this.groupSnapshotActivityId = q['activityId'];
+      this.groupSnapshotActivityId = q['activityId'] ?? '';
       this.hasGroupSnapshotContext = true;
     } else if (q['from'] === 'activity' && q['activityId']) {
       this.activeContextType = 'activity';
@@ -156,6 +168,29 @@ export class IndicatorDetailComponent implements OnInit {
       this.activeContextType = 'course';
       this.activeContextId = q['courseId'];
       this.courseContextCourseName = q['courseName'] ?? 'Cours';
+      this.courseContextCourseId = q['courseId'];
+      this.hasCourseContext = true;
+    } else if (q['from'] === 'activity-personal' && q['contextType'] && q['activityId']) {
+      // Carte personnelle (learner/teacher/admin) activity-aware, cliquée depuis "Mes
+      // statistiques" sur une page d'activité. contextType vient explicitement des query
+      // params (pas déduit de `from`, contrairement aux branches ci-dessus) : contrairement à
+      // `activity`/`course`, ce n'est jamais fixe, ça dépend de l'indicateur cliqué.
+      this.activeContextType = q['contextType'];
+      this.activeContextId = getCurrentUserId();
+      this.activeActivityId = q['activityId'];
+      this.activityId = q['activityId'];
+      this.activityCourseId = q['courseId'] ?? '';
+      this.activityName = q['activityName'] ?? 'Activité';
+      this.activityCourseName = q['courseName'] ?? 'Cours';
+      this.hasActivityContext = true;
+    } else if (q['from'] === 'course-personal' && q['contextType'] && q['courseId']) {
+      // Même principe que ci-dessus, mais pour une carte personnelle course-aware,
+      // cliquée depuis "Mes statistiques" sur une page de cours.
+      this.activeContextType = q['contextType'];
+      this.activeContextId = getCurrentUserId();
+      this.activeCourseId = q['courseId'];
+      this.courseContextCourseName = q['courseName'] ?? 'Cours';
+      this.courseContextCourseId = q['courseId'];
       this.hasCourseContext = true;
     }
 
@@ -222,6 +257,7 @@ export class IndicatorDetailComponent implements OnInit {
       this.activeContextId,
       activityIdParam,
       viz.id,
+      this.activeCourseId,
     ).subscribe({
       next: result => {
         this.results[viz.id] = result;
@@ -238,23 +274,12 @@ export class IndicatorDetailComponent implements OnInit {
   }
 
   private buildChartOptions(viz: IndicatorVisualization, result: ViewResult): void {
-    const color = viz.color ?? '#5470c6';
-    const unit  = viz.unit  ?? '';
-
-    if (viz.type === 'gauge') {
-      const max = this.indicator?.thresholds?.good ?? 100;
-      this.chartOptions[viz.id] = {
-        series: [{
-          type: 'gauge', radius: '70%', min: 0, max,
-          progress: { show: true, width: 18 },
-          axisLine: { lineStyle: { width: 18, color: [[0.4, '#ff4d4f'], [0.7, '#faad14'], [1, '#52c41a']] } },
-          axisTick: { show: false }, splitLine: { show: false }, axisLabel: { show: false },
-          pointer: { show: false },
-          detail: { valueAnimation: true, fontSize: 24, formatter: (v: number) => v.toFixed(1) + unit },
-          data: [{ value: result.value, name: viz.label }],
-        }],
-      };
-    } else if (viz.type === 'line-chart') {
+    if (viz.type === 'line-chart') {
+      // Seul cas non couvert par l'utilitaire partagé : dépend de l'historique temporel et de
+      // l'état de sélection de période (historyPeriodDays/historyCustomRange), propres à cette
+      // page - une modale de comparaison par snapshots ponctuels n'a pas cette notion.
+      const color = viz.color ?? '#5470c6';
+      const unit  = viz.unit  ?? '';
       const fullHistory = result.metadata?.['history'] ?? [];
       const history = this.filterHistory(viz, fullHistory);
       this.chartOptions[viz.id] = {
@@ -263,38 +288,11 @@ export class IndicatorDetailComponent implements OnInit {
         yAxis: { type: 'value', name: unit },
         series: [{ data: history.map((h: any) => h.value), type: 'line', smooth: true, lineStyle: { color } }],
       };
-    } else if (viz.type === 'bar-chart') {
-      const raw = result.structuredValue ?? {};
-      const entries: { key: string; val: number }[] = Array.isArray(raw)
-        ? raw.map((e: any) => ({ key: e.key ?? e.label ?? String(e), val: e.value ?? 0 }))
-        : Object.entries(raw).map(([k, v]) => ({ key: k, val: v as number }));
-      this.chartOptions[viz.id] = {
-        tooltip: { trigger: 'axis', formatter: (p: any) => { const x = Array.isArray(p) ? p[0] : p; return `${x.name}<br/>${x.value} ${unit}`; } },
-        xAxis: { type: 'value', name: unit, nameLocation: 'end' },
-        yAxis: { type: 'category', data: entries.map(e => e.key),
-          axisLabel: { width: 180, overflow: 'truncate', formatter: (v: string) => v.length > 25 ? v.slice(0, 25) + '…' : v } },
-        series: [{ data: entries.map(e => e.val), type: 'bar', itemStyle: { color },
-          label: { show: true, position: 'right', formatter: (p: any) => `${p.value} ${unit}` } }],
-        grid: { containLabel: true, right: '15%' },
-      };
-    } else if (viz.type === 'histogram') {
-      const buckets: { bucket: number; count: number; users?: string[] }[] = result.structuredValue ?? [];
-      this.chartOptions[viz.id] = {
-        tooltip: { trigger: 'axis', enterable: true,
-          formatter: (p: any) => {
-            const x = Array.isArray(p) ? p[0] : p;
-            const item = x.data as { value: number; users?: string[] };
-            const names = item?.users ?? [];
-            return `<strong>${x.name} ${unit}</strong><br/>${item.value} étudiant(s)${names.length ? '<br/>' + names.map((n: string) => `&nbsp;• ${n}`).join('<br/>') : ''}`;
-          },
-        },
-        xAxis: { type: 'category', data: buckets.map(b => String(b.bucket)), name: unit, nameLocation: 'end' },
-        yAxis: { type: 'value', name: 'Effectif' },
-        series: [{ data: buckets.map(b => ({ value: b.count, users: b.users ?? [] })),
-          type: 'bar', itemStyle: { color }, label: { show: true, position: 'top' } }],
-        grid: { containLabel: true },
-      };
+      return;
     }
+
+    const options = buildIndicatorChartOptions(viz, result, this.indicator?.thresholds);
+    if (options) this.chartOptions[viz.id] = options;
   }
 
   /** Change la période affichée pour la courbe d'un viz et reconstruit le graphique. */
@@ -334,14 +332,6 @@ export class IndicatorDetailComponent implements OnInit {
   }
 
   // ── Helpers template ──────────────────────────────────────────────────────
-
-  getThresholdColor(_viz: IndicatorVisualization, value: number): string {
-    const t = this.indicator?.thresholds;
-    if (!t || (t.good == null && t.warning == null)) return '#1890ff';
-    if (t.good != null && value <= t.good)       return '#52c41a';
-    if (t.warning != null && value <= t.warning) return '#faad14';
-    return '#ff4d4f';
-  }
 
   getContextLabel(contextType: string): string {
     const labels: Record<string, string> = {

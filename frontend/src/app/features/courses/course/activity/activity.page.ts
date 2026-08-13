@@ -41,6 +41,8 @@ import { IndicatorCardComponent } from '../../../../shared/ui/indicator-card/ind
 import { PinIndicatorModalComponent } from '../../../pin-indicator-modal/pin-indicator-modal.component'
 import { GroupSnapshotsPanelComponent } from './group-snapshots-panel.component'
 import { ActivityPresenter } from './activity.presenter'
+import { getCurrentUserId } from '../../../../core/auth/current-user'
+import { isActivityAware } from '../../../../shared/utils/indicator-formula.util'
 
 @Component({
   standalone: true,
@@ -100,12 +102,23 @@ export class CourseActivityPage implements OnInit, OnDestroy {
   protected context = this.presenter.defaultContext()
   protected collapsedGlobal = false
   protected collapsedGroup = false
+  protected collapsedLearner = false
 
   // Indicateurs par contexte
   protected activityIndicators: IndicatorDefinition[] = []
   protected groupIndicators: IndicatorDefinition[] = []
+  // Indicateurs personnels (learner/teacher/admin) dont la formule filtre par activity_id :
+  // n'affichent jamais une valeur "globale" (voir isActivityAware()), seulement celle de
+  // cette activité. Mutuellement exclusifs en pratique (un même utilisateur n'a jamais deux
+  // de ces rôles à la fois), affichés dans la même section "Mes statistiques" du template.
+  protected learnerIndicators: IndicatorDefinition[] = []
+  protected teacherIndicators: IndicatorDefinition[] = []
+  protected adminIndicators: IndicatorDefinition[] = []
   protected indicatorsLoading = true
   protected activityContext: DashboardContext | null = null
+  protected learnerContext: DashboardContext | null = null
+  protected teacherContext: DashboardContext | null = null
+  protected adminContext: DashboardContext | null = null
   protected indicatorQueryParams: Record<string, string> = {}
 
   // Indicateurs figés (pins enseignant) sur cette activité - indépendant des
@@ -196,6 +209,30 @@ export class CourseActivityPage implements OnInit, OnDestroy {
             this.roleService.canSeeIndicatorContext(ind.contextType, ind.visibilityRoles) &&
             settings.activeIndicators.includes(ind.id))
           this.groupIndicators = visible.filter(ind => ind.contextType === 'group')
+          this.learnerIndicators = visible.filter(ind =>
+            ind.contextType === 'learner' && isActivityAware(ind.formula))
+          this.learnerContext = {
+            scope: 'learner',
+            scopeId: getCurrentUserId(),
+            userId: getCurrentUserId(),
+            activityId,
+          }
+          this.teacherIndicators = visible.filter(ind =>
+            ind.contextType === 'teacher' && isActivityAware(ind.formula))
+          this.teacherContext = {
+            scope: 'teacher',
+            scopeId: getCurrentUserId(),
+            userId: getCurrentUserId(),
+            activityId,
+          }
+          this.adminIndicators = visible.filter(ind =>
+            ind.contextType === 'admin' && isActivityAware(ind.formula))
+          this.adminContext = {
+            scope: 'admin',
+            scopeId: getCurrentUserId(),
+            userId: getCurrentUserId(),
+            activityId,
+          }
 
           // Union : indicateurs activés perso par l'utilisateur (il faut d'abord
           // l'activer soi-même, comme n'importe quel indicateur, pour le voir ici)
@@ -221,21 +258,26 @@ export class CourseActivityPage implements OnInit, OnDestroy {
     )
   }
 
+  /**
+   * queryParams distincts de `indicatorQueryParams` pour les cartes personnelles (learner/
+   * teacher/admin) : contrairement aux indicateurs `activity`, leur contextType n'est pas fixe
+   * (dépend de l'indicateur cliqué), indicator-detail.component.ts a donc besoin de le recevoir
+   * explicitement plutôt que de le déduire de `from` (voir la branche `activity-personal`).
+   */
+  protected personalIndicatorQueryParams(contextType: string): Record<string, string> {
+    return { ...this.indicatorQueryParams, from: 'activity-personal', contextType }
+  }
+
   protected onPinToggle(indicator: IndicatorDefinition): void {
     const activityId = this.currentActivityId
     if (!activityId) return
 
-    if (this.pinsByIndicatorId.has(indicator.id)) {
-      this.indicatorService.deletePin(indicator.id, 'activity', activityId).subscribe(() => {
-        this.loadActivityIndicators(activityId)
-      })
-      return
-    }
+    const existingPin = this.pinsByIndicatorId.get(indicator.id) ?? null
 
     const modalRef = this.modal.create({
-      nzTitle: `Figer "${indicator.name}"`,
+      nzTitle: existingPin ? `Seuils figés - "${indicator.name}"` : `Figer "${indicator.name}"`,
       nzContent: PinIndicatorModalComponent,
-      nzData: { indicator, contextType: 'activity', contextId: activityId },
+      nzData: { indicator, contextType: 'activity', contextId: activityId, existingPin },
       nzFooter: null,
       nzWidth: 480,
     })

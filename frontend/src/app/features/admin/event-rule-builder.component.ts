@@ -32,10 +32,10 @@ interface PlatonTable { name: string; columns: { name: string; type: string }[];
   template: `
     <div class="rule-builder">
       <p class="rule-builder-intro">
-        Une règle transforme un changement réel dans PLaTon (une table, une colonne, une
-        condition) en un événement métier utilisable comme déclencheur d'indicateur. Le
-        trigger PostgreSQL correspondant devra ensuite être installé explicitement depuis
-        la liste, une fois la règle enregistrée.
+        Une règle décrit comment un changement réel dans PLaTon (une table, une colonne, une
+        condition) doit être transformé en événement utilisable comme déclencheur
+        d'indicateur. Le trigger PostgreSQL correspondant devra ensuite être installé
+        explicitement depuis la liste, une fois la règle enregistrée.
       </p>
 
       <nz-divider nzText="1. Source du changement"></nz-divider>
@@ -57,7 +57,7 @@ interface PlatonTable { name: string; columns: { name: string; type: string }[];
         </nz-form-label>
         <nz-form-control>
           <nz-select [(ngModel)]="watchedColumn" nzAllowClear nzPlaceHolder="Aucune (INSERT uniquement)" style="width:100%">
-            <nz-option *ngFor="let c of columnsOf(sourceTable)" [nzValue]="c.name" [nzLabel]="c.name + ' (' + c.type + ')'"></nz-option>
+            <nz-option *ngFor="let c of watchableColumns(sourceTable)" [nzValue]="c.name" [nzLabel]="c.name + ' (' + c.type + ')'"></nz-option>
           </nz-select>
         </nz-form-control>
       </nz-form-item>
@@ -79,7 +79,7 @@ interface PlatonTable { name: string; columns: { name: string; type: string }[];
         <nz-form-item>
           <nz-form-label>Déclencher quand…</nz-form-label>
           <nz-form-control>
-            <nz-radio-group [(ngModel)]="condition.kind" style="display:flex;flex-direction:column;gap:6px">
+            <nz-radio-group [(ngModel)]="condition.kind" (ngModelChange)="onConditionKindChange()" style="display:flex;flex-direction:column;gap:6px">
               <label nz-radio nzValue="always">à chaque changement (aucune condition)</label>
               <label nz-radio nzValue="changed" [nzDisabled]="!watchedColumn">la valeur de la colonne a changé</label>
               <label nz-radio nzValue="equals" [nzDisabled]="!watchedColumn">la colonne est égale à une valeur</label>
@@ -145,9 +145,9 @@ interface PlatonTable { name: string; columns: { name: string; type: string }[];
         </nz-form-item>
 
         <nz-form-item>
-          <nz-form-label>Session</nz-form-label>
+          <nz-form-label>Session <mat-icon class="info-icon" nz-tooltip="Colonne identifiant la ligne précise (ex: id de SessionData). Sans elle, chaque événement déclenche un recalcul complet de l'indicateur ; avec elle, seule la ligne concernée est mise à jour (plus rapide, surtout avec des événements fréquents)." nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
           <nz-form-control>
-            <nz-select [(ngModel)]="contextMapping.sessionId" nzAllowClear nzPlaceHolder="Colonne → sessionId (optionnel)" style="width:100%">
+            <nz-select [(ngModel)]="contextMapping.sessionId" nzAllowClear nzPlaceHolder="Colonne → sessionId (optionnel, active le calcul incrémental)" style="width:100%">
               <nz-option *ngFor="let c of columnsOf(sourceTable)" [nzValue]="c.name" [nzLabel]="c.name"></nz-option>
             </nz-select>
           </nz-form-control>
@@ -169,7 +169,7 @@ interface PlatonTable { name: string; columns: { name: string; type: string }[];
 
         <ng-container *ngIf="creatingNewEventType">
           <nz-form-item>
-            <nz-form-label [nzRequired]="true">Nom technique</nz-form-label>
+            <nz-form-label [nzRequired]="true">Nom technique <mat-icon class="info-icon" nz-tooltip="Le style 'domaine.action' (ex: exercise.viewed) est juste une convention de nommage lisible, un choix délibéré - rien ne l'impose techniquement. N'importe quel nom (sans point, autre format...) fonctionne tout aussi bien." nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
             <nz-form-control>
               <input nz-input [(ngModel)]="newEventType.name" placeholder="ex: exercise.viewed" />
             </nz-form-control>
@@ -262,6 +262,14 @@ export class EventRuleBuilderComponent implements OnInit {
     this.contextMapping = { userId: '' };
   }
 
+  /** Si la colonne surveillée actuelle n'est plus proposée pour la nouvelle condition
+   *  (ex. bascule vers "franchit un seuil" avec une colonne texte sélectionnée), la réinitialiser. */
+  onConditionKindChange(): void {
+    if (!this.watchedColumn) return;
+    const stillValid = this.watchableColumns(this.sourceTable).some(c => c.name === this.watchedColumn);
+    if (!stillValid) this.watchedColumn = null;
+  }
+
   columnsOf(table: string | null): { name: string; type: string }[] {
     if (!table) return [];
     const cached = this._colsCache.get(table);
@@ -271,12 +279,39 @@ export class EventRuleBuilderComponent implements OnInit {
     return cols;
   }
 
+  /** Colonnes proposées pour "Colonne surveillée" - filtrées aux colonnes numériques
+   *  quand la condition est "franchit un seuil" (comparaison `>`/`<` n'a de sens que sur du
+   *  numérique). Les autres sélecteurs (contexte) utilisent columnsOf() directement, sans
+   *  rapport avec la condition. */
+  watchableColumns(table: string | null): { name: string; type: string }[] {
+    const cols = this.columnsOf(table);
+    if (this.condition.kind !== 'threshold_crossed') return cols;
+    return cols.filter(c => this.isNumericType(c.type));
+  }
+
+  private isNumericType(type: string): boolean {
+    return ['integer', 'bigint', 'smallint', 'numeric', 'decimal', 'real', 'double precision']
+      .includes(type.toLowerCase());
+  }
+
   get canSave(): boolean {
     if (!this.sourceTable || !this.contextMapping.userId) return false;
+    if (!this.isConditionComplete()) return false;
     if (this.creatingNewEventType) {
       return !!this.newEventType.name.trim() && !!this.newEventType.label.trim();
     }
     return !!this.eventTypeId;
+  }
+
+  private isConditionComplete(): boolean {
+    const c = this.condition;
+    if (c.kind === 'equals' || c.kind === 'not_equals') {
+      return c.value !== undefined && c.value !== null && c.value !== '';
+    }
+    if (c.kind === 'threshold_crossed') {
+      return !!c.operator && c.threshold !== undefined && c.threshold !== null;
+    }
+    return true;
   }
 
   save(): void {

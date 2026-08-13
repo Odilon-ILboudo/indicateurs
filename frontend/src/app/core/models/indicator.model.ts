@@ -1,5 +1,22 @@
 export type IndicatorScope = 'learner' | 'teacher' | 'admin' | 'course' | 'activity' | 'group';
 
+/** Icône Material fixe par contexte - pour qu'un coup d'œil suffise à identifier à qui
+ *  s'adresse un indicateur (apprenant/enseignant/cours/activité/...), au lieu d'un choix libre
+ *  par visualisation. Volontairement pas de couleur ici : la couleur reste personnalisable
+ *  (préférence utilisateur + choix admin par visualisation), seule l'icône est automatique. */
+export const CONTEXT_ICONS: Record<IndicatorScope, string> = {
+  learner:  'person',
+  teacher:  'co_present',
+  admin:    'admin_panel_settings',
+  course:   'school',
+  activity: 'assignment',
+  group:    'group',
+};
+
+export function contextIcon(contextType: IndicatorScope | null | undefined): string {
+  return (contextType && CONTEXT_ICONS[contextType]) || 'analytics';
+}
+
 export type ViewVisualizationType = 'card' | 'gauge' | 'line-chart' | 'bar-chart' | 'histogram';
 
 export interface IndicatorFormula {
@@ -81,6 +98,10 @@ export interface DashboardContext {
   scopeId: string;
   userId: string;
   activityId?: string;
+  // Pour scope='group' course-aware uniquement (voir isCourseAware côté backend) :
+  // agrège toutes les activités du cours plutôt qu'une seule. Mutuellement exclusif
+  // avec activityId pour ce scope.
+  courseId?: string;
   groupId?: string;
   academicYear?: string;
   semester?: string;
@@ -94,7 +115,6 @@ export interface CourseActivity {
 export interface TeacherCourse {
   id: string;
   name: string;
-  groups: { id: string; name: string }[];
 }
 
 export interface IndicatorSnapshot {
@@ -102,7 +122,9 @@ export interface IndicatorSnapshot {
   indicatorId: string;
   contextType: string;
   contextId: string;
-  activityId: string;
+  // Exactement l'un des deux, jamais les deux (voir isCourseAware côté backend).
+  activityId: string | null;
+  courseId: string | null;
   title: string;
   createdAt: Date;
   updatedAt: Date;

@@ -6,8 +6,10 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnIni
 import { RouterModule } from '@angular/router'
 import { Subscription, combineLatest, of } from 'rxjs'
 
+import { MatIconModule } from '@angular/material/icon'
 import { NzButtonModule } from 'ng-zorro-antd/button'
 import { NzCollapseModule } from 'ng-zorro-antd/collapse'
+import { NzDividerModule } from 'ng-zorro-antd/divider'
 import { NzEmptyModule } from 'ng-zorro-antd/empty'
 import { NzGridModule } from 'ng-zorro-antd/grid'
 import { NzIconModule } from 'ng-zorro-antd/icon'
@@ -39,6 +41,9 @@ import { DashboardSettingsService } from '../../../../core/services/dashboard-se
 import { DashboardContext, IndicatorDefinition, IndicatorPin } from '../../../../core/models/indicator.model'
 import { IndicatorCardComponent } from '../../../../shared/ui/indicator-card/indicator-card.component'
 import { PinIndicatorModalComponent } from '../../../pin-indicator-modal/pin-indicator-modal.component'
+import { GroupSnapshotsPanelComponent } from '../activity/group-snapshots-panel.component'
+import { isCourseAware } from '../../../../shared/utils/indicator-formula.util'
+import { getCurrentUserId } from '../../../../core/auth/current-user'
 
 @Component({
   standalone: true,
@@ -50,12 +55,14 @@ import { PinIndicatorModalComponent } from '../../../pin-indicator-modal/pin-ind
     CommonModule,
     RouterModule,
 
+    MatIconModule,
     NzIconModule,
     NzGridModule,
     NzEmptyModule,
     NzButtonModule,
     NzTooltipModule,
     NzCollapseModule,
+    NzDividerModule,
     NzSegmentedModule,
     NzSpinModule,
     NzTypographyModule,
@@ -69,6 +76,7 @@ import { PinIndicatorModalComponent } from '../../../pin-indicator-modal/pin-ind
     UiSearchBarComponent,
 
     IndicatorCardComponent,
+    GroupSnapshotsPanelComponent,
   ],
 })
 export class CourseDashboardPage implements OnInit, OnDestroy {
@@ -84,9 +92,24 @@ export class CourseDashboardPage implements OnInit, OnDestroy {
 
   // Indicateurs de contexte 'course'
   protected courseIndicators: IndicatorDefinition[] = []
+  // Indicateurs 'group' course-aware (filtrés par course_id, agrègent toutes les activités
+  // du cours pour un groupe) - voir isCourseAware(). Rendus via GroupSnapshotsPanelComponent
+  // sans [activityId] (mode cours entier).
+  protected groupIndicators: IndicatorDefinition[] = []
+  // Indicateurs personnels (learner/teacher/admin) course-aware : n'affichent jamais une
+  // valeur "globale" (voir isCourseAware()), seulement celle de ce cours. Mutuellement
+  // exclusifs en pratique, affichés dans la même section "Mes statistiques".
+  protected learnerIndicators: IndicatorDefinition[] = []
+  protected teacherIndicators: IndicatorDefinition[] = []
+  protected adminIndicators: IndicatorDefinition[] = []
   protected indicatorsLoading = true
   protected courseContext: DashboardContext | null = null
+  protected learnerContext: DashboardContext | null = null
+  protected teacherContext: DashboardContext | null = null
+  protected adminContext: DashboardContext | null = null
   protected indicatorQueryParams: Record<string, string> = {}
+  protected collapsedGroup = false
+  protected collapsedLearner = false
 
   // Indicateurs figés (pins enseignant) sur ce cours - indépendant des
   // préférences perso, cf. IndicatorPinsService côté backend.
@@ -193,6 +216,26 @@ export class CourseDashboardPage implements OnInit, OnDestroy {
           }
           this.courseIndicators = Array.from(byId.values())
 
+          this.groupIndicators = indicators.filter(ind =>
+            ind.contextType === 'group' &&
+            isCourseAware(ind.formula) &&
+            this.roleService.canSeeIndicatorContext(ind.contextType, ind.visibilityRoles) &&
+            settings.activeIndicators.includes(ind.id))
+
+          const isVisiblePersonal = (ind: IndicatorDefinition) =>
+            isCourseAware(ind.formula) &&
+            this.roleService.canSeeIndicatorContext(ind.contextType, ind.visibilityRoles) &&
+            settings.activeIndicators.includes(ind.id)
+          this.learnerIndicators = indicators.filter(ind => ind.contextType === 'learner' && isVisiblePersonal(ind))
+          this.teacherIndicators = indicators.filter(ind => ind.contextType === 'teacher' && isVisiblePersonal(ind))
+          this.adminIndicators = indicators.filter(ind => ind.contextType === 'admin' && isVisiblePersonal(ind))
+          const personalContext = (scope: 'learner' | 'teacher' | 'admin'): DashboardContext => ({
+            scope, scopeId: getCurrentUserId(), userId: getCurrentUserId(), courseId,
+          })
+          this.learnerContext = personalContext('learner')
+          this.teacherContext = personalContext('teacher')
+          this.adminContext = personalContext('admin')
+
           this.indicatorsLoading = false
           this.changeDetectorRef.markForCheck()
         },
@@ -204,21 +247,26 @@ export class CourseDashboardPage implements OnInit, OnDestroy {
     )
   }
 
+  /**
+   * queryParams distincts de `indicatorQueryParams` pour les cartes personnelles (learner/
+   * teacher/admin) : leur contextType n'est pas fixe (dépend de l'indicateur cliqué),
+   * indicator-detail.component.ts a besoin de le recevoir explicitement plutôt que de le
+   * déduire de `from` (voir la branche `course-personal`).
+   */
+  protected personalIndicatorQueryParams(contextType: string): Record<string, string> {
+    return { ...this.indicatorQueryParams, from: 'course-personal', contextType }
+  }
+
   protected onPinToggle(indicator: IndicatorDefinition): void {
     const courseId = this.currentCourseId
     if (!courseId) return
 
-    if (this.pinsByIndicatorId.has(indicator.id)) {
-      this.indicatorService.deletePin(indicator.id, 'course', courseId).subscribe(() => {
-        this.loadCourseIndicators(courseId)
-      })
-      return
-    }
+    const existingPin = this.pinsByIndicatorId.get(indicator.id) ?? null
 
     const modalRef = this.modal.create({
-      nzTitle: `Figer "${indicator.name}"`,
+      nzTitle: existingPin ? `Seuils figés - "${indicator.name}"` : `Figer "${indicator.name}"`,
       nzContent: PinIndicatorModalComponent,
-      nzData: { indicator, contextType: 'course', contextId: courseId },
+      nzData: { indicator, contextType: 'course', contextId: courseId, existingPin },
       nzFooter: null,
       nzWidth: 480,
     })

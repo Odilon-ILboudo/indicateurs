@@ -18,6 +18,58 @@
     <nz-row [nzGutter]="[24, 24]" nzAlign="top">
       <nz-col nzXs="24" nzSm="24" nzMd="16" nzLg="16" nzXl="16">
 
+        <!-- ── Section Mes statistiques (learner/teacher/admin activity-aware) ──
+             Mutuellement exclusives en pratique (un utilisateur n'a jamais deux de ces rôles
+             à la fois), regroupées sous un même titre plutôt que trois sections presque
+             toujours vides. ────────────────────────────────────────────── -->
+        <ng-container *ngIf="!indicatorsLoading && (learnerIndicators.length > 0 || teacherIndicators.length > 0 || adminIndicators.length > 0)">
+          <nz-divider [nzText]="learnerTitle" nzOrientation="left"></nz-divider>
+          <ng-template #learnerTitle>
+            <span class="section-divider-btn" (click)="collapsedLearner = !collapsedLearner">
+              <mat-icon class="section-chevron" [class.collapsed]="collapsedLearner">expand_more</mat-icon>
+              Mes statistiques
+            </span>
+          </ng-template>
+
+          <ng-container *ngIf="!collapsedLearner">
+            <nz-row [nzGutter]="[16, 16]">
+              <nz-col
+                *ngFor="let ind of learnerIndicators"
+                nzXs="24" nzSm="12" nzMd="12" nzLg="8" nzXl="8">
+                <ui-indicator-card
+                  [indicator]="ind"
+                  [context]="learnerContext"
+                  [clickable]="true"
+                  [queryParams]="personalIndicatorQueryParams('learner')"
+                  [showPinButton]="false"
+                />
+              </nz-col>
+              <nz-col
+                *ngFor="let ind of teacherIndicators"
+                nzXs="24" nzSm="12" nzMd="12" nzLg="8" nzXl="8">
+                <ui-indicator-card
+                  [indicator]="ind"
+                  [context]="teacherContext"
+                  [clickable]="true"
+                  [queryParams]="personalIndicatorQueryParams('teacher')"
+                  [showPinButton]="false"
+                />
+              </nz-col>
+              <nz-col
+                *ngFor="let ind of adminIndicators"
+                nzXs="24" nzSm="12" nzMd="12" nzLg="8" nzXl="8">
+                <ui-indicator-card
+                  [indicator]="ind"
+                  [context]="adminContext"
+                  [clickable]="true"
+                  [queryParams]="personalIndicatorQueryParams('admin')"
+                  [showPinButton]="false"
+                />
+              </nz-col>
+            </nz-row>
+          </ng-container>
+        </ng-container>
+
         <!-- ── Section Indicateurs globaux de l'activité ───────────────── -->
         <nz-divider [nzText]="globalTitle" nzOrientation="left"></nz-divider>
         <ng-template #globalTitle>

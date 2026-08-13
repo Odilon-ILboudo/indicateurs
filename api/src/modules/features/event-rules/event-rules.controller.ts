@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
-import { EventRulesService, CreateEventRuleBody } from './event-rules.service';
+import { EventRulesService } from './event-rules.service';
+import { CreateEventRuleDto, UpdateEventRuleDto } from './dto/event-rule.dto';
 import { AdminGuard } from '../../core/guards/admin.guard';
 import { AuthGuard } from '../../core/auth/auth.guard';
 
@@ -19,12 +20,12 @@ export class EventRulesController {
   }
 
   @Post()
-  create(@Body() body: CreateEventRuleBody) {
+  create(@Body() body: CreateEventRuleDto) {
     return this.svc.create(body);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: Partial<CreateEventRuleBody>) {
+  update(@Param('id') id: string, @Body() body: UpdateEventRuleDto) {
     return this.svc.update(id, body);
   }
 

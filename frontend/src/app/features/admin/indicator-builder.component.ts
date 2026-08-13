@@ -26,34 +26,17 @@ import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import * as yaml from 'js-yaml';
 import { IndicatorService } from '../../core/services/indicator.service';
-import { IndicatorDefinition, IndicatorScope, ViewVisualizationType, TeacherCourse, CourseActivity } from '../../core/models/indicator.model';
-import { ReuseIndicatorModalComponent, ReuseIndicatorResult } from './reuse-indicator-modal.component';
+import { IndicatorDefinition, IndicatorScope, ViewVisualizationType, TeacherCourse, CourseActivity, contextIcon } from '../../core/models/indicator.model';
+import { ReuseIndicatorResult } from './reuse-indicator-modal.component';
+import { EventRuleManagerComponent } from './event-rule-manager.component';
+import {
+  StepType, PipelineStep, PlatonTableSchema,
+  PipelineError, ImportedIndicatorMeta, ImportErrorDisplay, toImportErrorDisplay,
+  dehydrateStep, parseIndicatorImport, replaceValueInText, validatePipelineStepComplete,
+} from './pipeline-import.util';
 import { getCurrentUserId } from '../../core/auth/current-user';
 
 // ── Types DSL ────────────────────────────────────────────────────────────────
-
-type StepType = 'fetch' | 'join' | 'filter' | 'groupBy' | 'findFirst' | 'extract' | 'aggregate' | 'round' | 'divide' | 'js';
-
-interface PipelineStep {
-  id: string; type: StepType; label: string;
-  // fetch
-  table?: string; contextFields?: string[]; useGroupContext?: boolean;
-  // join
-  joinTable?: string; joinContextFields?: string[]; joinLeftKey?: string; joinRightKey?: string;
-  joinType?: 'left' | 'inner' | 'right' | 'full';
-  // filter
-  filterField?: string; filterOperator?: string; filterValue?: string | number;
-  // groupBy
-  groupField?: string;
-  // findFirst
-  whereField?: string; whereValue?: string | number; sortField?: string;
-  // extract
-  extractField?: string;
-  // aggregate
-  aggregateFn?: string;
-  // round / divide / js
-  decimals?: number; divideBy?: number; jsCode?: string;
-}
 
 interface FlatViz {
   id: string;
@@ -63,8 +46,6 @@ interface FlatViz {
   color: string;
   unit: string;
 }
-
-interface PlatonTable { name: string; columns: { name: string; type: string }[]; }
 
 /** Données partagées par les membres d'une famille, transmis de builder en builder. */
 export interface IndicatorFamilyPreset {
@@ -99,7 +80,18 @@ const STEP_CATALOG: { type: StepType; label: string; icon: string; color: string
   { type: 'js',        label: 'Code JS',            icon: 'code',         color: '#595959', desc: 'Exécute une fonction JavaScript sur les données' },
 ];
 
-const FORMULA_RECIPES: { name: string; desc: string; detail: { objectif: string; utilisation: string; adapter: string }; pipeline: Omit<PipelineStep, 'id'>[] }[] = [
+/** Carte affichée dans la modale "Pipelines" - `detail` (objectif/utilisation/adapter) n'existe
+ *  que pour les pipelines prédéfinis (FORMULA_RECIPES) ; `usedBy` n'existe que pour les
+ *  pipelines dérivés d'indicateurs déjà créés (voir loadExistingPipelines()). */
+interface PipelineCatalogItem {
+  name: string;
+  desc: string;
+  pipeline: Omit<PipelineStep, 'id'>[];
+  detail?: { objectif: string; utilisation: string; adapter: string };
+  usedBy?: string[];
+}
+
+const FORMULA_RECIPES: PipelineCatalogItem[] = [
   {
     name: 'Tentatives avant réussite',
     desc: 'Nb moyen de tentatives avant la 1ère note de 100',
@@ -204,24 +196,9 @@ return out;` },
 ];
 
 // ── Erreur de parsing structurée ─────────────────────────────────────────────
-
-class PipelineError extends Error {
-  constructor(
-    message: string,
-    readonly available?: string[],
-    readonly availableLabel?: string,
-    readonly wrongValue?: string,
-    readonly availableDisplay?: string[], // étiquettes d'affichage (si différentes de available)
-  ) { super(message); }
-}
-
-interface ImportErrorDisplay {
-  main: string;
-  available?: string[];           // valeurs à insérer au clic
-  availableDisplay?: string[];    // étiquettes affichées (si différentes de available)
-  availableLabel?: string;
-  wrongValue?: string;
-}
+// PipelineError, ImportedIndicatorMeta et ImportErrorDisplay viennent de
+// pipeline-import.util.ts (voir imports en tête de fichier) - partagés avec la modale de choix
+// initial qui valide l'import avant même l'ouverture de ce wizard.
 
 // ── Composant ────────────────────────────────────────────────────────────────
 
@@ -241,9 +218,9 @@ interface ImportErrorDisplay {
 <div class="builder">
 
   <nz-steps [nzCurrent]="step" nzSize="small" class="steps">
-    <nz-step nzTitle="Définition"  nzDescription="Nom et événements"           class="step-clickable" (click)="goToStep(0)"></nz-step>
-    <nz-step nzTitle="Contexte"    nzDescription="Contexte et visualisations"  class="step-clickable" (click)="goToStep(1)"></nz-step>
-    <nz-step nzTitle="Formules"    nzDescription="Pipeline par visualisation"  class="step-clickable" (click)="goToStep(2)"></nz-step>
+    <nz-step nzTitle="Définition"  nzDescription="Nom et description"                    class="step-clickable" (click)="goToStep(0)"></nz-step>
+    <nz-step nzTitle="Contexte"    nzDescription="Contexte et visualisations"             class="step-clickable" (click)="goToStep(1)"></nz-step>
+    <nz-step nzTitle="Formules"    nzDescription="Pipeline et événements déclencheurs"    class="step-clickable" (click)="goToStep(2)"></nz-step>
   </nz-steps>
 
   <div class="indicator-header" *ngIf="def.name">
@@ -256,35 +233,16 @@ interface ImportErrorDisplay {
   <!-- ── ÉTAPE 1 ─────────────────────────────────────────────────────── -->
   <div *ngIf="step === 0" class="step-content">
 
-    <!-- Réutiliser un indicateur existant (capitalisation) -->
-    <div class="reuse-section" *ngIf="!modalData?.indicator">
-      <button nz-button nzType="dashed" (click)="showReusePanel = !showReusePanel">
-        <span nz-icon nzType="copy"></span>
-        Réutiliser un indicateur existant
-      </button>
+    <!-- Le choix "réutiliser/importer/à partir de zéro" se fait désormais avant l'ouverture du
+         wizard (modale de démarrage) - ce bandeau ne fait que rappeler d'où vient le contenu
+         pré-rempli le cas échéant. -->
+    <p class="section-hint" *ngIf="def.baseIndicatorId">
+      "{{ reuseAppliedName }}" copié comme point de départ (nom, description, contexte, seuils,
+      visualisations et pipeline) - tout reste modifiable librement dans les étapes suivantes.
+    </p>
 
-      <div *ngIf="showReusePanel" class="reuse-panel">
-        <p class="section-hint">
-          Choisissez un indicateur pour copier son pipeline comme point de départ - une
-          fenêtre s'ouvrira pour prévisualiser et ajuster son contexte avant de
-          l'appliquer.
-        </p>
-        <div class="param-row">
-          <label>Indicateur source</label>
-          <nz-select [(ngModel)]="reuseSourceId" nzShowSearch nzAllowClear
-            nzPlaceHolder="Choisir un indicateur..." style="width:320px"
-            (ngModelChange)="onSelectReuseSource($event)">
-            <nz-option *ngFor="let ind of reusableIndicators" [nzValue]="ind.id" [nzLabel]="ind.name"></nz-option>
-          </nz-select>
-        </div>
-        <p class="section-hint" *ngIf="def.baseIndicatorId">
-          "{{ reuseAppliedName }}" copié comme point de départ (nom, description,
-          contexte, seuils, visualisations et pipeline) - tout reste modifiable
-          librement dans les étapes suivantes.
-        </p>
-      </div>
-      <nz-divider></nz-divider>
-    </div>
+    <div class="wizard-section">
+      <div class="wizard-section-title"><span nz-icon nzType="file-text"></span> Informations générales</div>
 
     <nz-form-item>
       <nz-form-label [nzRequired]="true">Nom de l'indicateur <mat-icon class="info-icon" nz-tooltip="Nom unique affiché dans le tableau de bord et les listes. Doit être court et descriptif. Ex : 'Tentatives avant réussite'." nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
@@ -304,7 +262,7 @@ interface ImportErrorDisplay {
           <div class="similar-list">
             <div *ngFor="let ind of similarIndicators" class="similar-item">
               <div class="similar-item-info">
-                <mat-icon [style.color]="ind.visualizations?.[0]?.color || '#8c8c8c'" style="font-size:16px;width:16px;height:16px;line-height:1">{{ ind.visualizations?.[0]?.icon || 'analytics' }}</mat-icon>
+                <mat-icon [style.color]="ind.visualizations?.[0]?.color || '#8c8c8c'" style="font-size:16px;width:16px;height:16px;line-height:1">{{ contextIcon(ind.contextType) }}</mat-icon>
                 <span class="similar-item-name">{{ ind.name }}</span>
                 <nz-tag [nzColor]="ind.isActive ? 'green' : 'default'" style="margin:0">{{ ind.isActive ? 'Actif' : 'Inactif' }}</nz-tag>
               </div>
@@ -363,7 +321,7 @@ interface ImportErrorDisplay {
               <span class="prev-label">Visualisations</span>
               <div class="prev-vizs">
                 <div *ngFor="let v of ind.visualizations" class="prev-viz-chip">
-                  <mat-icon [style.color]="v.color || '#8c8c8c'">{{ v.icon || 'bar_chart' }}</mat-icon>
+                  <mat-icon [style.color]="v.color || '#8c8c8c'">{{ contextIcon(ind.contextType) }}</mat-icon>
                   {{ v.label }}
                 </div>
               </div>
@@ -419,40 +377,32 @@ interface ImportErrorDisplay {
           placeholder="Ex : Un résultat élevé signifie que les étudiants ont eu du mal. Regardez en priorité les ressources avec une note inférieure à 50."></textarea>
       </nz-form-control>
     </nz-form-item>
-    <nz-form-item>
-      <nz-form-label [nzRequired]="true">Événements déclencheurs <mat-icon class="info-icon" nz-tooltip="Événements PLaTon qui déclenchent l'ingestion de nouvelles données. L'indicateur est recalculé automatiquement quand ces événements surviennent." nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
-      <nz-form-control>
-        <nz-select [(ngModel)]="def.requiredEvents" nzMode="multiple"
-          nzPlaceHolder="Sélectionner un ou plusieurs événements configurés" style="width:100%">
-          <nz-option *ngFor="let evt of availableEventTypes"
-            [nzValue]="evt.name" [nzLabel]="evt.name + ' - ' + evt.label">
-          </nz-option>
-        </nz-select>
-        <div *ngIf="!availableEventTypes.length" style="margin-top:6px;font-size:12px;color:#999">
-          Aucun événement configuré. Créez-en un depuis "Événements &amp; déclencheurs" dans l'onglet Administration.
-        </div>
-      </nz-form-control>
-    </nz-form-item>
+
+    </div>
   </div>
 
   <!-- ── ÉTAPE 2 ─────────────────────────────────────────────────────── -->
   <div *ngIf="step === 1" class="step-content">
 
-    <nz-form-item>
-      <nz-form-label [nzRequired]="true">Contexte <mat-icon class="info-icon" nz-tooltip="À qui s'adresse cet indicateur. Apprenant = tableau de bord personnel. Cours / Groupe = contexte enseignant. Activité = page statistiques d'une activité. Enseignant / Admin = tableau de bord propre à ces rôles." nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
-      <nz-form-control>
-        <nz-select [(ngModel)]="def.contextType" style="width:100%">
-          <nz-option nzValue="learner"  nzLabel="Apprenant (learner)"></nz-option>
-          <nz-option nzValue="group"    nzLabel="Groupe de TP (group)"></nz-option>
-          <nz-option nzValue="activity" nzLabel="Activité (activity)"></nz-option>
-          <nz-option nzValue="course"   nzLabel="Cours (course)"></nz-option>
-          <nz-option nzValue="teacher"  nzLabel="Enseignant (teacher)"></nz-option>
-          <nz-option nzValue="admin"    nzLabel="Admin"></nz-option>
-        </nz-select>
-      </nz-form-control>
-    </nz-form-item>
+    <div class="wizard-section">
+      <div class="wizard-section-title"><span nz-icon nzType="aim"></span> Contexte</div>
+      <nz-form-item>
+        <nz-form-label [nzRequired]="true">Contexte <mat-icon class="info-icon" nz-tooltip="À qui s'adresse cet indicateur. Apprenant = tableau de bord personnel. Cours / Groupe = contexte enseignant. Activité = page statistiques d'une activité. Enseignant / Admin = tableau de bord propre à ces rôles." nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
+        <nz-form-control>
+          <nz-select [(ngModel)]="def.contextType" style="width:100%">
+            <nz-option nzValue="learner"  nzLabel="Apprenant (learner)"></nz-option>
+            <nz-option nzValue="group"    nzLabel="Groupe de TP (group)"></nz-option>
+            <nz-option nzValue="activity" nzLabel="Activité (activity)"></nz-option>
+            <nz-option nzValue="course"   nzLabel="Cours (course)"></nz-option>
+            <nz-option nzValue="teacher"  nzLabel="Enseignant (teacher)"></nz-option>
+            <nz-option nzValue="admin"    nzLabel="Admin"></nz-option>
+          </nz-select>
+        </nz-form-control>
+      </nz-form-item>
+    </div>
 
-    <nz-divider nzText="Visualisations"></nz-divider>
+    <div class="wizard-section">
+      <div class="wizard-section-title"><span nz-icon nzType="bar-chart"></span> Visualisations</div>
 
     <div class="viz-list">
       <div *ngFor="let v of vizList; let i = index" class="viz-row-card">
@@ -472,9 +422,9 @@ interface ImportErrorDisplay {
 
         <div class="viz-fields">
           <div class="viz-field viz-field-type">
-            <label>Type <mat-icon class="info-icon" nz-tooltip="Forme d'affichage. Carte = valeur scalaire. Barres = résultat {clé:valeur}. Histogramme = distribution [{bucket, count}]. Jauge = valeur avec plafond. Ligne = historique temporel." nzTooltipPlacement="top">info_outline</mat-icon></label>
+            <label>Type <mat-icon class="info-icon" nz-tooltip="Forme d'affichage. Carte = valeur. Barres = résultat {clé:valeur}. Histogramme = distribution [{bucket, count}]. Jauge = valeur avec plafond. Ligne = historique temporel." nzTooltipPlacement="top">info_outline</mat-icon></label>
             <nz-select [(ngModel)]="v.type" style="width:100%" (ngModelChange)="onVizTypeChange(v)">
-              <nz-option nzValue="card"       nzLabel="Valeur scalaire"></nz-option>
+              <nz-option nzValue="card"       nzLabel="Valeur"></nz-option>
               <nz-option nzValue="gauge"      nzLabel="Jauge"></nz-option>
               <nz-option nzValue="bar-chart"  nzLabel="Barres horizontales"></nz-option>
               <nz-option nzValue="histogram"  nzLabel="Histogramme"></nz-option>
@@ -482,19 +432,10 @@ interface ImportErrorDisplay {
             </nz-select>
           </div>
           <div class="viz-field viz-field-icon">
-            <label>Icône <mat-icon class="info-icon" nz-tooltip="Icône Material affichée dans la card indicateur." nzTooltipPlacement="top">info_outline</mat-icon></label>
-            <div class="icon-picker">
-              <div class="icon-grid">
-                <button *ngFor="let ic of availableIcons"
-                  (click)="v.icon = ic"
-                  [class.selected]="v.icon === ic"
-                  class="icon-button"
-                  type="button"
-                  nz-tooltip="{{ic}}"
-                  nzTooltipPlacement="top">
-                  <mat-icon>{{ ic }}</mat-icon>
-                </button>
-              </div>
+            <label>Icône <mat-icon class="info-icon" nz-tooltip="Automatique selon le contexte de l'indicateur (choisi à la section « Contexte » ci-dessus) - pour rester reconnaissable d'un coup d'œil. Plus de choix manuel." nzTooltipPlacement="top">info_outline</mat-icon></label>
+            <div class="icon-preview">
+              <mat-icon>{{ contextIcon(def.contextType) }}</mat-icon>
+              <span>Automatique ({{ CONTEXT_LABELS[def.contextType] }})</span>
             </div>
           </div>
           <div class="viz-field viz-field-color">
@@ -514,11 +455,12 @@ interface ImportErrorDisplay {
       </button>
     </div>
 
+    </div>
+
     <!-- Seuil global (optionnel) -->
-    <nz-divider nzDashed></nz-divider>
-    <div class="global-threshold-section">
-      <div class="section-label">
-        Seuil de performance
+    <div class="wizard-section">
+      <div class="wizard-section-title">
+        <span nz-icon nzType="dashboard"></span> Seuil de performance
         <mat-icon class="info-icon"
           nz-tooltip="Optionnel. Définit 3 zones colorées : ● Bon (vert) : valeur ≤ seuil Bon - ● Moyen (orange) : valeur entre Bon et Moyen - ● Critique (rouge) : valeur > seuil Moyen. Le seuil Critique est optionnel et sert de repère dans la légende - la carte est de toute façon rouge au-delà du seuil Moyen, que Critique soit renseigné ou non. Colore la valeur dans la carte et affiche la légende dans le panneau latéral."
           nzTooltipPlacement="right">info_outline</mat-icon>
@@ -558,40 +500,33 @@ interface ImportErrorDisplay {
   <!-- ── ÉTAPE 3 ─────────────────────────────────────────────────────── -->
   <div *ngIf="step === 2" class="step-content">
 
-    <!-- Bouton explorateur de schéma -->
-    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
-      <button nz-button nzType="default" nzSize="small" (click)="openSchemaExplorer()">
-        <span nz-icon nzType="database"></span>
-        Explorer le schéma PLaTon
-      </button>
-    </div>
+    <div class="wizard-section">
+      <div class="wizard-section-title"><span nz-icon nzType="deployment-unit"></span> Construction du pipeline</div>
 
-    <!-- Recettes -->
-    <div class="recipes">
-      <div *ngFor="let r of recipes" class="recipe-wrapper">
-        <button nz-button nzType="dashed" class="recipe-btn" (click)="applyRecipe(r)">
-          <strong>{{ r.name }}</strong>
-          <span>{{ r.desc }}</span>
+    <!-- Recettes / explorateur de schéma / toggle Visuel-Import : répartis sur toute la ligne -->
+    <div class="step3-toolbar">
+      <div class="step3-toolbar-group">
+        <button nz-button nzType="default" nzSize="small" (click)="openRecipesModal()">
+          <span nz-icon nzType="bulb"></span>
+          Pipelines
         </button>
-        <button nz-button nzType="text" class="recipe-eye-btn"
-          (click)="openRecipeModal(r); $event.stopPropagation()">
-          <span nz-icon nzType="eye" style="font-size:18px"></span>
+        <button nz-button nzType="default" nzSize="small" (click)="openSchemaExplorer()">
+          <span nz-icon nzType="database"></span>
+          Explorer le schéma PLaTon
         </button>
       </div>
-    </div>
-
-    <!-- Toggle Visuel / Import -->
-    <div class="mode-toggle">
-      <button nz-button nzSize="small"
-        [nzType]="!showImport ? 'primary' : 'default'"
-        (click)="enterVisualMode()">
-        <span nz-icon nzType="eye"></span> Visuel
-      </button>
-      <button nz-button nzSize="small"
-        [nzType]="showImport ? 'primary' : 'default'"
-        (click)="enterImportMode()">
-        <span nz-icon nzType="import"></span> Import
-      </button>
+      <div class="step3-toolbar-group">
+        <button nz-button nzSize="small"
+          [nzType]="!showImport ? 'primary' : 'default'"
+          (click)="enterVisualMode()">
+          <span nz-icon nzType="eye"></span> Visuel
+        </button>
+        <button nz-button nzSize="small"
+          [nzType]="showImport ? 'primary' : 'default'"
+          (click)="enterImportMode()">
+          <span nz-icon nzType="import"></span> Import
+        </button>
+      </div>
     </div>
 
     <!-- Import YAML/JSON -->
@@ -651,7 +586,7 @@ interface ImportErrorDisplay {
       <div class="pipeline" cdkDropList (cdkDropListDropped)="drop($event)">
 
         <div *ngIf="pipeline.length === 0" class="pipeline-empty">
-          Aucune étape - choisissez une recette ou ajoutez manuellement.
+          Aucune étape - choisissez un pipeline prédéfini ou ajoutez manuellement.
         </div>
 
         <div *ngFor="let s of pipeline; let si = index; trackBy: trackStepById"
@@ -840,29 +775,60 @@ interface ImportErrorDisplay {
           </button>
         </div>
       </div>
+    </ng-container>
 
-      <!-- Preview -->
-      <nz-divider nzText="Tester cette formule"></nz-divider>
+    </div>
+
+    <!-- Preview - uniquement en mode Visuel, comme avant (section à part, pas imbriquée dans
+         "Construction du pipeline" pour que les deux restent des cartes indépendantes). -->
+    <ng-container *ngIf="!showImport">
+    <div class="wizard-section">
+      <div class="wizard-section-title"><span nz-icon nzType="experiment"></span> Tester cette formule</div>
       <div class="preview-section">
         <div class="preview-inputs">
-          <nz-select [(ngModel)]="previewCourseId" (ngModelChange)="onPreviewCourseChange($event)"
-            nzPlaceHolder="Cours" nzShowSearch [nzLoading]="previewCoursesLoading" style="width:220px">
-            <nz-option *ngFor="let c of previewCourses" [nzValue]="c.id" [nzLabel]="c.name"></nz-option>
-          </nz-select>
-          <nz-select [(ngModel)]="previewCtx.activityId" nzPlaceHolder="Activité (optionnel)"
-            nzShowSearch nzAllowClear [nzLoading]="previewActivitiesLoading"
-            [nzDisabled]="!previewCourseId" style="width:220px">
-            <nz-option *ngFor="let a of previewActivities" [nzValue]="a.id" [nzLabel]="a.name"></nz-option>
-          </nz-select>
-          <nz-select [(ngModel)]="previewCtx.groupId" nzPlaceHolder="Groupe (optionnel)"
-            nzShowSearch nzAllowClear [nzDisabled]="!previewCourseId" style="width:200px">
-            <nz-option *ngFor="let g of previewGroups" [nzValue]="g.id" [nzLabel]="g.name"></nz-option>
-          </nz-select>
-          <nz-select [(ngModel)]="previewCtx.userId" nzPlaceHolder="Utilisateur (optionnel)"
-            nzShowSearch nzAllowClear [nzLoading]="previewStudentsLoading"
-            [nzDisabled]="!previewCourseId" style="width:220px">
-            <nz-option *ngFor="let s of previewStudents" [nzValue]="s.id" [nzLabel]="s.name"></nz-option>
-          </nz-select>
+          <div class="preview-field">
+            <label>Cours <mat-icon class="info-icon" nz-tooltip="Cours dans lequel chercher les données de test (toutes ressources PLaTon, recherche par nom). Ne filtre la requête que si l'étape 'fetch' a coché 'course_id' dans ses colonnes de contexte - sinon cette sélection sert juste à faire apparaître les activités/groupes/utilisateurs ci-dessous." nzTooltipPlacement="top">info_outline</mat-icon></label>
+            <nz-select [(ngModel)]="previewCourseId" (ngModelChange)="onPreviewCourseChange($event)"
+              nzPlaceHolder="Tous les cours" nzShowSearch [nzServerSearch]="true"
+              (nzOnSearch)="onCourseSearch($event)" [nzDropdownRender]="courseLoadMoreTpl"
+              [nzLoading]="previewCoursesLoading" style="width:260px">
+              <nz-option *ngFor="let c of previewCourses" [nzValue]="c.id" [nzLabel]="c.name"></nz-option>
+            </nz-select>
+            <ng-template #courseLoadMoreTpl>
+              <div *ngIf="previewCoursesHasMore" class="course-load-more">
+                <nz-divider style="margin:4px 0"></nz-divider>
+                <button nz-button nzType="link" nzBlock nzSize="small"
+                  [nzLoading]="previewCoursesLoading"
+                  (click)="$event.stopPropagation(); loadMoreCourses()">
+                  Voir plus
+                </button>
+              </div>
+            </ng-template>
+          </div>
+          <div class="preview-field">
+            <label>Activité <mat-icon class="info-icon" nz-tooltip="Filtre sur l'activité, uniquement si l'étape 'fetch' a coché 'activity_id' dans ses colonnes de contexte. Laissé vide, ce filtre est simplement omis de la requête (pas d'erreur, pas de résultat vide - les données de toutes les activités remontent)." nzTooltipPlacement="top">info_outline</mat-icon></label>
+            <nz-select [(ngModel)]="previewCtx.activityId" nzPlaceHolder="Toutes"
+              nzShowSearch nzAllowClear [nzLoading]="previewActivitiesLoading"
+              [nzDisabled]="!previewCourseId" style="width:220px">
+              <nz-option *ngFor="let a of previewActivities" [nzValue]="a.id" [nzLabel]="a.name"></nz-option>
+            </nz-select>
+          </div>
+          <div class="preview-field">
+            <label>Groupe <mat-icon class="info-icon" nz-tooltip="Filtre sur le groupe de TP, uniquement si l'étape 'fetch' a coché 'group_id' dans ses colonnes de contexte - déclenche alors une requête différente (jointure vers les membres du groupe) qui exige aussi qu'une activité soit sélectionnée ci-dessus, sinon l'étape est ignorée." nzTooltipPlacement="top">info_outline</mat-icon></label>
+            <nz-select [(ngModel)]="previewCtx.groupId" nzPlaceHolder="Aucun"
+              nzShowSearch nzAllowClear [nzLoading]="previewGroupsLoading"
+              [nzDisabled]="!previewCourseId" style="width:200px">
+              <nz-option *ngFor="let g of previewGroups" [nzValue]="g.id" [nzLabel]="g.name"></nz-option>
+            </nz-select>
+          </div>
+          <div class="preview-field">
+            <label>Utilisateur <mat-icon class="info-icon" nz-tooltip="Filtre sur cet apprenant précis, uniquement si l'étape 'fetch' a coché 'user_id' dans ses colonnes de contexte. Laissé vide alors que 'user_id' est coché : le filtre est omis, la requête remonte les données de TOUS les utilisateurs (pas une erreur - à surveiller, le résultat peut sembler valide sans être celui attendu)." nzTooltipPlacement="top">info_outline</mat-icon></label>
+            <nz-select [(ngModel)]="previewCtx.userId" nzPlaceHolder="Aucun"
+              nzShowSearch nzAllowClear [nzLoading]="previewStudentsLoading"
+              [nzDisabled]="!previewCourseId" style="width:220px">
+              <nz-option *ngFor="let s of previewStudents" [nzValue]="s.id" [nzLabel]="s.name"></nz-option>
+            </nz-select>
+          </div>
           <button nz-button nzType="primary" [nzLoading]="previewing" (click)="runPreview()">
             <span nz-icon nzType="experiment"></span> Tester
           </button>
@@ -881,7 +847,7 @@ interface ImportErrorDisplay {
           <div class="debug-context">
             <strong>Contexte utilisé :</strong>
             userId={{ previewCtx.userId || '-' }} &nbsp;|&nbsp;
-            activityId={{ previewCtx.activityId || '(TARGET_ACTIVITY_ID)' }} &nbsp;|&nbsp;
+            activityId={{ previewCtx.activityId || '-' }} &nbsp;|&nbsp;
             groupId={{ previewCtx.groupId || '-' }} &nbsp;|&nbsp;
             courseId={{ previewCourseId || '-' }}
           </div>
@@ -925,14 +891,15 @@ interface ImportErrorDisplay {
         </div>
         <div *ngIf="debugError" class="preview-error">{{ debugError }}</div>
       </div>
+    </div>
     </ng-container>
 
     <!-- Restriction de visibilité (optionnel, uniquement course/activity) -->
     <ng-container *ngIf="def.contextType === 'course' || def.contextType === 'activity'">
-      <nz-divider nzDashed></nz-divider>
-      <div class="global-threshold-section">
-        <div class="section-label">
-          <span style="color:#ff4d4f;font-weight:600">Restreindre la visibilité</span>
+      <div class="wizard-section">
+        <div class="wizard-section-title">
+          <span nz-icon nzType="eye-invisible" style="color:#ff4d4f"></span>
+          <span style="color:#ff4d4f">Restreindre la visibilité</span>
           <mat-icon class="info-icon"
             nz-tooltip="Optionnel. Un indicateur de contexte Cours ou Activité est visible par tous les rôles par défaut. Si son résultat expose des données nominatives (ex. performance détaillée par étudiant), sélectionnez ici les seuls rôles autorisés à le voir - par exemple Enseignant + Admin, pour l'exclure des étudiants."
             nzTooltipPlacement="right">info_outline</mat-icon>
@@ -947,6 +914,78 @@ interface ImportErrorDisplay {
       </div>
     </ng-container>
 
+    <div class="wizard-section">
+      <div class="wizard-section-title"><span nz-icon nzType="bell"></span> Événements déclencheurs</div>
+    <nz-form-item>
+      <nz-form-control>
+        <div style="display:flex;align-items:center;gap:10px">
+          <nz-switch [(ngModel)]="def.useTriggerEvents" (ngModelChange)="onUseTriggerEventsChange($event)"></nz-switch>
+          <span>Activer des événements déclencheurs</span>
+          <button nz-button nzType="link" nzSize="small" *ngIf="def.useTriggerEvents"
+            (click)="showEventHint = !showEventHint" style="margin-left:auto">
+            <span nz-icon nzType="question-circle"></span>
+            Comment configurer l'événement pour ce pipeline ?
+          </button>
+        </div>
+        <div style="margin-top:6px;font-size:12px;color:#999">
+          Activé : l'indicateur est recalculé en temps réel dès qu'un événement choisi survient.
+          Désactivé : l'indicateur est recalculé automatiquement chaque minute, sans événement précis.
+        </div>
+
+        <!-- Aide dynamique, propre au pipeline défini à l'étape ci-dessus (pas une modale : la
+             suggestion dépend d'un état qui change en direct avec le pipeline). Uniquement
+             pertinente si des événements déclencheurs sont effectivement utilisés. -->
+        <div class="event-hint-panel" *ngIf="def.useTriggerEvents && showEventHint">
+          <ng-container *ngIf="eventRuleHint() as hint; else noHintYet">
+            <p class="event-hint-intro">
+              Basé sur le pipeline défini ci-dessus - à vérifier/adapter dans "Autres" du
+              sélecteur d'événements, pas une configuration garantie.
+            </p>
+            <div class="event-hint-row">
+              <span class="event-hint-label">Table{{ hint.tables.length > 1 ? 's' : '' }} à surveiller</span>
+              <span class="event-hint-value">
+                <nz-tag *ngFor="let t of hint.tables">{{ t }}</nz-tag>
+              </span>
+            </div>
+            <div class="event-hint-row" *ngIf="hint.columns.length">
+              <span class="event-hint-label">Colonne(s) probablement pertinente(s)</span>
+              <span class="event-hint-value">
+                <nz-tag *ngFor="let c of hint.columns" nzColor="blue">{{ c }}</nz-tag>
+              </span>
+            </div>
+            <div class="event-hint-row event-hint-row--mapping">
+              <span class="event-hint-label">Mapping de contexte suggéré</span>
+              <div class="event-hint-mapping">
+                <div *ngFor="let m of hint.contextMapping" class="event-hint-mapping-row">
+                  <span>{{ m.label }}</span>
+                  <span [class.event-hint-mapping-missing]="!m.column">{{ m.column ?? 'non détecté - à choisir manuellement' }}</span>
+                </div>
+              </div>
+            </div>
+          </ng-container>
+          <ng-template #noHintYet>
+            <p class="event-hint-empty">
+              Ajoutez au moins une étape "Récupérer données" (fetch) au pipeline ci-dessus pour
+              voir une suggestion.
+            </p>
+          </ng-template>
+        </div>
+      </nz-form-control>
+    </nz-form-item>
+    <nz-form-item *ngIf="def.useTriggerEvents">
+      <nz-form-label [nzRequired]="true">Événements <mat-icon class="info-icon" nz-tooltip="Événements PLaTon qui déclenchent l'ingestion de nouvelles données. L'indicateur est recalculé automatiquement quand ces événements surviennent." nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
+      <nz-form-control>
+        <nz-select [(ngModel)]="def.requiredEvents" (ngModelChange)="onRequiredEventsChange($event)" nzMode="multiple"
+          nzPlaceHolder="Sélectionner un ou plusieurs événements configurés" style="width:100%">
+          <nz-option *ngFor="let evt of availableEventTypes"
+            [nzValue]="evt.name" [nzLabel]="evt.name + ' - ' + evt.label">
+          </nz-option>
+          <nz-option [nzValue]="OTHER_EVENT_OPTION" nzLabel="Autres (configurer un nouvel événement...)"></nz-option>
+        </nz-select>
+      </nz-form-control>
+    </nz-form-item>
+
+    </div>
   </div>
 
   <!-- ── Overlay sélection d'étape ──────────────────────────────────── -->
@@ -978,6 +1017,10 @@ interface ImportErrorDisplay {
       <button nz-button *ngIf="step > 0" (click)="step = step - 1">
         <span nz-icon nzType="left"></span> Précédent
       </button>
+      <button nz-button *ngIf="step < 2" [nzLoading]="saving" [disabled]="!def.name.trim()" (click)="submit()"
+        nz-tooltip="Enregistre l'indicateur tel quel, incomplet. Il n'apparaîtra pas aux utilisateurs tant qu'il n'est pas activé.">
+        <span nz-icon nzType="save"></span> Sauvegarder le brouillon
+      </button>
       <button nz-button nzType="primary" *ngIf="step < 2" (click)="nextStep()" [disabled]="!canProceed()">
         Suivant <span nz-icon nzType="right"></span>
       </button>
@@ -991,41 +1034,128 @@ interface ImportErrorDisplay {
 
 </div>
 
-<ng-template #recipeDetailTpl>
-  <div style="padding:8px 4px;font-size:13px;line-height:1.7">
+<!-- ── Modal pipelines prédéfinis : grille ou détail d'un pipeline (vue interne, jamais une
+     seconde modale par-dessus celle-ci) ────────────────────────────────────────────────── -->
+<ng-template #recipesModalTpl>
 
-    <div style="margin-bottom:18px">
-      <div style="font-weight:600;color:#1890ff;margin-bottom:6px;font-size:11px;text-transform:uppercase;letter-spacing:.6px">Objectif</div>
-      <p style="margin:0;color:#333">{{ activeRecipeDetail?.detail?.objectif }}</p>
+  <nz-tabs *ngIf="!selectedRecipe" [(nzSelectedIndex)]="recipesActiveTab" nzSize="small">
+    <nz-tab nzTitle="Prédéfinis">
+      <div class="recipes-grid">
+        <div class="recipe-card" *ngFor="let r of recipes" (click)="applyRecipeAndClose(r)">
+          <div class="recipe-card-title">
+            <span class="recipe-card-title-text">
+              <span nz-icon nzType="bulb" style="font-size:14px"></span>
+              {{ r.name }}
+            </span>
+            <button nz-button nzType="text" nzSize="small" class="recipe-card-eye"
+              (click)="showRecipeDetail(r); $event.stopPropagation()" nz-tooltip="Voir le détail">
+              <span nz-icon nzType="eye"></span>
+            </button>
+          </div>
+          <div class="recipe-card-body">{{ r.desc }}</div>
+        </div>
+      </div>
+    </nz-tab>
+
+    <nz-tab nzTitle="Depuis les indicateurs existants">
+      <div class="recipes-grid" *ngIf="existingPipelines.length; else noExisting">
+        <div class="recipe-card" *ngFor="let r of existingPipelines" (click)="applyRecipeAndClose(r)">
+          <div class="recipe-card-title">
+            <span class="recipe-card-title-text">
+              <span nz-icon nzType="deployment-unit" style="font-size:14px"></span>
+              {{ r.name }}
+            </span>
+            <button nz-button nzType="text" nzSize="small" class="recipe-card-eye"
+              (click)="showRecipeDetail(r); $event.stopPropagation()" nz-tooltip="Voir le détail">
+              <span nz-icon nzType="eye"></span>
+            </button>
+          </div>
+          <div class="recipe-card-body">{{ r.desc }}</div>
+        </div>
+      </div>
+      <ng-template #noExisting>
+        <p class="section-hint">Aucun indicateur actif avec un pipeline pour l'instant.</p>
+      </ng-template>
+    </nz-tab>
+  </nz-tabs>
+
+  <!-- Vue détail - pas de bouton "Retour" séparé : le X de la modale sert de retour ici
+       (voir openRecipesModal(), nzOnCancel), et referme réellement la modale seulement
+       depuis la vue grille. -->
+  <div *ngIf="selectedRecipe as r">
+    <div class="recipe-detail">
+
+      <!-- Colonne gauche : contexte (objectif / utilisation / adaptation) pour les recettes
+           prédéfinies, ou simple liste "utilisé par" pour un pipeline issu d'indicateurs
+           existants (pas de texte curaté disponible dans ce cas). -->
+      <div class="recipe-detail-info">
+        <ng-container *ngIf="r.detail; else usedByBlock">
+          <div class="recipe-detail-section recipe-detail-section--objectif">
+            <div class="recipe-detail-section-title">
+              <span nz-icon nzType="aim"></span> Objectif
+            </div>
+            <p>{{ r.detail.objectif }}</p>
+          </div>
+
+          <div class="recipe-detail-section recipe-detail-section--utilisation">
+            <div class="recipe-detail-section-title">
+              <span nz-icon nzType="play-circle"></span> Utilisation
+            </div>
+            <p>{{ r.detail.utilisation }}</p>
+          </div>
+
+          <div class="recipe-detail-section recipe-detail-section--adapter">
+            <div class="recipe-detail-section-title">
+              <span nz-icon nzType="tool"></span> Comment adapter
+            </div>
+            <p>{{ r.detail.adapter }}</p>
+          </div>
+        </ng-container>
+        <ng-template #usedByBlock>
+          <div class="recipe-detail-section recipe-detail-section--objectif">
+            <div class="recipe-detail-section-title">
+              <span nz-icon nzType="deployment-unit"></span> Utilisé par
+            </div>
+            <p *ngFor="let name of r.usedBy">{{ name }}</p>
+          </div>
+        </ng-template>
+      </div>
+
+      <!-- Colonne droite : pipeline -->
+      <div class="recipe-detail-pipeline">
+        <div class="recipe-detail-pipeline-title">
+          Pipeline <span class="recipe-detail-pipeline-count">{{ r.pipeline.length }} étape{{ r.pipeline.length > 1 ? 's' : '' }}</span>
+        </div>
+        <div class="recipe-detail-steps">
+          <div class="recipe-detail-step" *ngFor="let s of r.pipeline; let i = index; let last = last">
+            <div class="recipe-detail-step-num">{{ i + 1 }}</div>
+            <div class="recipe-detail-step-body">
+              <span class="recipe-detail-step-type" [style.background]="stepTypeColor(s.type)">{{ s.type }}</span>
+              <span class="recipe-detail-step-label">{{ s.label }}</span>
+
+              <pre class="recipe-detail-step-code" *ngIf="s.type === 'js'">{{ s.jsCode }}</pre>
+
+              <div class="recipe-detail-step-info" *ngIf="s.type !== 'js'">
+                <div class="recipe-detail-step-info-row" *ngFor="let d of stepDetails(s)">
+                  <span class="recipe-detail-step-info-label">{{ d.label }} :</span>
+                  <span class="recipe-detail-step-info-value">{{ d.value }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="recipe-detail-step-connector" *ngIf="!last"></div>
+          </div>
+        </div>
+      </div>
+
     </div>
 
-    <div style="margin-bottom:18px">
-      <div style="font-weight:600;color:#52c41a;margin-bottom:6px;font-size:11px;text-transform:uppercase;letter-spacing:.6px">Utilisation</div>
-      <p style="margin:0;color:#333">{{ activeRecipeDetail?.detail?.utilisation }}</p>
+    <div class="recipe-detail-actions">
+      <button nz-button nzType="primary" (click)="applyRecipeAndClose(r)">
+        <span nz-icon nzType="check"></span> Utiliser ce pipeline
+      </button>
     </div>
-
-    <div style="margin-bottom:20px">
-      <div style="font-weight:600;color:#fa8c16;margin-bottom:6px;font-size:11px;text-transform:uppercase;letter-spacing:.6px">Comment adapter</div>
-      <p style="margin:0;color:#333">{{ activeRecipeDetail?.detail?.adapter }}</p>
-    </div>
-
-    <div style="border-top:1px solid #f0f0f0;padding-top:16px">
-      <div style="font-weight:600;color:#595959;margin-bottom:10px;font-size:11px;text-transform:uppercase;letter-spacing:.6px">Pipeline - {{ activeRecipeDetail?.pipeline?.length }} étapes</div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <tbody>
-          <tr *ngFor="let s of activeRecipeDetail?.pipeline; let i = index">
-            <td style="padding:6px 10px;border-bottom:1px solid #f0f0f0;color:#bbb;width:24px">{{ i + 1 }}</td>
-            <td style="padding:6px 10px;border-bottom:1px solid #f0f0f0;width:100px">
-              <span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;color:#fff"
-                [style.background]="stepTypeColor(s.type)">{{ s.type }}</span>
-            </td>
-            <td style="padding:6px 10px;border-bottom:1px solid #f0f0f0;color:#444">{{ s.label }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
   </div>
+
 </ng-template>
 
 <!-- ── Modal explorateur de schéma PLaTon ───────────────────────────────── -->
@@ -1371,57 +1501,20 @@ interface ImportErrorDisplay {
 
     .viz-field-icon { position: relative; }
 
-    .icon-picker {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      padding: 6px;
-      background: #fff;
-      border: 1px solid #d9d9d9;
-      border-radius: 4px;
-      width: 100%;
-      box-sizing: border-box;
-    }
-
-    .icon-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
-      gap: 4px;
-      width: 100%;
-    }
-
-    .icon-button {
+    .icon-preview {
       display: flex;
       align-items: center;
-      justify-content: center;
-      width: 36px;
-      height: 36px;
-      padding: 0;
-      border: 2px solid #d9d9d9;
-      border-radius: 3px;
-      background: #fff;
-      cursor: pointer;
-      transition: all 0.2s;
-      flex-shrink: 0;
-    }
-    .icon-button:hover {
-      border-color: #1890ff;
-      background: #f0f5ff;
-    }
-    .icon-button.selected {
-      border-color: #1890ff;
-      background: #e6f7ff;
-      font-weight: bold;
-    }
-    .icon-button mat-icon {
-      font-size: 24px;
-      width: 24px;
-      height: 24px;
+      gap: 8px;
+      padding: 6px 10px;
+      background: #fafafa;
+      border: 1px solid #e8e8e8;
+      border-radius: 6px;
+      width: 100%;
+      box-sizing: border-box;
       color: #595959;
+      font-size: 12px;
     }
-    .icon-button.selected mat-icon {
-      color: #1890ff;
-    }
+    .icon-preview mat-icon { color: #1890ff; }
 
     .dot {
       display: inline-block;
@@ -1436,30 +1529,12 @@ interface ImportErrorDisplay {
     .dot-orange { background: #fa8c16; }
     .dot-red    { background: #ff4d4f; }
 
-    .global-threshold-section {
-      padding: 4px 0 8px;
-    }
-
-    .reuse-section { margin-bottom: 12px; }
-    .reuse-panel {
-      margin-top: 10px;
-      padding: 12px 14px;
-      border: 1px dashed #d9d9d9;
-      border-radius: 6px;
-      background: #fafafa;
-    }
-    .reuse-preview { margin: 8px 0 4px; }
-    .reuse-step-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
     .section-hint { color: #888; font-size: 12px; margin: 4px 0 10px; }
-    .global-threshold-section .section-label {
-      font-size: 13px;
-      font-weight: 500;
-      color: #444;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
+
+    /* Sections bien délimitées dans chaque étape du wizard - remplace les simples nz-divider */
+    .wizard-section { border: 1px solid #1890ff; border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; background: #fff; }
+    .wizard-section:last-child { margin-bottom: 0; }
+    .wizard-section-title { font-size: 13px; font-weight: 600; color: #444; margin-bottom: 14px; display: flex; align-items: center; gap: 6px; }
 
     .threshold-row {
       display: flex;
@@ -1504,15 +1579,77 @@ interface ImportErrorDisplay {
       overflow: visible;
     }
 
-    .recipes { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
-    .recipe-wrapper { display: flex; align-items: stretch; }
-    .recipe-btn { display: flex; flex-direction: column; align-items: flex-start; height: auto; padding: 6px 12px; border-right: none; border-radius: 6px 0 0 6px; }
-    .recipe-btn strong { font-size: 13px; }
-    .recipe-btn span   { font-size: 11px; color: #888; }
-    .recipe-eye-btn { border-left: 1px dashed #d9d9d9; border-radius: 0 6px 6px 0; padding: 0 12px; color: #999; min-width: 42px; }
-    .recipe-eye-btn:hover { color: #1890ff; background: #e6f7ff; }
+    /* Modale "Pipelines" - style calqué sur .compare-card (modale "Comparaison par groupe") */
+    .recipes-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .recipe-card {
+      border: 1px solid #f0f0f0; border-radius: 10px; overflow: hidden;
+      background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.06); cursor: pointer;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .recipe-card:hover { border-color: #722ed1; box-shadow: 0 4px 12px rgba(114,46,209,.12); }
+    .recipe-card-title {
+      display: flex; align-items: center; justify-content: space-between; gap: 6px;
+      padding: 10px 14px; background: #f9f0ff; border-bottom: 1px solid #efdbff;
+      font-size: 13px; font-weight: 600; color: #531dab;
+    }
+    .recipe-card-title-text { display: flex; align-items: center; gap: 6px; }
+    .recipe-card-eye { color: #9254de; margin: -4px -6px -4px 0; }
+    .recipe-card-eye:hover { color: #531dab; background: #efdbff; }
+    .recipe-card-body { padding: 12px 14px; font-size: 12px; color: #888; line-height: 1.5; }
+
+    /* Détail d'un pipeline - paysage, 2 sections côte à côte */
+    .recipe-detail { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+    .recipe-detail-info { display: flex; flex-direction: column; gap: 14px; }
+    .recipe-detail-section { border-radius: 8px; padding: 12px 14px; background: #fafafa; border-left: 3px solid #d9d9d9; }
+    .recipe-detail-section-title { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 6px; }
+    .recipe-detail-section p { margin: 0; color: #333; font-size: 13px; line-height: 1.6; }
+    .recipe-detail-section--objectif { border-left-color: #1890ff; }
+    .recipe-detail-section--objectif .recipe-detail-section-title { color: #1890ff; }
+    .recipe-detail-section--utilisation { border-left-color: #52c41a; }
+    .recipe-detail-section--utilisation .recipe-detail-section-title { color: #52c41a; }
+    .recipe-detail-section--adapter { border-left-color: #fa8c16; }
+    .recipe-detail-section--adapter .recipe-detail-section-title { color: #fa8c16; }
+
+    .recipe-detail-pipeline { border: 1px solid #f0f0f0; border-radius: 8px; padding: 16px; background: #fff; }
+    .recipe-detail-pipeline-title { font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: #595959; margin-bottom: 14px; display: flex; align-items: baseline; gap: 8px; }
+    .recipe-detail-pipeline-count { font-weight: 400; text-transform: none; letter-spacing: 0; color: #bbb; font-size: 11px; }
+    .recipe-detail-steps { display: flex; flex-direction: column; }
+    .recipe-detail-step { position: relative; display: flex; align-items: flex-start; gap: 10px; padding-bottom: 18px; }
+    .recipe-detail-step-num {
+      width: 22px; height: 22px; border-radius: 50%; background: #f0f0f0; color: #888;
+      display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600;
+      flex-shrink: 0; z-index: 1;
+    }
+    .recipe-detail-step-body { display: flex; flex-direction: column; gap: 4px; padding-top: 2px; flex: 1; min-width: 0; }
+    .recipe-detail-step-type { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; color: #fff; width: fit-content; }
+    .recipe-detail-step-label { font-size: 13px; color: #444; }
+    .recipe-detail-step-connector { position: absolute; left: 10px; top: 22px; bottom: 0; width: 2px; background: #f0f0f0; }
+    .recipe-detail-step-info { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
+    .recipe-detail-step-info-row { display: flex; gap: 6px; font-size: 12px; }
+    .recipe-detail-step-info-label { color: #999; flex-shrink: 0; }
+    .recipe-detail-step-info-value { color: #555; word-break: break-word; }
+    .recipe-detail-step-code {
+      margin-top: 4px; padding: 8px 10px; background: #282c34; color: #abb2bf;
+      border-radius: 6px; font-family: 'Fira Code', 'Courier New', monospace; font-size: 12px;
+      line-height: 1.5; white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow-y: auto;
+    }
+    .recipe-detail-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
+
+    /* Aide dynamique "comment configurer l'événement pour ce pipeline" */
+    .event-hint-panel { margin-top: 10px; padding: 12px 14px; background: #f9f0ff; border: 1px solid #efdbff; border-radius: 6px; }
+    .event-hint-intro { margin: 0 0 10px; font-size: 12px; color: #531dab; font-style: italic; }
+    .event-hint-row { margin-bottom: 10px; display: flex; align-items: flex-start; gap: 10px; }
+    .event-hint-row:last-child { margin-bottom: 0; }
+    .event-hint-label { flex-shrink: 0; width: 220px; font-size: 12px; font-weight: 600; color: #595959; }
+    .event-hint-value { display: flex; flex-wrap: wrap; gap: 4px; }
+    .event-hint-mapping { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+    .event-hint-mapping-row { display: flex; justify-content: space-between; font-size: 12px; color: #333; }
+    .event-hint-mapping-missing { color: #bbb; font-style: italic; }
+    .event-hint-empty { margin: 0; font-size: 12px; color: #888; }
 
     .mode-toggle { display: flex; gap: 4px; margin-bottom: 10px; justify-content: flex-end; }
+    .step3-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    .step3-toolbar-group { display: flex; align-items: center; gap: 8px; }
 
     .json-editor {
       width: 100%; font-family: monospace; font-size: 12px;
@@ -1637,7 +1774,9 @@ interface ImportErrorDisplay {
     .step-picker-text span   { font-size: 11px; color: #888; }
 
     .preview-section { display: flex; flex-direction: column; gap: 10px; }
-    .preview-inputs  { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .preview-inputs  { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+    .preview-field   { display: flex; flex-direction: column; gap: 4px; }
+    .preview-field label { font-size: 12px; font-weight: 500; color: #595959; display: flex; align-items: center; gap: 4px; }
     .preview-result  { font-size: 15px; padding: 8px 14px; background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 8px; }
     .preview-error   { color: #ff4d4f; font-size: 13px; }
 
@@ -1840,13 +1979,20 @@ interface ImportErrorDisplay {
 export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
   private readonly modalRef     = inject(NzModalRef);
   private readonly modalSvc     = inject(NzModalService);
-  @ViewChild('recipeDetailTpl')   private recipeDetailTplRef!: TemplateRef<any>;
+  @ViewChild('recipesModalTpl')   private recipesModalTplRef!: TemplateRef<any>;
   @ViewChild('schemaExplorerTpl') private schemaExplorerTplRef!: TemplateRef<any>;
   private readonly hostEl = inject(ElementRef);
   private readonly modalData    = inject(NZ_MODAL_DATA, { optional: true }) as {
     indicator?: IndicatorDefinition;
     familyPreset?: IndicatorFamilyPreset;
     familyQueue?: IndicatorScope[];
+    /** Réutilisation choisie dans la modale de démarrage (blanc/réutiliser/import), avant
+     *  l'ouverture de ce wizard - alternative à `familyPreset` pour une création standard. */
+    reuseSeed?: { source: IndicatorDefinition; override: ReuseIndicatorResult };
+    /** Import YAML/JSON choisi et déjà validé dans la modale de démarrage (voir
+     *  NewIndicatorChoiceModalComponent.chooseImport()) - appliqué tel quel dès l'ouverture du
+     *  wizard, aucune re-validation nécessaire. */
+    importSeed?: { pipeline: PipelineStep[]; meta: ImportedIndicatorMeta };
   } | null;
   private readonly indicatorSvc = inject(IndicatorService);
   private readonly messageSvc   = inject(NzMessageService);
@@ -1872,6 +2018,9 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
   private readonly nameSearch$ = new Subject<string>();
   similarIndicators: IndicatorDefinition[] = [];
   similarSearching = false;
+
+  // ── Recherche serveur du cours (panneau "Tester cette formule") ─────────────
+  private readonly courseSearch$ = new Subject<string>();
   previewIndicator: IndicatorDefinition | null = null;
   previewModalVisible = false;
 
@@ -1901,30 +2050,55 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
 
   get importPlaceholder(): string {
     return this.importMode === 'yaml'
-      ? '# pipeline:\n#   - type: fetch\n#     label: "..."'
-      : '{ "pipeline": [ { "type": "fetch", "label": "...", "params": {} } ] }';
+      ? '# name: "..."\n# pipeline:\n#   - type: fetch\n#     label: "..."'
+      : '{ "name": "...", "pipeline": [ { "type": "fetch", "label": "...", "params": {} } ] }';
   }
 
   get importDocsText(): string {
     return `╔══════════════════════════════════════════════════════════════════╗
-║   RÉFÉRENCE COMPLÈTE - Format ${this.importMode.toUpperCase().padEnd(4)} - Pipeline DSL           ║
+║   RÉFÉRENCE COMPLÈTE - Format ${this.importMode.toUpperCase().padEnd(4)} - Indicateur complet       ║
 ╚══════════════════════════════════════════════════════════════════╝
 
 ${this.importMode === 'yaml' ? `STRUCTURE DE BASE
 ─────────────────
-pipeline:
+name: "..."                  # obligatoire - nom de l'indicateur
+description: "..."           # optionnel
+interpretationHint: "..."    # optionnel  - aide à l'analyse
+requiredEvents: [...]        # optionnel  - noms d'événements déclencheurs
+contextType: learner         # optionnel  - learner | teacher | admin | course | activity | group
+thresholds:                  # optionnel  - { good, warning, critical }
+  good: 80
+visualizations:               # optionnel  - liste de { label, type, icon, color, unit }
+  - label: "Vue principale"
+    type: card
+pipeline:                    # obligatoire - liste d'étapes
   - type: <type>      # obligatoire - nom technique de l'étape (voir liste ci-dessous)
     label: "..."      # optionnel  - nom affiché dans le builder (généré auto si absent)
     params:           # obligatoire - paramètres propres à chaque type
-      ...` : `{
-  "pipeline": [
+      ...
+
+Seul un champ absent de l'import conserve la valeur déjà saisie dans le formulaire ; "name" et
+"pipeline" doivent toujours être présents.` : `{
+  "name": "...",                  // obligatoire - nom de l'indicateur
+  "description": "...",           // optionnel
+  "interpretationHint": "...",    // optionnel  - aide à l'analyse
+  "requiredEvents": [...],        // optionnel  - noms d'événements déclencheurs
+  "contextType": "learner",       // optionnel  - learner | teacher | admin | course | activity | group
+  "thresholds": { "good": 80 },   // optionnel  - { good, warning, critical }
+  "visualizations": [             // optionnel  - liste de { label, type, icon, color, unit }
+    { "label": "Vue principale", "type": "card" }
+  ],
+  "pipeline": [                   // obligatoire - liste d'étapes
     {
       "type": "<type>",    // obligatoire - nom technique (voir liste ci-dessous)
       "label": "...",      // optionnel  - affiché dans le builder (généré auto si absent)
       "params": { ... }    // obligatoire - paramètres propres à chaque type
     }
   ]
-}`}
+}
+
+Seul un champ absent de l'import conserve la valeur déjà saisie dans le formulaire ; "name" et
+"pipeline" doivent toujours être présents.`}
 
 ══════════════════════════════════════════════════════════════════
   TYPES D'ÉTAPES DISPONIBLES
@@ -2057,7 +2231,8 @@ ${this.importMode === 'yaml' ? `│
 ══════════════════════════════════════════════════════════════════
   EXEMPLE COMPLET - Note moyenne d'un apprenant
 ══════════════════════════════════════════════════════════════════
-${this.importMode === 'yaml' ? `pipeline:
+${this.importMode === 'yaml' ? `name: "Note moyenne"
+pipeline:
   - type: fetch
     params:
       table: SessionData
@@ -2071,6 +2246,7 @@ ${this.importMode === 'yaml' ? `pipeline:
   - type: round
     params:
       decimals: 1` : `{
+  "name": "Note moyenne",
   "pipeline": [
     { "type": "fetch",     "params": { "table": "SessionData", "contextFields": ["user_id","activity_id"] } },
     { "type": "extract",   "params": { "extractField": "grade" } },
@@ -2086,13 +2262,94 @@ ${this.importMode === 'yaml' ? `pipeline:
   };
 
   availableEventTypes: { name: string; label: string }[] = [];
+  readonly OTHER_EVENT_OPTION = '__create_new__';
+
+  /** L'option "Autres" du sélecteur d'événements n'est pas un vrai événement - elle ouvre le
+   *  gestionnaire d'événements & règles directement depuis le wizard, puis se retire elle-même
+   *  de la sélection (elle ne doit jamais être envoyée au backend comme requiredEvents). */
+  onRequiredEventsChange(values: string[]): void {
+    if (!values.includes(this.OTHER_EVENT_OPTION)) return;
+    this.def.requiredEvents = values.filter(v => v !== this.OTHER_EVENT_OPTION);
+    const ref = this.modalSvc.create({
+      nzTitle: 'Événements & déclencheurs',
+      nzContent: EventRuleManagerComponent,
+      nzFooter: null,
+      nzWidth: '80vw',
+      nzCentered: true,
+      nzBodyStyle: { 'max-height': '80vh', 'overflow-y': 'auto' },
+    });
+    ref.afterClose.subscribe(() => {
+      this.indicatorSvc.getEventTypes(true).subscribe({
+        next: types => { this.availableEventTypes = types; this.cdr.detectChanges(); },
+        error: () => {},
+      });
+    });
+  }
+
+  // ── Aide dynamique "comment configurer l'événement pour ce pipeline" ────────
+  showEventHint = false;
+
+  private static readonly CONTEXT_FIELD_PATTERNS: { label: string; patterns: string[] }[] = [
+    { label: 'Utilisateur concerné', patterns: ['user_id'] },
+    { label: 'Cours',                patterns: ['course_id'] },
+    { label: 'Activité',             patterns: ['activity_id'] },
+    { label: 'Session',              patterns: ['session_id'] },
+  ];
+
+  /** Analyse le pipeline courant (étape Formules) pour suggérer une configuration de règle
+   *  event-rule plausible : table(s) à surveiller, colonnes probablement pertinentes, mapping
+   *  de contexte - une suggestion à vérifier/adapter, jamais une garantie (un pipeline avec
+   *  plusieurs jointures ou une étape "js" ne se réduit pas forcément à une seule table). */
+  eventRuleHint(): {
+    tables: string[];
+    columns: string[];
+    contextMapping: { label: string; column: string | null }[];
+  } | null {
+    const fetchStep = this.pipeline.find(s => s.type === 'fetch');
+    if (!fetchStep) return null;
+
+    const tables = new Set<string>();
+    if (fetchStep.table) tables.add(fetchStep.table);
+    for (const s of this.pipeline) {
+      if (s.type === 'join' && s.joinTable) tables.add(s.joinTable);
+    }
+
+    const columns = new Set<string>();
+    for (const s of this.pipeline) {
+      if (s.type === 'extract' && s.extractField) columns.add(s.extractField);
+      if (s.type === 'filter' && s.filterField) columns.add(s.filterField);
+      if (s.type === 'groupBy' && s.groupField) columns.add(s.groupField);
+      if (s.type === 'findFirst') {
+        if (s.whereField) columns.add(s.whereField);
+        if (s.sortField) columns.add(s.sortField);
+      }
+    }
+
+    const contextFields = [...(fetchStep.contextFields ?? [])];
+    for (const s of this.pipeline) {
+      if (s.type === 'join' && s.joinContextFields) contextFields.push(...s.joinContextFields);
+    }
+
+    const contextMapping = IndicatorBuilderComponent.CONTEXT_FIELD_PATTERNS.map(({ label, patterns }) => ({
+      label,
+      column: contextFields.find(f => patterns.some(p => f === p || f.includes(p))) ?? null,
+    }));
+
+    return { tables: [...tables], columns: [...columns], contextMapping };
+  }
 
   // Label-picker du panneau de test : sélection en cascade Cours → Groupe/Activité/Utilisateur
   previewCourseId: string | null = null;
   previewCourses: TeacherCourse[] = [];
   previewCoursesLoading = false;
+  // Pagination "charger plus" (10 par page) sur la recherche de cours - voir loadMoreCourses().
+  private previewCoursesQuery = '';
+  private previewCoursesOffset = 0;
+  previewCoursesHasMore = false;
   previewActivities: CourseActivity[] = [];
   previewActivitiesLoading = false;
+  previewGroups: { id: string; name: string }[] = [];
+  previewGroupsLoading = false;
   previewStudents: { id: string; name: string }[] = [];
   previewStudentsLoading = false;
 
@@ -2296,44 +2553,27 @@ ${this.importMode === 'yaml' ? `pipeline:
     });
   }
 
-  get previewGroups(): { id: string; name: string }[] {
-    return this.previewCourses.find(c => c.id === this.previewCourseId)?.groups ?? [];
-  }
-
   readonly stepCatalog = STEP_CATALOG;
   readonly recipes     = FORMULA_RECIPES;
-  activeRecipeDetail: (typeof FORMULA_RECIPES)[number] | null = null;
+  readonly CONTEXT_LABELS = CONTEXT_LABELS;
+  readonly contextIcon = contextIcon;
+  selectedRecipe: PipelineCatalogItem | null = null;
+  // Onglet "Depuis les indicateurs existants" de la modale Pipelines - chargé une seule fois à
+  // la première ouverture (indicateurs ACTIFS uniquement, un brouillon peut être incomplet),
+  // dédupliqué par contenu réel du pipeline (type+params, l'id et le label sont ignorés).
+  existingPipelines: PipelineCatalogItem[] = [];
+  private existingPipelinesLoaded = false;
+  recipesActiveTab = 0;
   readonly contextFilterCols = [
     { value: 'user_id',     label: 'user_id - apprenant courant' },
     { value: 'activity_id', label: 'activity_id - activité sélectionnée' },
     { value: 'course_id',   label: 'course_id - cours sélectionné' },
   ];
 
-  // ── Réutiliser un indicateur existant (capitalisation) ─────────────────────
-  reusableIndicators: IndicatorDefinition[] = [];
-  showReusePanel = false;
-  reuseSourceId: string | null = null;
+  // ── Réutiliser un indicateur existant (capitalisation) - choix fait en amont dans la modale
+  //    de démarrage (NewIndicatorChoiceModalComponent) ; ce composant ne fait plus qu'appliquer
+  //    le résultat (`modalData.reuseSeed`) via composeFromReuseSource(), voir ngOnInit. ─────────
   reuseAppliedName: string | null = null;
-
-  onSelectReuseSource(id: string | null): void {
-    const src = this.reusableIndicators.find(i => i.id === id);
-    if (!src) return;
-
-    const ref = this.modalSvc.create<ReuseIndicatorModalComponent, { source: IndicatorDefinition }>({
-      nzTitle: 'Réutiliser un indicateur existant',
-      nzContent: ReuseIndicatorModalComponent,
-      nzData: { source: src },
-      nzFooter: null,
-      nzWidth: 560,
-    });
-    ref.afterClose.subscribe((result: ReuseIndicatorResult | null | undefined) => {
-      if (result) {
-        this.composeFromReuseSource(src, result);
-      } else {
-        this.reuseSourceId = null;
-      }
-    });
-  }
 
   private composeFromReuseSource(src: IndicatorDefinition, override: ReuseIndicatorResult): void {
     // Étape 1 (Général)
@@ -2341,6 +2581,7 @@ ${this.importMode === 'yaml' ? `pipeline:
     this.def.description        = src.description || '';
     this.def.interpretationHint = src.interpretationHint || '';
     this.def.requiredEvents     = [...(src.requiredEvents || [])];
+    this.def.useTriggerEvents   = this.def.requiredEvents.length > 0;
 
     // Étape 2 (Contexte / seuils / visualisations)
     this.def.contextType = src.contextType ?? 'learner';
@@ -2375,32 +2616,15 @@ ${this.importMode === 'yaml' ? `pipeline:
       fetchStep.params = { ...fetchStep.params, contextFields: fields };
     }
 
-    this.pipeline = cloned.map((s: any) => this.dehydrateStep(s));
+    this.pipeline = cloned.map((s: any) => dehydrateStep(s));
     this.def.baseIndicatorId = src.id;
     this.reuseAppliedName = src.name;
     this.messageSvc.success(`"${src.name}" copié comme point de départ.`);
   }
-  readonly availableIcons = [
-    'trending_up', 'trending_down', 'star', 'repeat', 'check_circle',
-    'access_time', 'analytics', 'speed', 'emoji_events', 'school',
-    'quiz', 'assignment', 'bar_chart', 'show_chart', 'timeline', 'groups', 'leaderboard',
-    'pie_chart', 'scatter_plot', 'equalizer', 'moving', 'percent',
-    'target', 'favorite', 'grade', 'done', 'warning',
-    'info', 'help', 'description', 'document_scanner', 'receipt_long',
-    'paid', 'money', 'trending_flat', 'swap_calls', 'call_split',
-    'merge_type', 'account_tree', 'manage_search', 'task', 'checklist',
-  ];
-
-  platonSchema: PlatonTable[] = [];
+  platonSchema: PlatonTableSchema[] = [];
   schemaLoading = false;
 
   private readonly _colsCache = new Map<string, { value: string; label: string }[]>();
-
-  private readonly STEP_TYPE_LABELS: Record<StepType, string> = {
-    fetch: 'Récupérer données', join: 'Jointure', filter: 'Filtrer',
-    groupBy: 'Grouper par', findFirst: 'Premier résultat', extract: 'Extraire champ',
-    aggregate: 'Agréger', round: 'Arrondir', divide: 'Diviser', js: 'Code JS',
-  };
 
   // ── Modèle du formulaire ─────────────────────────────────────────────────
 
@@ -2409,11 +2633,15 @@ ${this.importMode === 'yaml' ? `pipeline:
     description: string;
     interpretationHint: string;
     requiredEvents: string[];
+    /** Flag UI-only (jamais envoyé au backend) : pilote l'affichage du bloc "Événements" à
+     *  l'étape Formules. Décoché → requiredEvents vide, l'indicateur est recalculé par le
+     *  cron minute côté serveur plutôt que par un événement précis. */
+    useTriggerEvents: boolean;
     contextType: IndicatorScope;
     thresholds: { good: number | null; warning: number | null; critical: number | null } | null;
     visibilityRoles: string[] | null;
     baseIndicatorId: string | null;
-  } = { name: '', description: '', interpretationHint: '', requiredEvents: [], contextType: 'learner', thresholds: null, visibilityRoles: null, baseIndicatorId: null };
+  } = { name: '', description: '', interpretationHint: '', requiredEvents: [], useTriggerEvents: false, contextType: 'learner', thresholds: null, visibilityRoles: null, baseIndicatorId: null };
 
   readonly visibilityRoleOptions: { value: string; label: string }[] = [
     { value: 'student', label: 'Étudiant' },
@@ -2444,20 +2672,61 @@ ${this.importMode === 'yaml' ? `pipeline:
       next: types => { this.availableEventTypes = types; this.cdr.detectChanges(); },
       error: () => { this.availableEventTypes = []; },
     });
-    if (this.modalData?.indicator) this.hydrate(this.modalData.indicator);
-    else if (this.modalData?.familyPreset) this.applyFamilyPreset(this.modalData.familyPreset);
+    if (this.modalData?.indicator) {
+      this.hydrate(this.modalData.indicator);
+    } else {
+      // familyPreset pose d'abord les valeurs par défaut (nom, contexte du slot, famille) ;
+      // reuseSeed/importSeed viennent ensuite écraser nom/description/pipeline/etc. depuis
+      // l'indicateur source ou l'import choisi - mais jamais le contexte, qui reste imposé par
+      // le slot de famille en cours.
+      if (this.modalData?.familyPreset) this.applyFamilyPreset(this.modalData.familyPreset);
+      if (this.modalData?.reuseSeed) {
+        this.composeFromReuseSource(this.modalData.reuseSeed.source, this.modalData.reuseSeed.override);
+        if (this.modalData?.familyPreset) this.def.contextType = this.modalData.familyPreset.contextType;
+      }
+      if (this.modalData?.importSeed) {
+        // Déjà validé (y compris colonnes/tables) dans la modale de choix initial - simple
+        // application, aucune re-validation ni fallback d'erreur nécessaire ici.
+        this.pipeline = this.modalData.importSeed.pipeline;
+        this.applyImportedMeta(this.modalData.importSeed.meta);
+        if (this.modalData?.familyPreset) this.def.contextType = this.modalData.familyPreset.contextType;
+      }
+    }
 
-    this.indicatorSvc.loadAllForAdmin().subscribe({
-      next: all => {
-        this.reusableIndicators = all.filter(i => i.id !== this.modalData?.indicator?.id);
+    // Chargement initial : les 10 premiers cours (toutes ressources PLaTon, pas seulement
+    // celles de l'utilisateur courant - voir courseSearch$ ci-dessous pour la recherche, et
+    // loadMoreCourses() pour charger la suite, 10 par 10).
+    this.previewCoursesLoading = true;
+    this.indicatorSvc.searchCourses('').subscribe({
+      next: courses => {
+        this.previewCourses = courses;
+        this.previewCoursesOffset = courses.length;
+        this.previewCoursesHasMore = courses.length === 10;
+        this.previewCoursesLoading = false;
         this.cdr.detectChanges();
       },
-      error: () => { this.reusableIndicators = []; },
+      error: () => { this.previewCoursesLoading = false; },
     });
 
-    this.previewCoursesLoading = true;
-    this.indicatorSvc.getTeacherContext(getCurrentUserId()).subscribe({
-      next: courses => { this.previewCourses = courses; this.previewCoursesLoading = false; this.cdr.detectChanges(); },
+    // Recherche serveur sur le sélecteur de cours (nzServerSearch) - debounce pour ne pas
+    // spammer le backend à chaque frappe, 10 résultats par page côté serveur (voir
+    // loadMoreCourses() pour la suite).
+    this.courseSearch$.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      switchMap(q => {
+        this.previewCoursesLoading = true;
+        this.previewCoursesQuery = q;
+        return this.indicatorSvc.searchCourses(q);
+      }),
+    ).subscribe({
+      next: courses => {
+        this.previewCourses = courses;
+        this.previewCoursesOffset = courses.length;
+        this.previewCoursesHasMore = courses.length === 10;
+        this.previewCoursesLoading = false;
+        this.cdr.detectChanges();
+      },
       error: () => { this.previewCoursesLoading = false; },
     });
 
@@ -2485,6 +2754,27 @@ ${this.importMode === 'yaml' ? `pipeline:
     this.nameSearch$.next(value);
   }
 
+  onCourseSearch(value: string): void {
+    this.courseSearch$.next(value);
+  }
+
+  /** Ajoute (n'écrase pas) la page suivante de cours - déclenché en scrollant jusqu'en bas du
+   *  menu déroulant (nzScrollToBottom), même recherche que celle actuellement tapée. */
+  loadMoreCourses(): void {
+    if (this.previewCoursesLoading || !this.previewCoursesHasMore) return;
+    this.previewCoursesLoading = true;
+    this.indicatorSvc.searchCourses(this.previewCoursesQuery, this.previewCoursesOffset).subscribe({
+      next: courses => {
+        this.previewCourses = [...this.previewCourses, ...courses];
+        this.previewCoursesOffset += courses.length;
+        this.previewCoursesHasMore = courses.length === 10;
+        this.previewCoursesLoading = false;
+        this.cdr.detectChanges();
+      },
+      error: () => { this.previewCoursesLoading = false; },
+    });
+  }
+
   // ── Création d'un nouveau type d'événement ("Autres…" dans le sélecteur) ──
 
   openPreview(ind: IndicatorDefinition): void {
@@ -2498,6 +2788,7 @@ ${this.importMode === 'yaml' ? `pipeline:
     this.previewCtx.groupId = '';
     this.previewCtx.activityId = '';
     this.previewActivities = [];
+    this.previewGroups = [];
     this.previewStudents = [];
     if (!courseId) return;
 
@@ -2505,6 +2796,15 @@ ${this.importMode === 'yaml' ? `pipeline:
     this.indicatorSvc.getCourseActivities(courseId).subscribe({
       next: activities => { this.previewActivities = activities; this.previewActivitiesLoading = false; this.cdr.detectChanges(); },
       error: () => { this.previewActivitiesLoading = false; },
+    });
+
+    // Chargement dédié plutôt que dérivé du cache de recherche de cours (previewCourses) : ce
+    // cache est remplacé à chaque nouvelle recherche ou page suivante, et peut ne plus contenir
+    // le cours sélectionné - les groupes semblaient alors "ne jamais charger".
+    this.previewGroupsLoading = true;
+    this.indicatorSvc.getCourseGroups(courseId).subscribe({
+      next: groups => { this.previewGroups = groups; this.previewGroupsLoading = false; this.cdr.detectChanges(); },
+      error: () => { this.previewGroupsLoading = false; },
     });
 
     this.previewStudentsLoading = true;
@@ -2517,9 +2817,18 @@ ${this.importMode === 'yaml' ? `pipeline:
   // ── Navigation ───────────────────────────────────────────────────────────
 
   canProceed(): boolean {
-    if (this.step === 0) return !!this.def.name.trim() && this.def.requiredEvents.length > 0;
+    if (this.step === 0) return !!this.def.name.trim();
     if (this.step === 1) return !!this.def.contextType && this.vizList.length > 0;
     return true;
+  }
+
+  /** Décoché → on vide la sélection pour ne jamais soumettre un requiredEvents "fantôme", et on
+   *  referme l'aide (plus pertinente sans événements activés). */
+  onUseTriggerEventsChange(enabled: boolean): void {
+    if (!enabled) {
+      this.def.requiredEvents = [];
+      this.showEventHint = false;
+    }
   }
 
   goToStep(target: number): void {
@@ -2619,7 +2928,7 @@ ${this.importMode === 'yaml' ? `pipeline:
 
   removeStep(i: number): void { this.pipeline.splice(i, 1); }
 
-  applyRecipe(r: (typeof FORMULA_RECIPES)[0]): void {
+  applyRecipe(r: PipelineCatalogItem): void {
     this.pipeline = r.pipeline.map(s => ({ ...s, id: crypto.randomUUID() })) as PipelineStep[];
     if (this.showImport) {
       this.importText = this.pipelineToText(this.pipeline, this.importMode);
@@ -2627,15 +2936,118 @@ ${this.importMode === 'yaml' ? `pipeline:
     }
   }
 
-  openRecipeModal(r: (typeof FORMULA_RECIPES)[0]): void {
-    this.activeRecipeDetail = r;
-    this.modalSvc.create({
-      nzTitle: r.name,
-      nzContent: this.recipeDetailTplRef,
-      nzWidth: 580,
+  /** Les recettes ne s'affichent plus en permanence dans l'étape Formules (ça devenait trop
+   *  chargé visuellement) - même principe que "Explorer le schéma PLaTon" : un bouton qui ouvre
+   *  une modale dédiée. Le détail d'un pipeline (bouton œil) est une VUE interne de cette même
+   *  modale (`selectedRecipe`), jamais une seconde modale par-dessus - règle du projet : pas de
+   *  modale imbriquée, sauf sur le wizard lui-même. */
+  private recipesModalRef: NzModalRef | null = null;
+
+  openRecipesModal(): void {
+    this.selectedRecipe = null;
+    this.recipesActiveTab = 0;
+    this.loadExistingPipelines();
+    this.recipesModalRef = this.modalSvc.create({
+      nzTitle: 'Pipelines',
+      nzContent: this.recipesModalTplRef,
+      nzWidth: 820,
       nzCentered: true,
       nzFooter: null,
+      // Le X sert de "retour" tant qu'on est sur la vue détail (pas de bouton dédié) - ne
+      // referme réellement la modale que depuis la vue grille.
+      nzOnCancel: () => {
+        if (this.selectedRecipe) { this.backToRecipesGrid(); return false; }
+        return true;
+      },
     });
+  }
+
+  /** Construit l'onglet "Depuis les indicateurs existants" : un pipeline par groupe
+   *  d'indicateurs (actifs uniquement) partageant EXACTEMENT le même contenu de pipeline
+   *  (type+params de chaque étape - l'id et le label affiché n'entrent pas dans la comparaison). */
+  private loadExistingPipelines(): void {
+    if (this.existingPipelinesLoaded) return;
+    this.indicatorSvc.loadIndicators().subscribe(indicators => {
+      const groups = new Map<string, { names: string[]; rawPipeline: any[] }>();
+      for (const ind of indicators) {
+        const rawPipeline = ind.formula?.pipeline;
+        if (!rawPipeline?.length) continue;
+        const fingerprint = JSON.stringify(rawPipeline.map((s: any) => ({ type: s.type, params: s.params })));
+        const group = groups.get(fingerprint);
+        if (group) group.names.push(ind.name);
+        else groups.set(fingerprint, { names: [ind.name], rawPipeline });
+      }
+      this.existingPipelines = Array.from(groups.values()).map(g => ({
+        name: g.names.length > 1 ? `${g.names[0]} (+${g.names.length - 1} autre${g.names.length > 2 ? 's' : ''})` : g.names[0],
+        desc: `${g.rawPipeline.length} étape${g.rawPipeline.length > 1 ? 's' : ''}`,
+        usedBy: g.names,
+        pipeline: g.rawPipeline.map(s => dehydrateStep(s)) as Omit<PipelineStep, 'id'>[],
+      }));
+      this.existingPipelinesLoaded = true;
+      this.cdr.markForCheck();
+    });
+  }
+
+  /** Détail complet d'une étape pour la vue "Pipeline" des cartes (Prédéfinis / Existants) - le
+   *  type JS est traité à part dans le template (bloc de code en lecture seule). */
+  protected stepDetails(s: PipelineStep): { label: string; value: string }[] {
+    switch (s.type) {
+      case 'fetch':
+        return [
+          { label: 'Table', value: s.table || '—' },
+          { label: 'Filtrer par contexte', value: s.contextFields?.length ? s.contextFields.join(', ') : '—' },
+          { label: 'Requête groupe de TP', value: s.useGroupContext ? 'Oui' : 'Non' },
+        ];
+      case 'join':
+        return [
+          { label: 'Table jointe', value: s.joinTable || '—' },
+          { label: 'Type de jointure', value: (s.joinType || 'left').toUpperCase() },
+          { label: 'Clé left', value: s.joinLeftKey || '—' },
+          { label: 'Clé right', value: s.joinRightKey || '—' },
+          { label: 'Filtrer par contexte', value: s.joinContextFields?.length ? s.joinContextFields.join(', ') : '—' },
+        ];
+      case 'filter':
+        return [
+          { label: 'Champ', value: s.filterField || '—' },
+          { label: 'Opérateur', value: s.filterOperator || '—' },
+          { label: 'Valeur', value: s.filterValue != null ? String(s.filterValue) : '—' },
+        ];
+      case 'groupBy':
+        return [{ label: 'Grouper par', value: s.groupField || '—' }];
+      case 'findFirst':
+        return [
+          { label: 'Condition (champ)', value: s.whereField || '—' },
+          { label: 'Valeur attendue', value: s.whereValue != null ? String(s.whereValue) : '—' },
+          { label: 'Trier par', value: s.sortField || '—' },
+        ];
+      case 'extract':
+        return [{ label: 'Champ à extraire', value: s.extractField || '—' }];
+      case 'aggregate':
+        return [{ label: 'Fonction', value: s.aggregateFn || '—' }];
+      case 'round':
+        return [{ label: 'Décimales', value: s.decimals != null ? String(s.decimals) : '—' }];
+      case 'divide':
+        return [{ label: 'Diviser par', value: s.divideBy != null ? String(s.divideBy) : '—' }];
+      default:
+        return [];
+    }
+  }
+
+  showRecipeDetail(r: PipelineCatalogItem): void {
+    this.selectedRecipe = r;
+    this.recipesModalRef?.updateConfig({ nzTitle: r.name, nzWidth: 920 });
+  }
+
+  backToRecipesGrid(): void {
+    this.selectedRecipe = null;
+    this.recipesModalRef?.updateConfig({ nzTitle: 'Pipelines', nzWidth: 820 });
+  }
+
+  applyRecipeAndClose(r: PipelineCatalogItem): void {
+    this.applyRecipe(r);
+    this.recipesModalRef?.close();
+    this.recipesModalRef = null;
+    this.selectedRecipe = null;
   }
 
   drop(event: CdkDragDrop<PipelineStep[]>): void {
@@ -2763,48 +3175,84 @@ ${this.importMode === 'yaml' ? `pipeline:
     this.importText = this.pipelineToText(this.pipeline, mode);
   }
 
-  /** Sérialise le pipeline courant (visuel ou importé) en YAML/JSON pour ré-édition. */
+  /** Sérialise l'indicateur courant (nom, description, événements, seuils, visualisations et
+   *  pipeline) en YAML/JSON pour ré-édition - un export produit ici doit pouvoir être
+   *  ré-importé à l'identique par parseStep3Text(). */
   private pipelineToText(pipeline: PipelineStep[], mode: 'yaml' | 'json'): string {
     if (!pipeline.length) return '';
-    const raw = {
+    const raw: Record<string, unknown> = {
+      name: this.def.name || undefined,
+      description: this.def.description || undefined,
+      interpretationHint: this.def.interpretationHint || undefined,
+      requiredEvents: this.def.requiredEvents.length ? this.def.requiredEvents : undefined,
+      contextType: this.def.contextType,
+      thresholds: this.def.thresholds ?? undefined,
+      visualizations: this.vizList.length
+        ? this.vizList.map(v => ({ label: v.label, type: v.type, icon: v.icon, color: v.color, unit: v.unit }))
+        : undefined,
       pipeline: pipeline.map(s => ({
         type: s.type,
         label: s.label,
         params: this.extractParams(s),
       })),
     };
+    Object.keys(raw).forEach(k => raw[k] === undefined && delete raw[k]);
     return mode === 'yaml' ? yaml.dump(raw, { lineWidth: -1 }) : JSON.stringify(raw, null, 2);
   }
 
   applyImport(): void {
     this.importError = null;
     try {
-      const pipeline = this.parseStep3Text(this.importText, this.importMode);
+      const { pipeline, meta } = parseIndicatorImport(this.importText, this.importMode, this.platonSchema);
       this.pipeline = pipeline;
+      this.applyImportedMeta(meta);
       this.showImport = false;
-      this.messageSvc.success('Pipeline importé');
+      this.messageSvc.success('Indicateur importé');
       this.cdr.detectChanges();
     } catch (e: any) {
-      this.importError = e instanceof PipelineError
-        ? { main: e.message, available: e.available, availableLabel: e.availableLabel, wrongValue: e.wrongValue, availableDisplay: e.availableDisplay }
-        : { main: e.message };
+      this.importError = toImportErrorDisplay(e);
+    }
+  }
+
+  /** Applique les champs (hors pipeline) d'un import à `def`/`vizList` - un champ absent de
+   *  l'import (donc non présent dans `meta`) laisse la valeur déjà saisie dans le formulaire
+   *  inchangée, seul `name` est toujours écrasé puisqu'il est obligatoire dans l'import. */
+  private applyImportedMeta(meta: ImportedIndicatorMeta): void {
+    this.def.name = meta.name;
+    if (meta.description !== undefined) this.def.description = meta.description;
+    if (meta.interpretationHint !== undefined) this.def.interpretationHint = meta.interpretationHint;
+    if (meta.requiredEvents !== undefined) {
+      this.def.requiredEvents = meta.requiredEvents;
+      this.def.useTriggerEvents = meta.requiredEvents.length > 0;
+    }
+    if (meta.contextType !== undefined) this.def.contextType = meta.contextType;
+    if (meta.thresholds !== undefined) {
+      this.def.thresholds = meta.thresholds
+        ? { good: meta.thresholds.good ?? null, warning: meta.thresholds.warning ?? null, critical: meta.thresholds.critical ?? null }
+        : null;
+    }
+    if (meta.visualizations !== undefined && meta.visualizations.length > 0) {
+      this.vizList = meta.visualizations.map(v => ({
+        id:    crypto.randomUUID(),
+        label: v.label ?? 'Vue',
+        type:  (v.type as ViewVisualizationType) ?? 'card',
+        icon:  v.icon ?? 'analytics',
+        color: v.color ?? '#722ed1',
+        unit:  v.unit ?? '',
+      }));
     }
   }
 
   applySuggestion(suggestion: string): void {
     const wrong = this.importError?.wrongValue;
     if (!wrong) return;
-    const escaped = wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(`(["']?)\\b${escaped}\\b\\1`);
-    this.importText = this.importText.replace(re, `$1${suggestion}$1`);
+    this.importText = replaceValueInText(this.importText, wrong, suggestion);
     // Revalide sans fermer le panneau ni appliquer le pipeline
     try {
-      this.parseStep3Text(this.importText, this.importMode);
+      parseIndicatorImport(this.importText, this.importMode, this.platonSchema);
       this.importError = null;
     } catch (e: any) {
-      this.importError = e instanceof PipelineError
-        ? { main: e.message, available: e.available, availableLabel: e.availableLabel, wrongValue: e.wrongValue, availableDisplay: e.availableDisplay }
-        : { main: e.message };
+      this.importError = toImportErrorDisplay(e);
     }
     this.cdr.detectChanges();
   }
@@ -2846,276 +3294,6 @@ ${this.importMode === 'yaml' ? `pipeline:
     reader.readAsText(file);
   }
 
-  private parseStep3Text(text: string, mode: 'yaml' | 'json'): PipelineStep[] {
-    if (!text.trim()) throw new Error('Le champ est vide. Collez votre pipeline ci-dessus avant d\'appliquer.');
-    let raw: any;
-    try {
-      raw = mode === 'yaml' ? yaml.load(text) : JSON.parse(text);
-    } catch {
-      throw new Error(
-        mode === 'yaml'
-          ? 'Le YAML contient une erreur de syntaxe. Vérifiez l\'indentation (utilisez des espaces, pas des tabulations) et les guillemets.'
-          : 'Le JSON contient une erreur de syntaxe. Vérifiez les virgules, les guillemets et les accolades.'
-      );
-    }
-    if (!raw || typeof raw !== 'object') {
-      throw new Error('Le document doit commencer par "pipeline:" (YAML) ou { "pipeline": [...] } (JSON).');
-    }
-    if (!Array.isArray(raw.pipeline)) {
-      const wrongKey = Object.keys(raw).find(k => k !== 'pipeline');
-      if (wrongKey) {
-        throw new PipelineError(
-          `Clé racine "${wrongKey}" inconnue - le document doit commencer par "pipeline".`,
-          ['pipeline'], 'Clé attendue', wrongKey,
-        );
-      }
-      throw new Error('Clé "pipeline" introuvable ou invalide. Elle doit contenir une liste d\'étapes.');
-    }
-    if (raw.pipeline.length === 0) {
-      throw new Error('Le pipeline est vide. Ajoutez au moins une étape.');
-    }
-    const pipeline = raw.pipeline.map((s: any, j: number) => this.validateAndDehydrate(s, j + 1));
-    this.validatePipelineColumns(pipeline);
-    return pipeline;
-  }
-
-  private validateAndDehydrate(raw: any, stepNum: number): PipelineStep {
-    const VALID_TYPES: StepType[] = ['fetch', 'join', 'filter', 'groupBy', 'findFirst', 'extract', 'aggregate', 'round', 'divide', 'js'];
-    const VALID_AGGREGATE_FNS = ['avg', 'sum', 'count', 'min', 'max'];
-    const VALID_FILTER_OPERATORS = ['==', '!=', '>', '<', '>=', '<='];
-    const VALID_JOIN_TYPES = ['left', 'inner', 'right', 'full'];
-    const VALID_STEP_KEYS = ['type', 'label', 'params'];
-    const VALID_PARAMS: Record<StepType, string[]> = {
-      fetch:     ['table', 'contextFields'],
-      join:      ['table', 'contextFields', 'leftKey', 'rightKey', 'joinType'],
-      filter:    ['field', 'operator', 'value'],
-      groupBy:   ['groupField'],
-      findFirst: ['whereField', 'whereValue', 'sortField'],
-      extract:   ['extractField'],
-      aggregate: ['aggregateFn'],
-      round:     ['decimals'],
-      divide:    ['divideBy'],
-      js:        ['code'],
-    };
-
-    if (!raw || typeof raw !== 'object') {
-      throw new Error(`Étape ${stepNum} : doit être un objet avec au minimum les clés "type" et "params".`);
-    }
-
-    // ── Niveau 1 : clés de l'étape (type / label / params) ──────────────────
-    const stepKeys = Object.keys(raw);
-    const wrongStepKey = stepKeys.find(k => !VALID_STEP_KEYS.includes(k));
-
-    if (!raw.type) {
-      if (wrongStepKey) {
-        throw new PipelineError(
-          `Étape ${stepNum} : clé "${wrongStepKey}" inconnue - le nom correct est "type".`,
-          ['type'], 'Clé attendue', wrongStepKey,
-        );
-      }
-      throw new PipelineError(
-        `Étape ${stepNum} : la clé "type" est manquante. Pour du code JavaScript personnalisé, utilisez "type: js" avec "params.code".`,
-        VALID_TYPES, 'Types disponibles',
-      );
-    }
-    if (!VALID_TYPES.includes(raw.type)) {
-      throw new PipelineError(
-        `Étape ${stepNum} : type "${raw.type}" inconnu. Pour du code JavaScript personnalisé, utilisez "type: js" avec "params.code".`,
-        VALID_TYPES, 'Types valides', raw.type,
-        VALID_TYPES.map(t => `${t} - ${this.STEP_TYPE_LABELS[t]}`),
-      );
-    }
-    // Clé étrangère présente malgré un type valide (ex: prams, lable…)
-    if (wrongStepKey) {
-      throw new PipelineError(
-        `Étape ${stepNum} : clé "${wrongStepKey}" inconnue au niveau de l'étape.`,
-        VALID_STEP_KEYS, 'Clés valides d\'une étape', wrongStepKey,
-      );
-    }
-
-    if (!raw.label) raw.label = this.STEP_TYPE_LABELS[raw.type as StepType];
-    const ctx = `Étape ${stepNum} (${this.STEP_TYPE_LABELS[raw.type as StepType]})`;
-
-    // ── Niveau 2 : params doit être un objet plain ───────────────────────────
-    if (raw.params !== undefined && raw.params !== null) {
-      if (Array.isArray(raw.params))
-        throw new Error(`${ctx} : "params" doit être un objet clé:valeur, pas une liste.`);
-      if (typeof raw.params !== 'object')
-        throw new Error(`${ctx} : "params" doit être un objet clé:valeur (reçu : ${typeof raw.params}).`);
-    }
-    const p = raw.params ?? {};
-
-    // ── Niveau 3 : clés à l'intérieur de params ──────────────────────────────
-    const validParamKeys = VALID_PARAMS[raw.type as StepType];
-    const wrongParamKey = Object.keys(p).find(k => !validParamKeys.includes(k));
-    if (wrongParamKey) {
-      throw new PipelineError(
-        `${ctx} : clé de paramètre "${wrongParamKey}" inconnue.`,
-        validParamKeys, 'Paramètres valides', wrongParamKey,
-      );
-    }
-
-    switch (raw.type as StepType) {
-      case 'fetch': {
-        if (!p.table || typeof p.table !== 'string' || !p.table.trim())
-          throw new Error(`${ctx} : "params.table" est requis - nom de la table PLaTon, ex: SessionData.`);
-        if (p.contextFields !== undefined && !Array.isArray(p.contextFields))
-          throw new Error(`${ctx} : "params.contextFields" doit être une liste, ex: [user_id, activity_id].`);
-        if (Array.isArray(p.contextFields) && p.contextFields.some((f: any) => typeof f !== 'string'))
-          throw new Error(`${ctx} : "params.contextFields" doit contenir uniquement des noms de colonnes (chaînes de caractères).`);
-        break;
-      }
-      case 'join': {
-        if (!p.table || typeof p.table !== 'string' || !p.table.trim())
-          throw new Error(`${ctx} : "params.table" est requis - nom de la table à joindre.`);
-        if (!p.leftKey || typeof p.leftKey !== 'string')
-          throw new Error(`${ctx} : "params.leftKey" est requis - colonne dans les données courantes servant de clé de jointure.`);
-        if (!p.rightKey || typeof p.rightKey !== 'string')
-          throw new Error(`${ctx} : "params.rightKey" est requis - colonne correspondante dans la table à joindre.`);
-        if (p.contextFields !== undefined && !Array.isArray(p.contextFields))
-          throw new Error(`${ctx} : "params.contextFields" doit être une liste, ex: [user_id, activity_id].`);
-        if (Array.isArray(p.contextFields) && p.contextFields.some((f: any) => typeof f !== 'string'))
-          throw new Error(`${ctx} : "params.contextFields" doit contenir uniquement des noms de colonnes (chaînes de caractères).`);
-        if (p.joinType !== undefined && !VALID_JOIN_TYPES.includes(p.joinType))
-          throw new PipelineError(`${ctx} : "params.joinType" invalide ("${p.joinType}").`, VALID_JOIN_TYPES, 'Valeurs possibles (défaut : left)', p.joinType);
-        break;
-      }
-      case 'filter': {
-        if (!p.field || typeof p.field !== 'string')
-          throw new Error(`${ctx} : "params.field" est requis - nom de la colonne à tester.`);
-        if (!p.operator)
-          throw new PipelineError(`${ctx} : "params.operator" est requis.`, VALID_FILTER_OPERATORS, 'Opérateurs valides');
-        if (!VALID_FILTER_OPERATORS.includes(p.operator))
-          throw new PipelineError(`${ctx} : opérateur "${p.operator}" inconnu.`, VALID_FILTER_OPERATORS, 'Opérateurs valides', p.operator);
-        if (p.value === undefined || p.value === null)
-          throw new Error(`${ctx} : "params.value" est requis - valeur à comparer avec "${p.field}".`);
-        if (typeof p.value !== 'string' && typeof p.value !== 'number')
-          throw new Error(`${ctx} : "params.value" doit être une chaîne ou un nombre (reçu : ${typeof p.value}).`);
-        break;
-      }
-      case 'groupBy': {
-        if (!p.groupField || typeof p.groupField !== 'string')
-          throw new Error(`${ctx} : "params.groupField" est requis - nom de la colonne de regroupement.`);
-        break;
-      }
-      case 'findFirst': {
-        if (p.whereField !== undefined && typeof p.whereField !== 'string')
-          throw new Error(`${ctx} : "params.whereField" doit être une chaîne (nom de colonne).`);
-        if (p.whereField && (p.whereValue === undefined || p.whereValue === null))
-          throw new Error(`${ctx} : "params.whereValue" est requis quand "params.whereField" est défini.`);
-        if (p.sortField !== undefined && typeof p.sortField !== 'string')
-          throw new Error(`${ctx} : "params.sortField" doit être une chaîne (nom de colonne).`);
-        break;
-      }
-      case 'extract': {
-        if (!p.extractField || typeof p.extractField !== 'string')
-          throw new Error(`${ctx} : "params.extractField" est requis - nom de la colonne dont extraire la valeur.`);
-        break;
-      }
-      case 'aggregate': {
-        if (!p.aggregateFn)
-          throw new PipelineError(`${ctx} : "params.aggregateFn" est requis.`, VALID_AGGREGATE_FNS, 'Fonctions valides');
-        if (!VALID_AGGREGATE_FNS.includes(p.aggregateFn))
-          throw new PipelineError(`${ctx} : fonction "${p.aggregateFn}" inconnue.`, VALID_AGGREGATE_FNS, 'Fonctions valides', p.aggregateFn);
-        break;
-      }
-      case 'round': {
-        if (p.decimals === undefined || p.decimals === null)
-          throw new Error(`${ctx} : "params.decimals" est requis - nombre de décimales (ex: 0, 1, 2).`);
-        if (typeof p.decimals !== 'number' || !Number.isInteger(p.decimals) || p.decimals < 0)
-          throw new Error(`${ctx} : "params.decimals" doit être un entier positif ou nul (reçu : ${p.decimals}).`);
-        break;
-      }
-      case 'divide': {
-        if (p.divideBy === undefined || p.divideBy === null)
-          throw new Error(`${ctx} : "params.divideBy" est requis - constante de division (ex: 60, 100).`);
-        if (typeof p.divideBy !== 'number')
-          throw new Error(`${ctx} : "params.divideBy" doit être un nombre (reçu : ${typeof p.divideBy}).`);
-        if (p.divideBy === 0)
-          throw new Error(`${ctx} : "params.divideBy" ne peut pas être 0 (division par zéro).`);
-        break;
-      }
-      case 'js': {
-        if (!p.code || typeof p.code !== 'string' || !p.code.trim())
-          throw new Error(`${ctx} : "params.code" est requis - le code JavaScript à exécuter. Utilisez "return", ex: return input.length;`);
-        break;
-      }
-    }
-    return this.dehydrateStep({ id: crypto.randomUUID(), type: raw.type, label: raw.label, params: p });
-  }
-
-  private validatePipelineColumns(pipeline: PipelineStep[]): void {
-    if (!this.platonSchema.length) return;
-
-    const tableNames = this.platonSchema.map(t => t.name);
-    const colsOf = (tableName: string): Set<string> =>
-      new Set(this.platonSchema.find(t => t.name === tableName)?.columns.map(c => c.name) ?? []);
-
-    let knownCols = new Set<string>();
-
-    for (let i = 0; i < pipeline.length; i++) {
-      const s = pipeline[i];
-      const n = i + 1;
-      const ctx = `Étape ${n} (${this.STEP_TYPE_LABELS[s.type]})`;
-
-      switch (s.type) {
-        case 'fetch': {
-          if (!tableNames.includes(s.table!))
-            throw new PipelineError(`${ctx} : table "${s.table}" introuvable dans le schéma PLaTon.`, tableNames, 'Tables disponibles', s.table);
-          const cols = colsOf(s.table!);
-          for (const f of s.contextFields ?? []) {
-            if (!cols.has(f))
-              throw new PipelineError(`${ctx} : colonne de contexte "${f}" introuvable dans "${s.table}".`, [...cols], 'Colonnes disponibles', f);
-          }
-          knownCols = cols;
-          break;
-        }
-        case 'join': {
-          if (!tableNames.includes(s.joinTable!))
-            throw new PipelineError(`${ctx} : table "${s.joinTable}" introuvable dans le schéma PLaTon.`, tableNames, 'Tables disponibles', s.joinTable);
-          const joinCols = colsOf(s.joinTable!);
-          if (knownCols.size && s.joinLeftKey && !knownCols.has(s.joinLeftKey))
-            throw new PipelineError(`${ctx} : colonne de jointure gauche "${s.joinLeftKey}" introuvable dans les données courantes.`, [...knownCols], 'Colonnes disponibles', s.joinLeftKey);
-          if (s.joinRightKey && !joinCols.has(s.joinRightKey))
-            throw new PipelineError(`${ctx} : colonne de jointure droite "${s.joinRightKey}" introuvable dans "${s.joinTable}".`, [...joinCols], 'Colonnes disponibles', s.joinRightKey);
-          for (const f of s.joinContextFields ?? []) {
-            if (!joinCols.has(f))
-              throw new PipelineError(`${ctx} : colonne de filtre "${f}" introuvable dans "${s.joinTable}".`, [...joinCols], 'Colonnes disponibles', f);
-          }
-          for (const col of joinCols) knownCols.add(col);
-          break;
-        }
-        case 'filter': {
-          if (knownCols.size && s.filterField && !knownCols.has(s.filterField))
-            throw new PipelineError(`${ctx} : colonne "${s.filterField}" introuvable dans les données courantes.`, [...knownCols], 'Colonnes disponibles', s.filterField);
-          break;
-        }
-        case 'groupBy': {
-          if (knownCols.size && s.groupField && !knownCols.has(s.groupField))
-            throw new PipelineError(`${ctx} : colonne de regroupement "${s.groupField}" introuvable dans les données courantes.`, [...knownCols], 'Colonnes disponibles', s.groupField);
-          break;
-        }
-        case 'findFirst': {
-          if (knownCols.size && s.whereField && !knownCols.has(s.whereField))
-            throw new PipelineError(`${ctx} : colonne de filtre "${s.whereField}" introuvable dans les données courantes.`, [...knownCols], 'Colonnes disponibles', s.whereField);
-          if (knownCols.size && s.sortField && !knownCols.has(s.sortField))
-            throw new PipelineError(`${ctx} : colonne de tri "${s.sortField}" introuvable dans les données courantes.`, [...knownCols], 'Colonnes disponibles', s.sortField);
-          break;
-        }
-        case 'extract': {
-          if (knownCols.size && s.extractField && !knownCols.has(s.extractField))
-            throw new PipelineError(`${ctx} : colonne "${s.extractField}" introuvable dans les données courantes.`, [...knownCols], 'Colonnes disponibles', s.extractField);
-          knownCols = new Set();
-          break;
-        }
-        case 'js':
-          knownCols = new Set();
-          break;
-        // aggregate, round, divide : ne changent pas le contexte de colonnes
-      }
-    }
-  }
-
   stepTypeColor(type: string): string {
     const map: Record<string, string> = {
       fetch: '#0958d9', join: '#531dab', filter: '#c41d7f',
@@ -3129,6 +3307,31 @@ ${this.importMode === 'yaml' ? `pipeline:
 
   submit(): void {
     if (!this.def.name.trim()) { this.messageSvc.error('Le nom est requis'); return; }
+    if (this.def.useTriggerEvents && this.def.requiredEvents.length === 0) {
+      this.messageSvc.error('Sélectionnez au moins un événement, ou désactivez "Activer des événements déclencheurs".');
+      return;
+    }
+    // Le pipeline peut rester vide ou partiel (brouillon) - seules les étapes déjà ajoutées
+    // doivent être complètes, pour ne pas enregistrer un step à moitié rempli en silence.
+    for (let i = 0; i < this.pipeline.length; i++) {
+      const err = validatePipelineStepComplete(this.pipeline[i], i);
+      if (err) { this.messageSvc.error(err); return; }
+    }
+    // Ordre attendu par indicator-card.component.ts#statusColor : val<=good -> vert,
+    // val<=warning -> orange, sinon rouge.
+    const { good, warning, critical } = this.def.thresholds ?? {};
+    if (good != null && warning != null && good > warning) {
+      this.messageSvc.error('Le seuil "Bon" doit être inférieur ou égal au seuil "Attention".');
+      return;
+    }
+    if (warning != null && critical != null && warning > critical) {
+      this.messageSvc.error('Le seuil "Attention" doit être inférieur ou égal au seuil "Critique".');
+      return;
+    }
+    if (good != null && critical != null && warning == null && good > critical) {
+      this.messageSvc.error('Le seuil "Bon" doit être inférieur ou égal au seuil "Critique".');
+      return;
+    }
 
     this.saving = true;
 
@@ -3159,7 +3362,9 @@ ${this.importMode === 'yaml' ? `pipeline:
         id: v.id,
         label: v.label,
         type: v.type,
-        icon: v.icon,
+        // Icône toujours dérivée du contexte à l'enregistrement - jamais un choix manuel
+        // (voir contextIcon()) ; ignore toute valeur importée/héritée dans v.icon.
+        icon: this.contextIcon(this.def.contextType),
         color: v.color,
         unit: v.unit,
       })),
@@ -3217,42 +3422,13 @@ ${this.importMode === 'yaml' ? `pipeline:
     }
   }
 
-  private dehydrateStep(s: any): PipelineStep {
-    return {
-      id:              s.id ?? crypto.randomUUID(),
-      type:            s.type,
-      label:           s.label ?? s.type,
-      // fetch
-      table:           s.type === 'fetch' ? s.params?.table : undefined,
-      contextFields:   s.type === 'fetch' ? s.params?.contextFields : undefined,
-      useGroupContext: s.type === 'fetch' ? s.params?.contextFields?.includes('group_id') : undefined,
-      // join
-      joinTable:          s.type === 'join' ? s.params?.table : undefined,
-      joinContextFields:  s.type === 'join' ? s.params?.contextFields : undefined,
-      joinLeftKey:        s.type === 'join' ? s.params?.leftKey : undefined,
-      joinRightKey:       s.type === 'join' ? s.params?.rightKey : undefined,
-      joinType:           s.type === 'join' ? (s.params?.joinType ?? 'left') : undefined,
-      filterField:     s.params?.field,
-      filterOperator:  s.params?.operator,
-      filterValue:     s.params?.value,
-      groupField:      s.params?.groupField,
-      whereField:      s.params?.whereField,
-      whereValue:      s.params?.whereValue,
-      sortField:       s.params?.sortField,
-      extractField:    s.params?.extractField,
-      aggregateFn:     s.params?.aggregateFn,
-      decimals:        s.params?.decimals,
-      divideBy:        s.params?.divideBy,
-      jsCode:          s.params?.code,
-    };
-  }
-
   /** Pré-remplit le formulaire à partir des données partagées d'une famille en cours de création. */
   private applyFamilyPreset(preset: IndicatorFamilyPreset): void {
-    this.def.name           = preset.name;
-    this.def.description    = preset.description;
-    this.def.requiredEvents = [...preset.requiredEvents];
-    this.def.contextType    = preset.contextType;
+    this.def.name             = preset.name;
+    this.def.description      = preset.description;
+    this.def.requiredEvents   = [...preset.requiredEvents];
+    this.def.useTriggerEvents = this.def.requiredEvents.length > 0;
+    this.def.contextType      = preset.contextType;
   }
 
   private hydrate(ind: IndicatorDefinition): void {
@@ -3260,6 +3436,7 @@ ${this.importMode === 'yaml' ? `pipeline:
     this.def.description        = ind.description || '';
     this.def.interpretationHint = ind.interpretationHint || '';
     this.def.requiredEvents     = ind.requiredEvents || [];
+    this.def.useTriggerEvents   = this.def.requiredEvents.length > 0;
     this.def.contextType        = ind.contextType ?? 'learner';
     this.def.visibilityRoles    = ind.visibilityRoles || null;
     this.def.baseIndicatorId    = ind.baseIndicatorId || null;
@@ -3280,6 +3457,6 @@ ${this.importMode === 'yaml' ? `pipeline:
         }))
       : [this.newViz('Vue principale', 'card')];
 
-    this.pipeline = (ind.formula?.pipeline ?? []).map((s: any) => this.dehydrateStep(s));
+    this.pipeline = (ind.formula?.pipeline ?? []).map((s: any) => dehydrateStep(s));
   }
 }

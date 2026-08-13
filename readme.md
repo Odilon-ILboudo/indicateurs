@@ -76,10 +76,6 @@ INDICATORS_DB_USERNAME=
 INDICATORS_DB_PASSWORD=
 INDICATORS_DB_NAME=
 
-# Activité utilisée par défaut pour calculer la valeur "learner" d'un indicateur
-# quand aucune activité n'est précisée par l'appelant
-TARGET_ACTIVITY_ID=
-
 # Optionnel - identifiant Postgres à privilèges élevés (superuser, ou propriétaire
 # des tables PLaTon concernées), utilisé uniquement pour exécuter le DDL d'installation
 # des déclencheurs dynamiques (section 6bis / event-rules). Sans ça, l'installation
@@ -430,7 +426,7 @@ utilisé par le débogueur pas-à-pas du builder (`POST /preview-steps`).
 
 | Type | Rôle | Paramètres principaux |
 |---|---|---|
-| `fetch` | Charge des lignes depuis une table PLaTon, filtrées selon le contexte. | `table`, `contextFields: string[]` (`user_id`, `activity_id`, `course_id`, `group_id` → mappés depuis `FormulaContext`). Si `group_id` est demandé et que `context.groupId` est défini, déclenche une jointure `CourseGroupsMember`/`CourseGroups` via `queryTableForGroup` (nécessite `activityId` dans le contexte, sinon retourne `[]`). |
+| `fetch` | Charge des lignes depuis une table PLaTon, filtrées selon le contexte. | `table`, `contextFields: string[]` (`user_id`, `activity_id`, `course_id`, `group_id` → mappés depuis `FormulaContext`). Si `group_id` est demandé et que `context.groupId` est défini, déclenche une jointure `CourseGroupsMember`/`CourseGroups` via `queryTableForGroup` (nécessite `activityId` **ou** `courseId` dans le contexte - une seule activité, ou tout le cours agrégé si `isCourseAware`, sinon retourne `[]`). |
 | `join` | LEFT/INNER/RIGHT/FULL JOIN entre la sortie courante (table gauche) et une seconde table PLaTon (table droite), indexée en `Map` (O(n)). | `table`, `leftKey`, `rightKey`, `contextFields?` (mêmes filtres que `fetch`), `joinType?: 'left'\|'inner'\|'right'\|'full'` (défaut `'left'`). En cas de fusion, les champs de gauche écrasent ceux de droite en cas de conflit de nom. `right`/`full` ajoutent les lignes droites jamais matchées. CROSS JOIN volontairement non supporté. |
 | `filter` | Filtre les lignes selon `field operator value`. | `field`, `operator: '=='\|'!='\|'>'\|'<'\|'>='\|'<='`, `value`. Un opérateur inconnu **lève une erreur** (le pipeline s'arrête, résultat 0). |
 | `groupBy` | Regroupe des lignes plates en `any[][]`. | `groupField` |
@@ -480,9 +476,7 @@ pipeline:
 contextId, activityId?, vizId?, forceRefresh?)` :
 
 - **Résolution de la formule** : `indicator.formula` - toutes les visualisations partagent la même formule (**1 indicateur = 1 formule**).
-- **Résolution `activityId`** :
-  - `learner` → `activityId ?? process.env.TARGET_ACTIVITY_ID`
-  - `course`/`group`/`activity` → fourni par l'appelant, pas de fallback
+- **Résolution `activityId`** : fourni par l'appelant, pas de fallback (aucune valeur par défaut, pour aucun contextType).
 - **Clé de cache** :
   - `learner` → `contextId = userId`
   - `course`/`group`/`activity` → `contextId = ${contextId}:${activityId}:${viz.id}`
@@ -498,10 +492,12 @@ contextId, activityId?, vizId?, forceRefresh?)` :
 `IngestionService` appelle, en fire-and-forget après chaque événement PLaTon
 ingéré pour une activité, deux méthodes complémentaires :
 
-1. `IndicatorsService.refreshSnapshots(indicatorId, activityId)` : recalcule
-   (`forceRefresh = true`) **toutes** les `IndicatorSnapshot` épinglées pour
-   cette activité, pour chaque visualisation. Les erreurs par snapshot sont
-   loggées sans bloquer les autres.
+1. `IndicatorsService.refreshSnapshots(indicatorId, scope, deltaEvent?)` : recalcule
+   (`forceRefresh = true`) **toutes** les `IndicatorSnapshot` épinglées pour ce
+   périmètre, pour chaque visualisation. `scope` est `{ activityId }` (une seule
+   activité) ou `{ courseId }` (indicateur `group` course-aware, voir
+   `isCourseAware()` - agrège toutes les activités du cours pour ce groupe).
+   Les erreurs par snapshot sont loggées sans bloquer les autres.
 
 2. `IndicatorsService.refreshActivityViews(indicatorId, activityId)` : recalcule
    (`forceRefresh = true`) toutes les `indicator_values` de type
@@ -510,12 +506,15 @@ ingéré pour une activité, deux méthodes complémentaires :
    `activityId`, `activityId:vizId`, `courseId:activityId`,
    `courseId:activityId:vizId`). Déduit les couples uniques
    `(contextType, contextId d'origine)` et recalcule par visualisation.
+   Uniquement pour le périmètre "une activité" - l'équivalent pour un indicateur
+   `group` course-aware est `refreshCourseGroupViews(indicatorId, courseId)`,
+   plus simple (toujours un recalcul complet, pas de variante incrémentale).
 
-Ces deux appels sont indépendants : `refreshSnapshots` couvre les groupes
-explicitement épinglés, `refreshActivityViews` couvre toutes les vues
-cours/groupe/activité simplement consultées (cachées par `computeView`). Ensemble,
-ils garantissent que **toutes** les valeurs course/group/activity en cache sont
-fraîches après chaque événement d'ingestion.
+Ces appels sont indépendants : `refreshSnapshots` couvre les groupes
+explicitement épinglés, `refreshActivityViews`/`refreshCourseGroupViews` couvrent
+toutes les vues cours/groupe/activité simplement consultées (cachées par
+`computeView`). Ensemble, ils garantissent que **toutes** les valeurs
+course/group/activity en cache sont fraîches après chaque événement d'ingestion.
 
 **Tradeoff** : chaque événement déclenche le recalcul de toutes les vues déjà
 consultées pour cette activité. Pour une activité avec beaucoup de groupes/vues,

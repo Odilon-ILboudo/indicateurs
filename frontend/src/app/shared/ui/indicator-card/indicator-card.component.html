@@ -2,10 +2,11 @@
   class="indicator-card"
   [class.clickable]="clickable"
   [class.loading]="isLoading"
-  [style.border-left]="'4px solid ' + getThresholdColor()"
+  [style.border-left]="getThresholdColor() ? '4px solid ' + getThresholdColor() : 'none'"
   [routerLink]="clickable ? ['/dashboard/indicator', indicator.id] : null"
   [queryParams]="clickable && queryParams ? queryParams : null"
   [matTooltip]="clickable && isChartVisualization() ? 'Cliquez pour voir le graphique complet' : (clickable ? 'Cliquez pour plus de détails' : '')"
+  [matTooltipDisabled]="suppressCardTooltip"
   matTooltipPosition="above">
 
   <mat-card-content>
@@ -19,8 +20,8 @@
       <div class="card-header">
         <div class="value-section">
           <ng-container *ngIf="!isChartVisualization()">
-            <span class="value">{{ getFormattedValue() }}</span>
-            <span class="unit" *ngIf="activeViz?.unit">
+            <span class="value" [style.color]="displayColor">{{ getFormattedValue() }}</span>
+            <span class="unit" *ngIf="activeViz?.unit" [style.color]="displayColor">
               {{ activeViz!.unit }}
             </span>
             <span
@@ -29,17 +30,19 @@
               [class.trend-up]="value!.trend === 'up'"
               [class.trend-down]="value!.trend === 'down'"
               [class.trend-stable]="value!.trend === 'stable'"
-              [matTooltip]="getTrendLabel(value!.trend!)">
+              [matTooltip]="getTrendLabel(value!.trend!)"
+              (mouseenter)="suppressCardTooltip = true"
+              (mouseleave)="suppressCardTooltip = false">
               <mat-icon class="trend-icon">{{ getTrendIcon(value!.trend!) }}</mat-icon>
             </span>
           </ng-container>
           <ng-container *ngIf="isChartVisualization()">
-            <mat-icon class="chart-placeholder-icon">bar_chart</mat-icon>
+            <mat-icon class="chart-placeholder-icon" [style.color]="displayColor">bar_chart</mat-icon>
           </ng-container>
         </div>
         <div class="icon-section">
-          <div class="icon-bg" [style.backgroundColor]="userColorPreference || activeViz?.color || '#7f8c8d'">
-            <mat-icon>{{ activeViz?.icon || 'analytics' }}</mat-icon>
+          <div class="icon-bg" [style.backgroundColor]="displayColor">
+            <mat-icon>{{ contextIcon(indicator?.contextType) }}</mat-icon>
           </div>
         </div>
       </div>
@@ -78,31 +81,35 @@
             mat-icon-button
             matTooltip="Paramètres"
             matTooltipPosition="above"
+            (mouseenter)="suppressCardTooltip = true"
+            (mouseleave)="suppressCardTooltip = false"
             (click)="openConfigModal($event)">
             <mat-icon>tune</mat-icon>
           </button>
           <mat-icon *ngIf="isPinned && !showPinButton"
             class="pin-indicator"
             matTooltip="Indicateur imposé par l'enseignant pour cette ressource"
-            matTooltipPosition="above">lock</mat-icon>
+            matTooltipPosition="above"
+            (mouseenter)="suppressCardTooltip = true"
+            (mouseleave)="suppressCardTooltip = false">lock</mat-icon>
           <button *ngIf="!isPinned && showPinButton"
             class="pin-button"
             mat-icon-button
             matTooltip="Figer pour ce cours/cette activité"
             matTooltipPosition="above"
+            (mouseenter)="suppressCardTooltip = true"
+            (mouseleave)="suppressCardTooltip = false"
             (click)="$event.stopPropagation(); pinToggle.emit()">
             <mat-icon>lock_open</mat-icon>
           </button>
           <button *ngIf="isPinned && showPinButton"
             class="pin-button pin-button--locked"
             mat-icon-button
-            matTooltip="Défiger"
+            matTooltip="Modifier les seuils figés"
             matTooltipPosition="above"
-            nz-popconfirm
-            nzPopconfirmTitle="Les étudiants ne seront plus obligés d'avoir cet indicateur sur cette ressource."
-            nzPopconfirmPlacement="top"
-            (nzOnConfirm)="pinToggle.emit()"
-            (click)="$event.stopPropagation()">
+            (mouseenter)="suppressCardTooltip = true"
+            (mouseleave)="suppressCardTooltip = false"
+            (click)="$event.stopPropagation(); pinToggle.emit()">
             <mat-icon>lock</mat-icon>
           </button>
           <button *ngIf="showDeleteButton"
@@ -114,6 +121,8 @@
             nzPopconfirmTitle="Supprimer ce snapshot ?"
             nzPopconfirmPlacement="top"
             (nzOnConfirm)="deleteClick.emit()"
+            (mouseenter)="suppressCardTooltip = true"
+            (mouseleave)="suppressCardTooltip = false"
             (click)="$event.stopPropagation()">
             <mat-icon>delete_outline</mat-icon>
           </button>

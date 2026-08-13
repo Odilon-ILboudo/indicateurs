@@ -135,20 +135,20 @@ export class CourseService {
     return of(undefined)
   }
 
-  createMember(_course: Course, _input: CreateCourseMember): Observable<CourseMember> {
-    return of({} as CourseMember)
+  createMember(course: Course, input: CreateCourseMember): Observable<CourseMember> {
+    return this.http.post<CourseMember>(`${API}/courses/${course.id}/members`, input)
   }
 
   createTestMembers(_course: Course, _input: CreateTestMember[]): Observable<{ resources: CourseMember[] }> {
     return of({ resources: [] })
   }
 
-  deleteMember(_member: CourseMember): Observable<void> {
-    return of(undefined)
+  deleteMember(member: CourseMember): Observable<void> {
+    return this.http.delete<void>(`${API}/courses/${member.courseId}/members/${member.id}`)
   }
 
-  updateMemberRole(_member: CourseMember, _role: CourseMemberRoles): Observable<CourseMember> {
-    return of({} as CourseMember)
+  updateMemberRole(member: CourseMember, role: CourseMemberRoles): Observable<CourseMember> {
+    return this.http.patch<CourseMember>(`${API}/courses/${member.courseId}/members/${member.id}`, { role })
   }
 
   searchMembers(course: Course, filters?: CourseMemberFilters): Observable<{ resources: CourseMember[]; total: number }> {
@@ -1019,7 +1019,7 @@ export class CourseMemberTableComponent {
   providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => CourseMemberSearchBarComponent), multi: true }],
   imports: [CommonModule, NzIconModule],
 })
-export class CourseMemberSearchBarComponent implements ControlValueAccessor {
+export class CourseMemberSearchBarComponent implements ControlValueAccessor, OnInit {
   @Input() placeholder = 'Rechercher...'
   @Input() filters: CourseMemberFilters = {}
   @Input() courseId = ''
@@ -1032,14 +1032,23 @@ export class CourseMemberSearchBarComponent implements ControlValueAccessor {
   private onChange = (_: CourseMember[]) => {}
   private onTouched = () => {}
   private courseService = inject(CourseService)
+  private changeDetectorRef = inject(ChangeDetectorRef)
 
   writeValue(_val: CourseMember[]): void {}
   registerOnChange(fn: (_: CourseMember[]) => void): void { this.onChange = fn }
   registerOnTouched(fn: () => void): void { this.onTouched = fn }
 
   ngOnInit(): void {
+    this.refresh()
+  }
+
+  /** Recharge la liste depuis le serveur - à appeler après tout ajout/suppression/changement
+   *  de rôle, ce composant ne se rafraîchit jamais tout seul. Public car appelé depuis
+   *  members.page.ts via une référence de template (#searchbar). */
+  refresh(): void {
     if (!this.courseId) return
     this.searching = true
+    this.changeDetectorRef.markForCheck()
     const fakeCourse = { id: this.courseId } as Course
     this.courseService.searchMembers(fakeCourse, this.filters).subscribe({
       next: (res) => {
@@ -1047,8 +1056,12 @@ export class CourseMemberSearchBarComponent implements ControlValueAccessor {
         this.total = res.total ?? res.resources.length
         this.searching = false
         this.onChange(this.allMembers)
+        this.changeDetectorRef.markForCheck()
       },
-      error: () => { this.searching = false },
+      error: () => {
+        this.searching = false
+        this.changeDetectorRef.markForCheck()
+      },
     })
   }
 

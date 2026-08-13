@@ -6,7 +6,7 @@ import { IndicatorDefinition } from '../indicators/entities/indicator-definition
 import { IndicatorValue, buildValueMetadata } from '../indicators/entities/indicator-value.entity';
 import { UserIndicatorPreference } from './entities/user-indicator-preference.entity';
 import { FormulaInterpreterService } from '../indicators/interpreter/formula-interpreter.service';
-import { resolveFormula } from '../indicators/formula-resolution.util';
+import { resolveFormula, isActivityAware, isCourseAware } from '../indicators/formula-resolution.util';
 
 @Injectable()
 export class UserPreferencesService {
@@ -154,18 +154,22 @@ export class UserPreferencesService {
 
   // Pré-calcule la valeur d'un indicateur scopé à un seul utilisateur (learner/teacher/admin) et la persiste.
   // Skip pour les indicateurs course/group/activity : leur valeur se calcule à la demande via computeView.
+  // Skip aussi pour les indicateurs learner/teacher/admin activity-aware ou course-aware
+  // (filtrés par activity_id ou course_id) : ils n'ont pas de valeur "globale" à précalculer,
+  // seulement une valeur par activité/cours, jamais lue avant l'ouverture de la page
+  // correspondante (voir isActivityAware()/isCourseAware()).
   private async calculateAndStoreValue(userId: string, indicator: IndicatorDefinition): Promise<void> {
     if (!['learner', 'teacher', 'admin'].includes(indicator.contextType)) return;
 
     const formulaToUse = resolveFormula(indicator);
 
     if (!formulaToUse?.pipeline?.length) return;
+    if (isActivityAware(formulaToUse) || isCourseAware(formulaToUse)) return;
 
     let value = 0;
     try {
       value = await this.formulaInterpreter.interpret(formulaToUse as any, {
         userId,
-        activityId: process.env.TARGET_ACTIVITY_ID,
         indicatorId: indicator.id,
       });
     } catch (err) {

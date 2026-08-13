@@ -14,6 +14,7 @@ import { DashboardSettingsService } from '../../../../core/services/dashboard-se
 import { RoleService } from '../../../../core/services/role.service';
 import { DashboardContext, IndicatorDefinition } from '../../../../core/models/indicator.model';
 import { getCurrentUserId } from '../../../../core/auth/current-user';
+import { isActivityAware, isCourseAware } from '../../../../shared/utils/indicator-formula.util';
 
 @Component({
   standalone: true,
@@ -54,7 +55,20 @@ export class OverviewPage implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadActiveIndicators();
-    this.loadIndicators();
+    // Le rôle réel se charge de façon asynchrone (SidebarComponent#loadUser, appel réseau vers
+    // le backend) et arrive TOUJOURS après la construction de cette page - se caler une seule
+    // fois sur roleService.isTeacher()/isAdmin() au constructeur figeait "learner" par défaut
+    // (juste après un rechargement complet) et n'était jamais recalculé quand le vrai rôle
+    // arrivait ensuite, d'où les indicateurs qui disparaissaient tant qu'on ne quittait/revenait
+    // pas sur la page (qui reconstruit alors le composant avec le rôle déjà chargé entre-temps).
+    // role$ réémet à chaque changement de rôle, donc ceci se corrige tout seul dès que le vrai
+    // rôle arrive, sans attendre une navigation.
+    this.subscriptions.push(
+      this.roleService.role$.subscribe(() => {
+        this.context = this.buildDefaultContext();
+        this.loadIndicators();
+      })
+    );
   }
 
   ngOnDestroy(): void {
@@ -75,7 +89,13 @@ export class OverviewPage implements OnInit, OnDestroy {
     this.subscriptions.push(
       this.indicatorService.loadIndicators().subscribe(indicators => {
         this.indicators = indicators.filter(ind =>
-          ind.contextType === this.context.scope && this.roleService.canSeeIndicatorContext(ind.contextType, ind.visibilityRoles));
+          ind.contextType === this.context.scope &&
+          this.roleService.canSeeIndicatorContext(ind.contextType, ind.visibilityRoles) &&
+          // Un indicateur learner/teacher/admin activity-aware ou course-aware n'a pas de valeur
+          // "globale" : il ne s'affiche que sur la page de l'activité/du cours concerné, jamais
+          // ici (voir isActivityAware()/isCourseAware()).
+          !((ind.contextType === 'learner' || ind.contextType === 'teacher' || ind.contextType === 'admin') &&
+            (isActivityAware(ind.formula) || isCourseAware(ind.formula))));
         this.loading = false;
         this.changeDetectorRef.markForCheck();
       })

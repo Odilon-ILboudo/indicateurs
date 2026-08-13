@@ -21,10 +21,13 @@ import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzDividerModule } from 'ng-zorro-antd/divider';
 import { NzProgressModule } from 'ng-zorro-antd/progress';
+import { NgxEchartsModule, NGX_ECHARTS_CONFIG } from 'ngx-echarts';
+import type { EChartsOption } from 'echarts';
 
 import { IndicatorService } from '../../../../core/services/indicator.service';
 import { DashboardContext, IndicatorDefinition, IndicatorSnapshot } from '../../../../core/models/indicator.model';
 import { IndicatorCardComponent } from '../../../../shared/ui/indicator-card/indicator-card.component';
+import { buildIndicatorChartOptions } from '../../../../shared/utils/indicator-chart-options.util';
 import { environment } from '../../../../../environments/environment';
 
 interface CourseGroup {
@@ -67,7 +70,14 @@ interface IndicatorPanel {
     NzDividerModule,
     NzModalModule,
     NzProgressModule,
+    NgxEchartsModule,
     IndicatorCardComponent,
+  ],
+  providers: [
+    {
+      provide: NGX_ECHARTS_CONFIG,
+      useFactory: () => ({ echarts: () => import('echarts') }),
+    },
   ],
   template: `
     <div class="group-snapshots-panel">
@@ -232,41 +242,28 @@ interface IndicatorPanel {
                 <div class="compare-card-body">
                   <ng-container *ngIf="getCompResult(row.snapshot.contextId, viz.id) as res; else loadingCell">
 
-                    <!-- Scalaire -->
-                    <ng-container *ngIf="viz.type === 'card' || viz.type === 'gauge' || viz.type === 'line-chart'">
-                      <div class="compare-scalar" [style.color]="getThresholdColor(res.value)">
+                    <!-- Scalaire simple : card / line-chart (pas d'historique disponible sur un
+                         snapshot ponctuel, donc pas de vraie courbe possible ici). -->
+                    <ng-container *ngIf="viz.type === 'card' || viz.type === 'line-chart'">
+                      <div class="compare-scalar" [style.color]="viz.color || '#5470c6'">
                         {{ res.value | number:'1.0-2' }}
-                        <span class="compare-unit">{{ viz.unit || '' }}</span>
+                        <span class="compare-unit" [style.color]="viz.color || '#5470c6'">{{ viz.unit || '' }}</span>
                       </div>
-                      <nz-progress
-                        *ngIf="viz.type === 'gauge' && compPanel.indicator.thresholds?.good"
-                        [nzPercent]="+(res.value / compPanel.indicator.thresholds!.good! * 100).toFixed(0)"
-                        nzType="circle" [nzWidth]="72" nzStrokeWidth="8"
-                        [nzStrokeColor]="getThresholdColor(res.value)"
-                        style="margin-top:10px">
-                      </nz-progress>
                     </ng-container>
 
-                    <!-- Barres -->
-                    <ng-container *ngIf="viz.type === 'bar-chart' || viz.type === 'histogram'">
-                      <div class="compare-bars" *ngIf="res.structuredValue">
-                        <ng-container *ngFor="let item of topEntries(res.structuredValue) | slice:0:6">
-                          <div class="compare-bar-row">
-                            <span class="compare-bar-key" [title]="item.key">
-                              {{ item.key.length > 18 ? item.key.slice(0,17)+'…' : item.key }}
-                            </span>
-                            <div class="compare-bar-track">
-                              <div class="compare-bar-fill"
-                                [style.width]="barWidth(item.val, res.structuredValue) + '%'"
-                                [style.background]="viz.color || '#722ed1'">
-                              </div>
-                            </div>
-                            <span class="compare-bar-val">{{ item.val | number:'1.0-1' }}</span>
-                          </div>
-                        </ng-container>
-                      </div>
-                      <div *ngIf="!res.structuredValue" class="compare-no-data">-</div>
-                    </ng-container>
+                    <!-- Graphique réel (gauge / bar-chart / histogram) : même rendu ECharts que
+                         la page détail d'un indicateur (buildIndicatorChartOptions partagé).
+                         *ngIf sur les options elles-mêmes (pas juste sur le type) : le div
+                         echarts ne doit exister dans le DOM qu'une fois les vraies options
+                         disponibles, sinon ECharts s'initialise avec des options vides (le temps
+                         que le Promise.all(fetches) de openCompare() se résolve après l'ouverture
+                         de la modale) et ne se corrige jamais tout seul ensuite. -->
+                    <div class="compare-chart"
+                      *ngIf="(viz.type === 'gauge' || viz.type === 'bar-chart' || viz.type === 'histogram') && getCompChartOptions(row.snapshot.contextId, viz.id) as opts"
+                      echarts
+                      [options]="opts"
+                      [autoResize]="true">
+                    </div>
 
                   </ng-container>
                   <ng-template #loadingCell>
@@ -442,14 +439,14 @@ interface IndicatorPanel {
       height: 12px !important;
       line-height: 1 !important;
     }
-    .compare-sections { display: flex; flex-direction: column; gap: 24px; }
-    .compare-section { }
+    .compare-sections { display: flex; flex-direction: column; gap: 16px; }
+    /* Même motif que .wizard-section (indicator-builder) : bordure bleue, coins arrondis -
+       une vraie boîte par visualisation, plus seulement un espacement + un liseré sous le titre. */
+    .compare-section { border: 1px solid #1890ff; border-radius: 10px; padding: 16px 18px; background: #fff; }
     .compare-section-title {
       display: flex; align-items: center; gap: 6px;
-      font-size: 13px; font-weight: 700; color: #595959;
-      text-transform: uppercase; letter-spacing: 0.04em;
-      margin-bottom: 12px;
-      padding-bottom: 8px; border-bottom: 2px solid #f0f0f0;
+      font-size: 13px; font-weight: 600; color: #444;
+      margin-bottom: 14px;
     }
     .compare-cards-grid {
       display: grid;
@@ -473,28 +470,33 @@ interface IndicatorPanel {
     .compare-card-body {
       padding: 16px;
       display: flex; flex-direction: column; align-items: center;
+      width: 100%; box-sizing: border-box;
     }
     .compare-scalar {
       font-size: 36px; font-weight: 700; line-height: 1;
       display: flex; align-items: baseline; gap: 6px;
     }
-    .compare-unit { font-size: 15px; font-weight: 400; color: #8c8c8c; }
-    .compare-bars { width: 100%; display: flex; flex-direction: column; gap: 5px; }
-    .compare-bar-row { display: flex; align-items: center; gap: 6px; font-size: 11px; }
-    .compare-bar-key { flex: 0 0 90px; color: #595959; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
-    .compare-bar-track { flex: 1; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; }
-    .compare-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
-    .compare-bar-val { flex: 0 0 40px; text-align: right; color: #262626; font-weight: 600; }
-    .compare-no-data { color: #bbb; font-size: 13px; }
+    .compare-unit { font-size: 15px; font-weight: 400; }
+    /* Format compact pour tenir dans une carte de la grille (3 colonnes max) - même rendu
+       ECharts que la page détail, juste redimensionné. */
+    .compare-chart { width: 100%; height: 200px; }
     .compare-loading-cell { padding: 24px; }
   `],
 })
 export class GroupSnapshotsPanelComponent implements OnInit, OnChanges {
   @Input() groupIndicators: IndicatorDefinition[] = [];
-  @Input() activityId!: string;
+  // Absent = mode cours entier (toutes activités agrégées, isCourseAware) ; présent = mode
+  // activité précise (comportement historique). `courseId` reste toujours requis (utilisé
+  // pour la liste des groupes du cours, indépendamment du mode).
+  @Input() activityId?: string;
   @Input() courseId!: string;
   @Input() activityName = '';
   @Input() courseName = '';
+
+  /** L'un ou l'autre selon le mode - voir activityId ci-dessus. */
+  private get scope(): { activityId: string } | { courseId: string } {
+    return this.activityId ? { activityId: this.activityId } : { courseId: this.courseId };
+  }
 
   @ViewChild('compareTpl') private compareTplRef!: TemplateRef<any>;
 
@@ -514,6 +516,8 @@ export class GroupSnapshotsPanelComponent implements OnInit, OnChanges {
   protected compLoading = false;
   // clé: `${groupId}__${vizId}` → { value, structuredValue }
   private compResults = new Map<string, { value: number; structuredValue?: any }>();
+  // même clé → options ECharts précalculées (gauge/bar-chart/histogram), voir openCompare()
+  private compChartOptions = new Map<string, EChartsOption>();
   // contextIds des groupes masqués dans la vue comparaison
   protected compDisabledGroups = new Set<string>();
 
@@ -527,7 +531,7 @@ export class GroupSnapshotsPanelComponent implements OnInit, OnChanges {
 
   ngOnChanges(changes: SimpleChanges): void {
     // Réagit aux changements d'indicateurs ou d'activité après la première init.
-    if ((changes['groupIndicators'] || changes['activityId']) && !this.isFirstChange(changes)) {
+    if ((changes['groupIndicators'] || changes['activityId'] || changes['courseId']) && !this.isFirstChange(changes)) {
       if (this.groupIndicators.length > 0) {
         this.loadAll();
       }
@@ -567,7 +571,7 @@ export class GroupSnapshotsPanelComponent implements OnInit, OnChanges {
     for (const ind of this.groupIndicators) {
       let snapshots: IndicatorSnapshot[] = [];
       try {
-        snapshots = await firstValueFrom(this.indicatorService.getSnapshots(ind.id, this.activityId));
+        snapshots = await firstValueFrom(this.indicatorService.getSnapshots(ind.id, this.scope));
       } catch {
         snapshots = [];
       }
@@ -593,13 +597,13 @@ export class GroupSnapshotsPanelComponent implements OnInit, OnChanges {
         scope: 'group',
         scopeId: snapshot.contextId,
         userId: '',
-        activityId: snapshot.activityId,
+        ...(snapshot.activityId ? { activityId: snapshot.activityId } : { courseId: snapshot.courseId! }),
       },
       queryParams: {
         from: 'group-snapshot',
         groupId: snapshot.contextId,
         groupName: group?.name ?? snapshot.title,
-        activityId: snapshot.activityId,
+        ...(snapshot.activityId ? { activityId: snapshot.activityId } : {}),
         courseId: this.courseId,
         activityName: this.activityName,
         courseName: this.courseName,
@@ -655,7 +659,7 @@ export class GroupSnapshotsPanelComponent implements OnInit, OnChanges {
         this.indicatorService.createSnapshot(panel.indicator.id, {
           contextType: 'group',
           contextId: group.id,
-          activityId: this.activityId,
+          ...this.scope,
           title: group.name,
         }),
       );
@@ -730,6 +734,7 @@ export class GroupSnapshotsPanelComponent implements OnInit, OnChanges {
   protected async openCompare(panel: IndicatorPanel): Promise<void> {
     this.compPanel = panel;
     this.compResults.clear();
+    this.compChartOptions.clear();
     this.compDisabledGroups.clear();
     this.compLoading = true;
     this.cdr.markForCheck();
@@ -749,13 +754,17 @@ export class GroupSnapshotsPanelComponent implements OnInit, OnChanges {
         firstValueFrom(
           this.indicatorService.computeView(
             panel.indicator.id, 'group', row.snapshot.contextId,
-            row.snapshot.activityId, viz.id,
+            row.snapshot.activityId ?? undefined, viz.id, row.snapshot.courseId ?? undefined,
           ),
         ).then(res => {
-          this.compResults.set(`${row.snapshot.contextId}__${viz.id}`, {
-            value: res.value,
-            structuredValue: res.structuredValue ?? (res as any).metadata?.structuredValue,
-          });
+          const key = `${row.snapshot.contextId}__${viz.id}`;
+          const structuredValue = res.structuredValue ?? (res as any).metadata?.structuredValue;
+          this.compResults.set(key, { value: res.value, structuredValue });
+          // Même rendu ECharts que la page détail (indicator-chart-options.util.ts) - calculé
+          // une seule fois ici plutôt qu'à chaque cycle de détection pour éviter de recréer
+          // l'objet d'options à chaque fois (ngx-echarts recompare par référence).
+          const options = buildIndicatorChartOptions(viz, { value: res.value, structuredValue }, panel.indicator.thresholds);
+          if (options) this.compChartOptions.set(key, options);
         }).catch(() => {
           this.compResults.set(`${row.snapshot.contextId}__${viz.id}`, { value: 0 });
         }),
@@ -771,33 +780,15 @@ export class GroupSnapshotsPanelComponent implements OnInit, OnChanges {
     return this.compResults.get(`${groupId}__${vizId}`) ?? null;
   }
 
-  protected getThresholdColor(value: number): string {
-    const t = this.compPanel?.indicator.thresholds;
-    if (!t || (t.good == null && t.warning == null)) return '#1890ff';
-    if (t.good != null && value <= t.good)       return '#52c41a';
-    if (t.warning != null && value <= t.warning) return '#faad14';
-    return '#ff4d4f';
+  protected getCompChartOptions(groupId: string, vizId: string): EChartsOption | null {
+    return this.compChartOptions.get(`${groupId}__${vizId}`) ?? null;
   }
 
   protected getVizIcon(type: string): string {
     const map: Record<string, string> = {
       card: 'credit_card', gauge: 'speed', 'bar-chart': 'bar_chart',
-      histogram: 'bar_chart', 'line-chart': 'show_chart',
+      histogram: 'equalizer', 'line-chart': 'show_chart',
     };
     return map[type] ?? 'analytics';
-  }
-
-  protected topEntries(structured: any): { key: string; val: number }[] {
-    if (!structured) return [];
-    const entries = Array.isArray(structured)
-      ? structured.map((e: any) => ({ key: e.key ?? e.bucket ?? String(e), val: e.value ?? e.count ?? 0 }))
-      : Object.entries(structured).map(([k, v]) => ({ key: k, val: v as number }));
-    return entries.sort((a, b) => b.val - a.val);
-  }
-
-  protected barWidth(val: number, structured: any): number {
-    const entries = this.topEntries(structured);
-    const max = Math.max(...entries.map(e => e.val), 1);
-    return Math.round((val / max) * 100);
   }
 }

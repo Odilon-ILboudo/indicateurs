@@ -211,6 +211,14 @@ export class PlatonService {
     return rows[0]?.owner_id ?? null;
   }
 
+  async getCourseIdForActivity(activityId: string): Promise<string | null> {
+    const rows = await this.dataSource.query(
+      `SELECT course_id FROM "Activities" WHERE id = $1 LIMIT 1`,
+      [activityId],
+    );
+    return rows[0]?.course_id ?? null;
+  }
+
   /**
    * Récupère toutes les activités
    */
@@ -265,13 +273,14 @@ export class PlatonService {
   /**
    * Équivalent de queryTable mais filtre les lignes dont user_id appartient
    * au groupe de TP identifié par groupId (UUID de CourseGroups).
-   * Paramètre activityId requis : toutes les activités d'un même cours
-   * sont partagées entre les groupes.
+   * Le périmètre est soit une seule activité (`activityId`), soit toutes les
+   * activités d'un cours à la fois (`courseId`) - exactement l'un des deux,
+   * jamais les deux ni aucun.
    */
   async queryTableForGroup(
     table: string,
     groupId: string,
-    activityId: string,
+    scope: { activityId: string } | { courseId: string },
     extraFilters: Record<string, string> = {},
     limit = 10000,
   ): Promise<any[]> {
@@ -281,16 +290,25 @@ export class PlatonService {
 
     const select = await this.buildSafeSelect(table);
 
-    const conditions: string[] = [
-      `"activity_id" = $1`,
+    const conditions: string[] = [];
+    const params: any[] = [];
+    if ('activityId' in scope) {
+      conditions.push(`"activity_id" = $1`);
+      params.push(scope.activityId);
+    } else {
+      conditions.push(`"activity_id" IN (SELECT id FROM "Activities" WHERE course_id = $1)`);
+      params.push(scope.courseId);
+    }
+
+    conditions.push(
       `"user_id" IN (
          SELECT cgm.user_id
          FROM "CourseGroupsMember" cgm
          JOIN "CourseGroups" cg ON cg.group_id = cgm.group_id
          WHERE cg.id = $2
        )`,
-    ];
-    const params: any[] = [activityId, groupId];
+    );
+    params.push(groupId);
     let idx = 3;
 
     for (const [col, val] of Object.entries(extraFilters)) {
@@ -311,24 +329,63 @@ export class PlatonService {
   // ── Contexte enseignant ───────────────────────────────────────────────────
 
   /**
-   * Retourne les cours d'un enseignant avec leurs groupes de TP.
+   * Recherche des cours par nom (tous cours, pas seulement ceux possédés par l'utilisateur
+   * courant - le test de formule doit pouvoir cibler n'importe quelle ressource PLaTon).
+   * Limité à `limit` résultats pour rester rapide ; `query` vide renvoie les premiers par ordre
+   * alphabétique.
    */
-  async getCoursesWithGroupsForTeacher(teacherId: string): Promise<{
+  /**
+   * Recherche des utilisateurs (nom/prénom/username/email), pour la modale "Ajouter un
+   * membre" - même pattern que searchCourses ci-dessous.
+   */
+  async searchUsers(query: string, roles?: string[], limit = 10): Promise<{
     id: string;
-    name: string;
-    groups: { id: string; name: string }[];
+    username: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    email: string | null;
   }[]> {
-    const courses = await this.dataSource.query(
-      `SELECT id, name FROM "Courses" WHERE owner_id = $1 ORDER BY name`,
-      [teacherId],
-    );
-    for (const course of courses) {
-      course.groups = await this.dataSource.query(
-        `SELECT id, name FROM "CourseGroups" WHERE course_id = $1 ORDER BY name`,
-        [course.id],
+    const conditions = ['active = true'];
+    const params: unknown[] = [];
+    if (query) {
+      params.push(`%${query}%`);
+      conditions.push(
+        `(username ILIKE $${params.length} OR first_name ILIKE $${params.length} OR last_name ILIKE $${params.length} OR email ILIKE $${params.length})`,
       );
     }
-    return courses;
+    if (roles?.length) {
+      params.push(roles);
+      conditions.push(`role = ANY($${params.length})`);
+    }
+    params.push(limit);
+
+    const rows = await this.dataSource.query(
+      `SELECT id, username, first_name, last_name, role, email
+       FROM "Users"
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY first_name, last_name
+       LIMIT $${params.length}`,
+      params,
+    );
+    return rows.map((r: any) => ({
+      id: r.id,
+      username: r.username,
+      firstName: r.first_name,
+      lastName: r.last_name,
+      role: r.role,
+      email: r.email,
+    }));
+  }
+
+  async searchCourses(query: string, limit = 10, offset = 0): Promise<{
+    id: string;
+    name: string;
+  }[]> {
+    return this.dataSource.query(
+      `SELECT id, name FROM "Courses" WHERE name ILIKE $1 ORDER BY name LIMIT $2 OFFSET $3`,
+      [`%${query}%`, limit, offset],
+    );
   }
 
   /**

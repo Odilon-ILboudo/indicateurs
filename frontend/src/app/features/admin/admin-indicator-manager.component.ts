@@ -21,10 +21,10 @@ import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzTabsModule } from 'ng-zorro-antd/tabs';
 import { NzRateModule } from 'ng-zorro-antd/rate';
 import { IndicatorService } from '../../core/services/indicator.service';
-import { IndicatorDefinition, IndicatorFeedback, IndicatorScope } from '../../core/models/indicator.model';
+import { IndicatorDefinition, IndicatorFeedback, IndicatorScope, contextIcon } from '../../core/models/indicator.model';
 import { IndicatorConfigComponent } from './indicator-config.component';
 import { IndicatorBuilderComponent, CONTEXT_LABELS, IndicatorFamilyPreset } from './indicator-builder.component';
-import { EventRuleManagerComponent } from './event-rule-manager.component';
+import { NewIndicatorChoiceModalComponent, NewIndicatorChoiceResult } from './new-indicator-choice-modal.component';
 import { buildIndicatorDisplayRows, IndicatorDisplayRow } from '../../shared/utils/indicator-family-grouping';
 
 // ── Modale : logs d'exécution ─────────────────────────────────────────────────
@@ -188,6 +188,7 @@ export class IndicatorFamilyStartModalComponent {
     NzSwitchModule, NzTagModule, NzTooltipModule,
     NzPopconfirmModule, NzBadgeModule, NzDividerModule,
     NzEmptyModule, NzSpinModule, NzTabsModule, NzRateModule,
+    NzSelectModule,
   ],
   template: `
     <div class="admin-manager">
@@ -201,10 +202,6 @@ export class IndicatorFamilyStartModalComponent {
           </p>
         </div>
         <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
-          <button nz-button (click)="openEventRuleManager()" class="icon-btn">
-            <mat-icon>bolt</mat-icon>
-            Événements &amp; déclencheurs
-          </button>
           <button nz-button (click)="openFamilyWizard()" class="icon-btn">
             <mat-icon>folder_special</mat-icon>
             Créer une famille
@@ -216,10 +213,21 @@ export class IndicatorFamilyStartModalComponent {
         </div>
       </div>
 
-      <nz-tabs [nzSelectedIndex]="groupingFilter === 'standalone' ? 0 : 1" (nzSelectedIndexChange)="onTabChange($event)">
-        <nz-tab nzTitle="Indicateurs uniques"></nz-tab>
-        <nz-tab nzTitle="Familles"></nz-tab>
-      </nz-tabs>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <nz-tabs style="flex:1" [nzSelectedIndex]="groupingFilter === 'standalone' ? 0 : 1" (nzSelectedIndexChange)="onTabChange($event)">
+          <nz-tab nzTitle="Indicateurs uniques"></nz-tab>
+          <nz-tab nzTitle="Familles"></nz-tab>
+        </nz-tabs>
+        <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:#595959">
+          Statut
+          <mat-icon class="info-icon" nz-tooltip="Filtre sur le statut actif/inactif (pas sur des champs manquants) : &quot;Complets&quot; = indicateurs actifs, &quot;Incomplets&quot; = inactifs (brouillons non finalisés, ou réactivation à faire après une édition). Se combine avec l'onglet Uniques/Familles sélectionné à gauche." nzTooltipPlacement="top">info_outline</mat-icon>
+        </span>
+        <nz-select [(ngModel)]="completenessFilter" (ngModelChange)="applyGroupingFilter()" style="width:160px">
+          <nz-option nzValue="all" nzLabel="Tous"></nz-option>
+          <nz-option nzValue="complete" nzLabel="Complets"></nz-option>
+          <nz-option nzValue="incomplete" nzLabel="Incomplets"></nz-option>
+        </nz-select>
+      </div>
 
       <nz-spin [nzSpinning]="loading">
         <nz-table
@@ -235,7 +243,7 @@ export class IndicatorFamilyStartModalComponent {
               <th>Contexte</th>
               <th>Événements</th>
               <th style="width:80px;text-align:center">Statut</th>
-              <th style="width:200px;text-align:center">Actions</th>
+              <th style="width:210px;text-align:center;white-space:nowrap">Actions</th>
             </tr>
           </thead>
 
@@ -276,11 +284,18 @@ export class IndicatorFamilyStartModalComponent {
       <ng-template #indicatorRow let-ind let-isMember="isMember">
         <tr [class.member-row]="isMember">
           <!-- Nom + description -->
-          <td>
+          <td style="vertical-align:middle">
             <div style="display:flex;align-items:flex-start;gap:6px">
               <mat-icon *ngIf="isMember" style="font-size:16px;color:#bbb;margin-top:2px">subdirectory_arrow_right</mat-icon>
               <div>
-                <div style="font-weight:500">{{ ind.name }}</div>
+                <div style="font-weight:500;display:flex;align-items:center;gap:6px">
+                  {{ ind.name }}
+                  <nz-tag *ngIf="!ind.isActive" nzColor="red" nz-tooltip="Indicateur non finalisé (brouillon)">Incomplet</nz-tag>
+                  <nz-tag *ngIf="pinCountsByIndicatorId[ind.id]" nzColor="purple"
+                    nz-tooltip="Nombre de cours/activités où cet indicateur est figé par un enseignant">
+                    <span nz-icon nzType="lock"></span> Figé sur {{ pinCountsByIndicatorId[ind.id] }} ressource{{ pinCountsByIndicatorId[ind.id] > 1 ? 's' : '' }}
+                  </nz-tag>
+                </div>
                 <div style="font-size:11px;color:#999;margin-top:2px">
                   {{ ind.description | slice:0:80 }}{{ (ind.description?.length ?? 0) > 80 ? '…' : '' }}
                 </div>
@@ -289,7 +304,7 @@ export class IndicatorFamilyStartModalComponent {
           </td>
 
           <!-- Contexte -->
-          <td>
+          <td style="vertical-align:middle">
             <nz-tag *ngIf="ind.contextType" nzColor="blue">{{ ind.contextType }}</nz-tag>
             <span *ngIf="!ind.contextType" style="color:#bbb">-</span>
             <span *ngIf="ind.visualizations?.length" style="font-size:11px;color:#999;margin-left:6px">
@@ -298,13 +313,13 @@ export class IndicatorFamilyStartModalComponent {
           </td>
 
           <!-- Événements -->
-          <td>
+          <td style="vertical-align:middle">
             <nz-tag *ngFor="let ev of ind.requiredEvents" nzColor="purple">{{ ev }}</nz-tag>
             <span *ngIf="!ind.requiredEvents?.length" style="color:#bbb">-</span>
           </td>
 
           <!-- Switch actif/inactif -->
-          <td style="text-align:center">
+          <td style="text-align:center;vertical-align:middle">
             <nz-switch
               [(ngModel)]="ind.isActive"
               (ngModelChange)="toggleActive(ind)"
@@ -314,8 +329,8 @@ export class IndicatorFamilyStartModalComponent {
           </td>
 
           <!-- Actions -->
-          <td>
-            <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">
+          <td style="vertical-align:middle">
+            <div style="display:flex;gap:4px;justify-content:center;flex-wrap:nowrap">
 
               <button nz-button nzType="text" nzSize="small"
                 nz-tooltip="Modifier la formule et la définition"
@@ -429,7 +444,7 @@ export class IndicatorFamilyStartModalComponent {
             <span class="prev-label">Visualisations</span>
             <div class="prev-vizs">
               <div *ngFor="let v of ind.visualizations" class="prev-viz-chip">
-                <mat-icon [style.color]="v.color || '#8c8c8c'">{{ v.icon || 'bar_chart' }}</mat-icon>
+                <mat-icon [style.color]="v.color || '#8c8c8c'">{{ contextIcon(ind.contextType) }}</mat-icon>
                 {{ v.label }}
               </div>
             </div>
@@ -617,6 +632,11 @@ export class IndicatorFamilyStartModalComponent {
     }
     .icon-btn { display: inline-flex !important; align-items: center; gap: 6px; }
     .icon-btn mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .info-icon {
+      font-size: 14px !important; height: 14px; width: 14px; line-height: 1 !important;
+      color: #8c8c8c; cursor: help; vertical-align: middle;
+    }
+    .info-icon:hover { color: #1890ff; }
     .family-row { cursor: pointer; background: #f9f0ff; }
     .family-row:hover { background: #efdbff; }
     .family-row td { display: flex; align-items: center; gap: 6px; }
@@ -709,6 +729,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
   private readonly cdr          = inject(ChangeDetectorRef);
   @ViewChild('renameFamilyTpl') private renameFamilyTplRef!: TemplateRef<any>;
   renameFamilyInput = '';
+  readonly contextIcon = contextIcon;
 
   renameFamily(row: { familyName: string; members: IndicatorDefinition[] }): void {
     this.renameFamilyInput = row.familyName;
@@ -743,6 +764,9 @@ export class AdminIndicatorManagerComponent implements OnInit {
   displayRows: IndicatorDisplayRow[] = [];
   expandedFamilies = new Set<string>();
   groupingFilter: 'families' | 'standalone' = 'standalone';
+  completenessFilter: 'all' | 'complete' | 'incomplete' = 'all';
+  /** Nombre de pins par indicateur (tous cours/activités confondus) - label informatif. */
+  pinCountsByIndicatorId: Record<string, number> = {};
   loading = false;
   recalculating = new Set<string>();
   logsLoading    = new Set<string>();
@@ -776,21 +800,39 @@ export class AdminIndicatorManagerComponent implements OnInit {
   }
 
   createNewInFamily(familyName: string): void {
-    const ref = this.modalSvc.create({
+    const preset: IndicatorFamilyPreset = { familyName, contextType: 'learner', name: '', description: '', requiredEvents: [] };
+
+    const choiceRef = this.modalSvc.create<NewIndicatorChoiceModalComponent, { indicators: IndicatorDefinition[] }>({
       nzTitle: `Nouvel indicateur dans « ${familyName} »`,
-      nzContent: IndicatorBuilderComponent,
-      nzData: { familyPreset: { familyName, contextType: 'learner', name: '', description: '', requiredEvents: [] } },
+      nzContent: NewIndicatorChoiceModalComponent,
+      nzData: { indicators: this.indicators.filter(i => !i.isFamilyPlaceholder) },
       nzFooter: null,
-      nzWidth: '90vw',
+      nzWidth: 480,
       nzCentered: true,
-      nzBodyStyle: { 'max-height': '80vh', 'overflow-y': 'auto' },
     });
-    ref.afterClose.subscribe(created => {
-      if (created) {
-        this.cleanupFamilyPlaceholder(familyName);
-        this.load();
-        this.expandedFamilies.add(familyName);
-      }
+    choiceRef.afterClose.subscribe((choice: NewIndicatorChoiceResult | null | undefined) => {
+      if (!choice) return;
+
+      const nzData: Record<string, unknown> = { familyPreset: preset };
+      if (choice.mode === 'reuse') nzData['reuseSeed'] = choice;
+      else if (choice.mode === 'import') nzData['importSeed'] = { pipeline: choice.pipeline, meta: choice.meta };
+
+      const ref = this.modalSvc.create({
+        nzTitle: `Nouvel indicateur dans « ${familyName} »`,
+        nzContent: IndicatorBuilderComponent,
+        nzData,
+        nzFooter: null,
+        nzWidth: '95vw',
+        nzCentered: true,
+        nzBodyStyle: { 'max-height': '80vh', 'overflow-y': 'auto' },
+      });
+      ref.afterClose.subscribe(created => {
+        if (created) {
+          this.cleanupFamilyPlaceholder(familyName);
+          this.load();
+          this.expandedFamilies.add(familyName);
+        }
+      });
     });
   }
 
@@ -874,6 +916,11 @@ export class AdminIndicatorManagerComponent implements OnInit {
       next: list => { this.indicators = list; this.applyGroupingFilter(); this.loading = false; },
       error: ()  => { this.loading = false; },
     });
+
+    this.indicatorSvc.countPinsByIndicator().subscribe({
+      next: counts => { this.pinCountsByIndicatorId = counts; },
+      error: () => { this.pinCountsByIndicatorId = {}; },
+    });
   }
 
   /** Bascule entre l'onglet "Indicateurs uniques" (0) et "Familles" (1). */
@@ -882,11 +929,16 @@ export class AdminIndicatorManagerComponent implements OnInit {
     this.applyGroupingFilter();
   }
 
-  /** Reconstruit `displayRows` (familles repliables ou indicateurs uniques) selon l'onglet courant. */
+  /** Reconstruit `displayRows` (familles repliables ou indicateurs uniques) selon l'onglet
+   *  courant, combiné au filtre Complet/Incomplet (isActive). */
   applyGroupingFilter(): void {
-    const filtered = this.groupingFilter === 'families'
+    let filtered = this.groupingFilter === 'families'
       ? this.indicators.filter(ind => !!ind.familyName)
       : this.indicators.filter(ind => !ind.familyName);
+    if (this.completenessFilter !== 'all') {
+      filtered = filtered.filter(ind =>
+        this.completenessFilter === 'complete' ? ind.isActive : !ind.isActive);
+    }
     this.displayRows = buildIndicatorDisplayRows(filtered, this.expandedFamilies);
   }
 
@@ -905,24 +957,38 @@ export class AdminIndicatorManagerComponent implements OnInit {
 
   // ── Modales ───────────────────────────────────────────────────────────────
 
-  openEventRuleManager(): void {
-    this.modalSvc.create({
-      nzTitle: 'Événements & déclencheurs',
-      nzContent: EventRuleManagerComponent,
+  openBuilder(indicator?: IndicatorDefinition): void {
+    // Édition d'un indicateur existant : pas de choix préalable, on ouvre directement le wizard.
+    if (indicator) {
+      this.openBuilderModal({ indicator });
+      return;
+    }
+    // Création : demande d'abord comment démarrer (zéro / réutilisation / import), puis ouvre
+    // le wizard déjà pré-rempli en conséquence.
+    const choiceRef = this.modalSvc.create<NewIndicatorChoiceModalComponent, { indicators: IndicatorDefinition[] }>({
+      nzTitle: 'Nouvel indicateur',
+      nzContent: NewIndicatorChoiceModalComponent,
+      nzData: { indicators: this.indicators.filter(i => !i.isFamilyPlaceholder) },
       nzFooter: null,
-      nzWidth: '80vw',
+      nzWidth: 480,
       nzCentered: true,
-      nzBodyStyle: { 'max-height': '80vh', 'overflow-y': 'auto' },
+    });
+    choiceRef.afterClose.subscribe((choice: NewIndicatorChoiceResult | null | undefined) => {
+      if (!choice) return;
+      if (choice.mode === 'blank') this.openBuilderModal({});
+      else if (choice.mode === 'reuse') this.openBuilderModal({ reuseSeed: choice });
+      else this.openBuilderModal({ importSeed: { pipeline: choice.pipeline, meta: choice.meta } });
     });
   }
 
-  openBuilder(indicator?: IndicatorDefinition): void {
+  private openBuilderModal(nzData: Record<string, unknown>): void {
+    const indicator = nzData['indicator'] as IndicatorDefinition | undefined;
     const ref = this.modalSvc.create({
       nzTitle: indicator ? `Modifier : ${indicator.name}` : 'Nouvel indicateur',
       nzContent: IndicatorBuilderComponent,
-      nzData: indicator ? { indicator } : {},
+      nzData,
       nzFooter: null,
-      nzWidth: '90vw',
+      nzWidth: '95vw',
       nzCentered: true,
       nzBodyStyle: { 'max-height': '80vh', 'overflow-y': 'auto' },
     });
@@ -973,7 +1039,8 @@ export class AdminIndicatorManagerComponent implements OnInit {
     if (placeholder) this.indicatorSvc.deleteIndicator(placeholder.id).subscribe();
   }
 
-  /** Ouvre le builder pré-rempli pour un membre de la famille, puis enchaîne sur le suivant à la
+  /** Ouvre d'abord le choix de démarrage (zéro / réutiliser / import) pour ce membre de la
+   *  famille, puis le builder pré-rempli en conséquence, puis enchaîne sur le suivant à la
    *  fermeture. Supprime au passage le placeholder de famille vide si c'est le premier vrai membre. */
   private openFamilyMember(start: FamilyStartResult, contextType: IndicatorScope, queue: IndicatorScope[]): void {
     const preset: IndicatorFamilyPreset = {
@@ -983,22 +1050,39 @@ export class AdminIndicatorManagerComponent implements OnInit {
       contextType,
       name: `${start.familyName} - ${CONTEXT_LABELS[contextType]}`,
     };
-    const ref = this.modalSvc.create({
+
+    const choiceRef = this.modalSvc.create<NewIndicatorChoiceModalComponent, { indicators: IndicatorDefinition[] }>({
       nzTitle: preset.name,
-      nzContent: IndicatorBuilderComponent,
-      nzData: { familyPreset: preset, familyQueue: queue },
+      nzContent: NewIndicatorChoiceModalComponent,
+      nzData: { indicators: this.indicators.filter(i => !i.isFamilyPlaceholder) },
       nzFooter: null,
-      nzWidth: '90vw',
+      nzWidth: 480,
       nzCentered: true,
-      nzBodyStyle: { 'max-height': '80vh', 'overflow-y': 'auto' },
     });
-    ref.afterClose.subscribe(saved => {
-      if (saved) this.cleanupFamilyPlaceholder(start.familyName);
-      this.load();
-      if (saved && queue.length) {
-        const [next, ...rest] = queue;
-        this.openFamilyMember(start, next, rest);
-      }
+    choiceRef.afterClose.subscribe((choice: NewIndicatorChoiceResult | null | undefined) => {
+      if (!choice) return;
+
+      const nzData: Record<string, unknown> = { familyPreset: preset, familyQueue: queue };
+      if (choice.mode === 'reuse') nzData['reuseSeed'] = choice;
+      else if (choice.mode === 'import') nzData['importSeed'] = { pipeline: choice.pipeline, meta: choice.meta };
+
+      const ref = this.modalSvc.create({
+        nzTitle: preset.name,
+        nzContent: IndicatorBuilderComponent,
+        nzData,
+        nzFooter: null,
+        nzWidth: '95vw',
+        nzCentered: true,
+        nzBodyStyle: { 'max-height': '80vh', 'overflow-y': 'auto' },
+      });
+      ref.afterClose.subscribe(saved => {
+        if (saved) this.cleanupFamilyPlaceholder(start.familyName);
+        this.load();
+        if (saved && queue.length) {
+          const [next, ...rest] = queue;
+          this.openFamilyMember(start, next, rest);
+        }
+      });
     });
   }
 
@@ -1040,6 +1124,9 @@ export class AdminIndicatorManagerComponent implements OnInit {
     this.indicatorSvc.updateIndicatorStatus(indicator.id, indicator.isActive).subscribe({
       next: () => {
         this.messageSvc.success(`Indicateur ${indicator.isActive ? 'activé' : 'désactivé'}`);
+        // Le filtre Complet/Incomplet doit refléter immédiatement le nouveau statut, sinon un
+        // indicateur juste (dés)activé peut rester visible dans un filtre qu'il ne remplit plus.
+        this.applyGroupingFilter();
         if (indicator.isActive) {
           this.notifIndicator = indicator;
           this.notifTitle = `Nouvel indicateur disponible : ${indicator.name}`;

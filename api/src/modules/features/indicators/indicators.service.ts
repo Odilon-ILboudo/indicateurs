@@ -3,7 +3,7 @@ import { Injectable, NotFoundException, BadRequestException, ConflictException, 
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { IndicatorDefinition } from './entities/indicator-definition.entity';
+import { IndicatorDefinition, ContextType, FormulaDefinition } from './entities/indicator-definition.entity';
 import { IndicatorValue, buildValueMetadata } from './entities/indicator-value.entity';
 import { IndicatorExecutionLog } from './entities/indicator-execution-log.entity';
 import { IndicatorSnapshot } from './entities/indicator-snapshot.entity';
@@ -12,7 +12,8 @@ import { IndicatorNotification } from './entities/indicator-notification.entity'
 import { UserIndicatorPreference } from '../user-preferences/entities/user-indicator-preference.entity';
 import { FormulaInterpreterService, CandidateRowsMap, GroupCandidateRowsMap } from './interpreter/formula-interpreter.service';
 import { PlatonService } from '../../core/platon/platon.service';
-import { resolveFormula } from './formula-resolution.util';
+import { resolveFormula, isActivityAware, isCourseAware } from './formula-resolution.util';
+import { CreateIndicatorDto, UpdateIndicatorDto } from './dto/indicator.dto';
 
 export interface DeltaEvent {
   sessionId?: string;
@@ -147,11 +148,11 @@ export class IndicatorsService {
     return results;
   }
 
-  async create(definition: any): Promise<IndicatorDefinition> {
+  async create(definition: CreateIndicatorDto): Promise<IndicatorDefinition> {
     const indicator = this.indicatorModel.create({
       name: definition.name,
       description: definition.description,
-      contextType: definition.contextType ?? null,
+      contextType: (definition.contextType ?? null) as ContextType,
       familyName: definition.familyName ?? null,
       requiredEvents: definition.requiredEvents || [],
       visualizations: definition.visualizations ?? [],
@@ -168,7 +169,7 @@ export class IndicatorsService {
     return saved;
   }
 
-  async update(id: string, data: Partial<IndicatorDefinition> & { updatedBy?: string }): Promise<IndicatorDefinition> {
+  async update(id: string, data: UpdateIndicatorDto): Promise<IndicatorDefinition> {
     const indicator = await this.findById(id);
 
     Object.assign(indicator, data);
@@ -255,8 +256,8 @@ export class IndicatorsService {
     return { processed: userIds.length, updated, failed };
   }
 
-  async getTeacherContext(teacherId: string) {
-    return this.platonService.getCoursesWithGroupsForTeacher(teacherId);
+  async searchCourses(query: string, offset = 0) {
+    return this.platonService.searchCourses(query, 10, offset);
   }
 
   async getCourseActivities(courseId: string) {
@@ -274,6 +275,65 @@ export class IndicatorsService {
    * Si vizId est absent, utilise visualizations[0].
    * Persiste et met en cache le résultat dans indicator_values (clé = indicatorId+contextId+vizId).
    */
+  /**
+   * Clé de cache pour indicator_values : ajoute un suffixe activityId ou courseId quand le
+   * contexte ET la formule en ont besoin (voir isActivityAware()/isCourseAware()). Partagée par
+   * computeView() et computeViewIncremental() pour qu'elles ciblent toujours la même ligne -
+   * une divergence entre les deux aurait pour effet de faire manquer le cache en incrémental
+   * et de retomber, sans erreur visible, sur un recalcul complet.
+   */
+  private resolveCacheContextId(
+    contextType: string,
+    contextId: string,
+    formula: FormulaDefinition | null,
+    activityId?: string,
+    courseId?: string,
+  ): string {
+    const isPersonal = contextType === 'learner' || contextType === 'teacher' || contextType === 'admin';
+    const activityRelevant = contextType === 'course' || contextType === 'group' || (isPersonal && isActivityAware(formula));
+    const courseRelevant = contextType === 'group' || (isPersonal && isCourseAware(formula));
+    const scopeSuffix = (activityRelevant && activityId) ? activityId : (courseRelevant && courseId) ? courseId : undefined;
+    return scopeSuffix ? `${contextId}:${scopeSuffix}` : contextId;
+  }
+
+  /**
+   * Construit le FormulaContext (userId/groupId/activityId/courseId) passé à l'interpréteur,
+   * à partir du (contextType, contextId) de la vue. Partagée par computeView() et
+   * computeViewIncremental() (chemin needsTargetedFetch, formules avec join) - voir
+   * resolveCacheContextId() pour le même principe appliqué à la clé de cache.
+   */
+  private buildFormulaContext(
+    indicatorId: string,
+    contextType: string,
+    contextId: string,
+    formula: FormulaDefinition | null,
+    activityId?: string,
+    courseId?: string,
+  ): Record<string, any> {
+    const formulaContext: any = { indicatorId };
+    // course_id est une colonne directe de SessionData (dénormalisée) : contrairement à
+    // `group`, aucune sous-requête n'est nécessaire, le mécanisme générique de filtre suffit
+    // (voir executeFetch, CONTEXT_FIELD_MAP). Le choix se base sur ce que LA FORMULE déclare
+    // (isActivityAware/isCourseAware), jamais sur la simple présence d'un activityId~: un
+    // événement réel porte presque toujours un activityId, même pour une formule qui ne
+    // s'intéresse qu'à course_id - s'y fier aveuglément aurait scopé par erreur une formule
+    // course-aware sur une seule activité (ou pire, laissé son filtre sans valeur du tout).
+    if (contextType === 'learner' || contextType === 'teacher' || contextType === 'admin') {
+      formulaContext.userId = contextId;
+      if (isActivityAware(formula)) formulaContext.activityId = activityId;
+      if (isCourseAware(formula)) formulaContext.courseId = courseId;
+    }
+    if (contextType === 'group') {
+      formulaContext.groupId = contextId;
+      // Même principe que learner/teacher/admin ci-dessus~: se baser sur ce que la formule
+      // déclare, pas sur la simple présence d'un activityId (voir executeFetch, wantsGroup).
+      if (isCourseAware(formula)) { formulaContext.courseId = courseId; } else { formulaContext.activityId = activityId; }
+    }
+    if (contextType === 'course')   { formulaContext.courseId = contextId; formulaContext.activityId = activityId; }
+    if (contextType === 'activity') { formulaContext.activityId = contextId; }
+    return formulaContext;
+  }
+
   async computeView(
     indicatorId: string,
     contextType: string,
@@ -281,6 +341,7 @@ export class IndicatorsService {
     activityId?: string,
     vizId?: string,
     forceRefresh = false,
+    courseId?: string,
   ): Promise<{ value: number; structuredValue?: any; metadata: Record<string, any> }> {
     const indicator = await this.findById(indicatorId);
 
@@ -299,14 +360,15 @@ export class IndicatorsService {
       );
     }
 
-    const resolvedActivityId = contextType === 'learner'
-      ? (activityId ?? process.env.TARGET_ACTIVITY_ID)
-      : activityId;
-
-    // Clé de cache : 1 valeur par indicateur/contexte, partagée par toutes les visualisations
-    const cacheContextId = (contextType === 'course' || contextType === 'group') && resolvedActivityId
-      ? `${contextId}:${resolvedActivityId}`
-      : contextId;
+    // Clé de cache : 1 valeur par indicateur/contexte, partagée par toutes les visualisations.
+    // `course` est structurellement toujours scopé par activité (activityId requis côté
+    // appelant). `group` est scopé soit par activité, soit par cours entier (toutes ses
+    // activités agrégées) - l'un ou l'autre, jamais aucun, jamais les deux à la fois.
+    // `learner`/`teacher`/`admin` ne sont scopés que si LEUR formule est activity-aware
+    // (isActivityAware) ou course-aware (isCourseAware) : sinon, une valeur "globale"
+    // légitime (ex. tableau de bord) serait à tort fragmentée, ou inversement écrasée par
+    // une valeur scopée. Logique partagée avec computeViewIncremental() via resolveCacheContextId().
+    const cacheContextId = this.resolveCacheContextId(contextType, contextId, formula, activityId, courseId);
 
     const existing = await this.indicatorValueModel.findOne({
       where: { indicatorId, contextType, contextId: cacheContextId },
@@ -320,12 +382,7 @@ export class IndicatorsService {
       };
     }
 
-    const formulaContext: any = { indicatorId };
-    if (contextType === 'learner')  { formulaContext.userId = contextId; formulaContext.activityId = resolvedActivityId; }
-    if (contextType === 'teacher' || contextType === 'admin') { formulaContext.userId = contextId; formulaContext.activityId = resolvedActivityId; }
-    if (contextType === 'group')    { formulaContext.groupId = contextId; formulaContext.activityId = resolvedActivityId; }
-    if (contextType === 'course')   { formulaContext.courseId = contextId; formulaContext.activityId = resolvedActivityId; }
-    if (contextType === 'activity') { formulaContext.activityId = contextId; }
+    const formulaContext = this.buildFormulaContext(indicatorId, contextType, contextId, formula, activityId, courseId);
 
     // Pour les formules éligibles au calcul incrémental, stocker l'état intermédiaire en metadata
     // (rowValues ou groupRowValues) permet aux refresh d'événements ultérieurs d'éviter un SQL complet.
@@ -394,7 +451,7 @@ export class IndicatorsService {
     const raw = await this.formulaInterpreter.interpret(formula, {
       userId: context.userId,
       groupId: context.groupId,
-      activityId: context.activityId ?? process.env.TARGET_ACTIVITY_ID,
+      activityId: context.activityId,
       courseId: context.courseId,
     });
     const result = Array.isArray(raw) && raw.length > 200 ? raw.slice(0, 200) : raw;
@@ -408,7 +465,7 @@ export class IndicatorsService {
     return this.formulaInterpreter.interpretWithSteps(formula, {
       userId: context.userId,
       groupId: context.groupId,
-      activityId: context.activityId ?? process.env.TARGET_ACTIVITY_ID,
+      activityId: context.activityId,
       courseId: context.courseId,
     });
   }
@@ -433,22 +490,28 @@ export class IndicatorsService {
 
   // ── Snapshots ─────────────────────────────────────────────────────────────
 
-  async getSnapshots(indicatorId: string, activityId: string): Promise<IndicatorSnapshot[]> {
+  async getSnapshots(indicatorId: string, scope: { activityId: string } | { courseId: string }): Promise<IndicatorSnapshot[]> {
     return this.snapshotModel.find({
-      where: { indicatorId, activityId },
+      where: { indicatorId, ...scope },
       order: { createdAt: 'ASC' },
     });
   }
 
   async createSnapshot(
     indicatorId: string,
-    body: { contextType: string; contextId: string; activityId: string; title: string },
+    body: { contextType: string; contextId: string; activityId?: string; courseId?: string; title: string },
   ): Promise<IndicatorSnapshot> {
+    if (!body.activityId === !body.courseId) {
+      throw new BadRequestException('Exactement un des deux, activityId ou courseId, est requis');
+    }
+    const scope = body.activityId ? { activityId: body.activityId } : { courseId: body.courseId };
     const existing = await this.snapshotModel.findOne({
-      where: { indicatorId, contextType: body.contextType, contextId: body.contextId, activityId: body.activityId },
+      where: { indicatorId, contextType: body.contextType, contextId: body.contextId, ...scope },
     });
     if (existing) {
-      throw new ConflictException('Un snapshot pour ce groupe et cette activité existe déjà');
+      throw new ConflictException(
+        `Un snapshot pour ce groupe et ce${body.activityId ? 'tte activité' : ' cours'} existe déjà`,
+      );
     }
     const snapshot = this.snapshotModel.create({ indicatorId, ...body });
     return this.snapshotModel.save(snapshot);
@@ -468,10 +531,16 @@ export class IndicatorsService {
   }
 
   /**
-   * Mise à jour incrémentale (delta) d'une vue lors d'un événement d'ingestion.
-   * Si la formule est éligible et que rowValues existe déjà en metadata, met à jour uniquement
-   * la session concernée en mémoire et ré-agrège - aucune requête SQL sur PLaTon.
-   * Sinon, repasse en calcul complet via computeView(forceRefresh=true).
+   * Mise à jour incrémentale (delta) d'une vue lors d'un événement d'ingestion. Point d'entrée
+   * unique pour tout événement, quel que soit le contextType ou le périmètre (activité, cours
+   * entier, ou aucun) : si la formule est éligible (voir getIncrementalShape()) et qu'un état
+   * incrémental existe déjà en metadata, met à jour uniquement la ligne concernée et ré-agrège -
+   * 0 requête SQL sur PLaTon si le pipeline n'a pas de join (lecture directe du payload de
+   * l'événement), 1 requête ciblée (par sessionId) si le pipeline a un join. Sinon (formule non
+   * éligible, ou premier calcul), retombe sur un recalcul complet via
+   * computeView(forceRefresh=true), qui initialise au passage l'état incrémental pour les
+   * événements suivants. Retourne toujours la valeur à jour (jamais void), pour que les
+   * appelants puissent émettre la notification WS quel que soit le chemin emprunté.
    */
   async computeViewIncremental(
     indicatorId: string,
@@ -480,40 +549,59 @@ export class IndicatorsService {
     activityId: string | undefined,
     vizId: string | undefined,
     deltaEvent: DeltaEvent,
-  ): Promise<void> {
+    courseId?: string,
+  ): Promise<{ value: number } | null> {
     const indicator = await this.findById(indicatorId);
     const formula = resolveFormula(indicator);
-    if (!formula?.pipeline?.length) return;
+    if (!formula?.pipeline?.length) return null;
 
-    const cacheContextId = (contextType === 'course' || contextType === 'group') && activityId
-      ? `${contextId}:${activityId}`
-      : contextId;
+    const fullRecompute = async (): Promise<{ value: number }> => {
+      const result = await this.computeView(indicatorId, contextType, contextId, activityId, vizId, true, courseId);
+      return { value: result.value };
+    };
+
+    const cacheContextId = this.resolveCacheContextId(contextType, contextId, formula, activityId, courseId);
 
     const existing = await this.indicatorValueModel.findOne({
       where: { indicatorId, contextType, contextId: cacheContextId },
     });
 
     const shape = this.formulaInterpreter.getIncrementalShape(formula as any);
+    if (!shape || !deltaEvent.sessionId) return fullRecompute();
 
-    if (shape?.findFirst) {
+    // Résout la ligne source de l'événement, seulement si un état incrémental existe déjà (sinon
+    // fullRecompute() est appelé sans aucune requête ciblée). Pas de join → payload de
+    // l'événement directement (0 SQL) ; join → 1 fetch ciblé sur ce sessionId puis joins en
+    // mémoire (voir fetchSingleSessionRow). Utilisé par les 3 chemins ci-dessous.
+    const formulaContext = this.buildFormulaContext(indicatorId, contextType, contextId, formula, activityId, courseId);
+    const resolveSourceRow = async (): Promise<Record<string, any> | null> => {
+      if (!shape.needsTargetedFetch) return deltaEvent.payload ?? null;
+      const fetched = await this.formulaInterpreter.fetchSingleSessionRow(deltaEvent.sessionId!, formulaContext, shape);
+      return fetched ?? deltaEvent.payload ?? null;
+    };
+    const passesFilters = (row: Record<string, any>): boolean =>
+      shape.filterSteps.every(fs => this.formulaInterpreter.evaluateFilterRow(fs.params, row));
+
+    if (shape.findFirst) {
       // ── Chemin findFirst semi-incrémental ──────────────────────────────────
-      const buildEntry = (payload: Record<string, any> | undefined) => {
-        const { sortField, whereField, whereValue } = shape.findFirst!;
-        const extractedValue = parseFloat(payload?.[shape.extractField]);
-        if (isNaN(extractedValue)) return null;
+      const { sortField, whereField, whereValue } = shape.findFirst;
+      const buildEntry = (row: Record<string, any>) => {
+        const extractedValue = parseFloat(row[shape.extractField]);
+        if (isNaN(extractedValue) || !passesFilters(row)) return null;
         return {
-          sortValue: sortField ? payload?.[sortField] : null,
+          sortValue: sortField ? row[sortField] : null,
           extractedValue,
-          passes: whereField != null ? String(payload?.[whereField]) === String(whereValue) : true,
+          passes: whereField != null ? String(row[whereField]) === String(whereValue) : true,
         };
       };
 
       if (shape.groupByField) {
         const existingGroupCandidateRows = (existing?.metadata as any)?.incremental?.groupCandidateRows as GroupCandidateRowsMap | undefined;
-        if (existingGroupCandidateRows !== undefined && deltaEvent.sessionId) {
-          const groupKey = String(deltaEvent.payload?.[shape.groupByField] ?? '__null__');
-          const entry = buildEntry(deltaEvent.payload);
-          if (entry) {
+        if (existingGroupCandidateRows !== undefined) {
+          const row = await resolveSourceRow();
+          const entry = row ? buildEntry(row) : null;
+          if (row && entry) {
+            const groupKey = String(row[shape.groupByField] ?? '__null__');
             const newGroupCandidateRows = {
               ...existingGroupCandidateRows,
               [groupKey]: { ...(existingGroupCandidateRows[groupKey] ?? {}), [deltaEvent.sessionId]: entry },
@@ -524,13 +612,14 @@ export class IndicatorsService {
                 metadata: buildValueMetadata(existing?.metadata, newValue, { incremental: { groupCandidateRows: newGroupCandidateRows } }) },
               { conflictPaths: ['indicatorId', 'contextType', 'contextId'] },
             );
-            return;
+            return { value: newValue };
           }
         }
       } else {
         const existingCandidateRows = (existing?.metadata as any)?.incremental?.candidateRows as CandidateRowsMap | undefined;
-        if (existingCandidateRows !== undefined && deltaEvent.sessionId) {
-          const entry = buildEntry(deltaEvent.payload);
+        if (existingCandidateRows !== undefined) {
+          const row = await resolveSourceRow();
+          const entry = row ? buildEntry(row) : null;
           if (entry) {
             const newCandidateRows = { ...existingCandidateRows, [deltaEvent.sessionId]: entry };
             const newValue = await this.formulaInterpreter.computeResultFromCandidates(newCandidateRows, shape);
@@ -539,30 +628,34 @@ export class IndicatorsService {
                 metadata: buildValueMetadata(existing?.metadata, newValue, { incremental: { candidateRows: newCandidateRows } }) },
               { conflictPaths: ['indicatorId', 'contextType', 'contextId'] },
             );
-            return;
+            return { value: newValue };
           }
         }
       }
-      // Fallback → calcul complet
-      await this.computeView(indicatorId, contextType, contextId, activityId, vizId, true);
-      return;
+      return fullRecompute();
     }
 
-    if (shape?.groupByField) {
+    if (shape.groupByField) {
       // ── Chemin groupBy incrémental ─────────────────────────────────────────
       const existingGroupRowValues = (existing?.metadata as any)?.incremental?.groupRowValues as
         Record<string, Record<string, number>> | undefined;
 
-      if (existingGroupRowValues !== undefined && deltaEvent.sessionId) {
-        const groupKey = String(deltaEvent.payload?.[shape.groupByField] ?? '__null__');
-        const rawVal = deltaEvent.payload?.[shape.extractField];
-        const v = typeof rawVal === 'number' ? rawVal : parseFloat(rawVal);
+      if (existingGroupRowValues !== undefined) {
+        const row = await resolveSourceRow();
+        if (row) {
+          const groupKey = String(row[shape.groupByField] ?? '__null__');
+          const newGroupRowValues = { ...existingGroupRowValues };
+          newGroupRowValues[groupKey] = { ...(newGroupRowValues[groupKey] ?? {}) };
 
-        if (!isNaN(v)) {
-          const newGroupRowValues = {
-            ...existingGroupRowValues,
-            [groupKey]: { ...(existingGroupRowValues[groupKey] ?? {}), [deltaEvent.sessionId]: v },
-          };
+          if (passesFilters(row)) {
+            const rawVal = row[shape.extractField];
+            const v = typeof rawVal === 'number' ? rawVal : parseFloat(rawVal);
+            if (!isNaN(v)) newGroupRowValues[groupKey][deltaEvent.sessionId] = v;
+          } else {
+            delete newGroupRowValues[groupKey][deltaEvent.sessionId];
+            if (Object.keys(newGroupRowValues[groupKey]).length === 0) delete newGroupRowValues[groupKey];
+          }
+
           const allValues = Object.values(newGroupRowValues).flatMap(g => Object.values(g));
           const newValue = await this.formulaInterpreter.applyPostSteps(allValues, shape.postSteps);
 
@@ -576,25 +669,28 @@ export class IndicatorsService {
             },
             { conflictPaths: ['indicatorId', 'contextType', 'contextId'] },
           );
-          return;
+          return { value: newValue };
         }
       }
 
-      // Fallback groupBy → calcul complet
-      await this.computeView(indicatorId, contextType, contextId, activityId, vizId, true);
-      return;
+      return fullRecompute();
     }
 
-    // ── Chemin rowValues plat (existant) ────────────────────────────────────
+    // ── Chemin rowValues plat ────────────────────────────────────────────────
     const existingRowValues = (existing?.metadata as any)?.incremental?.rowValues as Record<string, number> | undefined;
 
-    if (shape && existingRowValues && deltaEvent.sessionId) {
-      const rawVal = deltaEvent.payload?.[shape.extractField];
-      const newFieldValue = typeof rawVal === 'number' ? rawVal : parseFloat(rawVal);
-
-      if (!isNaN(newFieldValue)) {
-        const rowValues = { ...existingRowValues, [deltaEvent.sessionId]: newFieldValue };
-        const newValue = await this.formulaInterpreter.applyPostSteps(Object.values(rowValues), shape.postSteps);
+    if (existingRowValues !== undefined) {
+      const row = await resolveSourceRow();
+      if (row) {
+        const newRowValues = { ...existingRowValues };
+        if (passesFilters(row)) {
+          const rawVal = row[shape.extractField];
+          const v = typeof rawVal === 'number' ? rawVal : parseFloat(rawVal);
+          if (!isNaN(v)) newRowValues[deltaEvent.sessionId] = v;
+        } else {
+          delete newRowValues[deltaEvent.sessionId];
+        }
+        const newValue = await this.formulaInterpreter.applyPostSteps(Object.values(newRowValues), shape.postSteps);
 
         await this.indicatorValueModel.upsert(
           {
@@ -602,25 +698,29 @@ export class IndicatorsService {
             contextType,
             contextId: cacheContextId,
             value: newValue,
-            metadata: buildValueMetadata(existing?.metadata, newValue, { incremental: { rowValues } }),
+            metadata: buildValueMetadata(existing?.metadata, newValue, { incremental: { rowValues: newRowValues } }),
           },
           { conflictPaths: ['indicatorId', 'contextType', 'contextId'] },
         );
-        return;
+        return { value: newValue };
       }
     }
 
     // Fallback : rowValues absent (première consultation) ou formule non éligible → calcul complet
-    await this.computeView(indicatorId, contextType, contextId, activityId, vizId, true);
+    return fullRecompute();
   }
 
   /**
-   * Rafraîchit tous les snapshots d'un indicateur liés à une activité donnée.
-   * Si deltaEvent est fourni (appel depuis l'ingestion) → calcul incrémental.
-   * Sans deltaEvent (appel manuel admin) → calcul complet depuis zéro.
+   * Rafraîchit tous les snapshots d'un indicateur liés à une activité ou à un cours donné.
+   * Si deltaEvent est fourni (appel depuis l'ingestion) → tente un calcul incrémental via
+   * computeViewIncremental() (activité ou cours entier, peu importe) ; sinon, recalcul complet.
    */
-  async refreshSnapshots(indicatorId: string, activityId: string, deltaEvent?: DeltaEvent): Promise<void> {
-    const snapshots = await this.snapshotModel.find({ where: { indicatorId, activityId } });
+  async refreshSnapshots(
+    indicatorId: string,
+    scope: { activityId: string } | { courseId: string },
+    deltaEvent?: DeltaEvent,
+  ): Promise<void> {
+    const snapshots = await this.snapshotModel.find({ where: { indicatorId, ...scope } });
     if (!snapshots.length) return;
 
     const indicator = await this.indicatorModel.findOne({ where: { id: indicatorId } });
@@ -634,11 +734,11 @@ export class IndicatorsService {
           const result = deltaEvent
             ? await this.computeViewIncremental(
                 snapshot.indicatorId, snapshot.contextType, snapshot.contextId,
-                snapshot.activityId, viz.id, deltaEvent,
+                snapshot.activityId ?? undefined, viz.id, deltaEvent, snapshot.courseId ?? undefined,
               )
             : await this.computeView(
                 snapshot.indicatorId, snapshot.contextType, snapshot.contextId,
-                snapshot.activityId, viz.id, true,
+                snapshot.activityId ?? undefined, viz.id, true, snapshot.courseId ?? undefined,
               );
           if (result) {
             this.emitUpdated(snapshot.indicatorId, indicator.name, snapshot.contextType, snapshot.contextId, result.value);
@@ -712,11 +812,54 @@ export class IndicatorsService {
   }
 
   /**
+   * Équivalent de refreshActivityViews mais pour les indicateurs `group` course-aware
+   * (isCourseAware) : rafraîchit toutes les valeurs déjà en cache pour ce cours, tous
+   * groupes confondus. Si deltaEvent est fourni, tente un calcul incrémental via
+   * computeViewIncremental() (0 requête SQL si le pipeline s'y prête et qu'un état
+   * incrémental existe déjà pour ce cours) ; sinon, recalcul complet comme avant.
+   */
+  async refreshCourseGroupViews(indicatorId: string, courseId: string, deltaEvent?: DeltaEvent): Promise<void> {
+    const indicator = await this.indicatorModel.findOne({ where: { id: indicatorId } });
+    if (!indicator) return;
+
+    const rows = await this.indicatorValueModel
+      .createQueryBuilder('iv')
+      .where('iv.indicatorId = :indicatorId', { indicatorId })
+      .andWhere('iv.contextType = :type', { type: 'group' })
+      .andWhere('iv.contextId LIKE :suffix', { suffix: `%:${courseId}` })
+      .getMany();
+
+    if (!rows.length) return;
+
+    const groupIds = new Set(rows.map(r => r.contextId.split(':')[0]));
+    const vizList = indicator.visualizations ?? [];
+
+    for (const groupId of groupIds) {
+      for (const vizId of (vizList.length ? vizList.map(v => v.id) : [undefined])) {
+        try {
+          const result = deltaEvent
+            ? await this.computeViewIncremental(indicatorId, 'group', groupId, undefined, vizId, deltaEvent, courseId)
+            : await this.computeView(indicatorId, 'group', groupId, undefined, vizId, true, courseId);
+          if (result) {
+            this.emitUpdated(indicatorId, indicator.name, 'group', groupId, result.value);
+          }
+        } catch (err) {
+          this.logger.warn(
+            `refreshCourseGroupViews échoué - indicatorId=${indicatorId} groupId=${groupId} courseId=${courseId}: ${(err as Error).message}`,
+          );
+        }
+      }
+    }
+  }
+
+  /**
    * Rafraîchit tous les contextes (teacher, admin, ou tout contextType futur) dont
    * les valeurs sont déjà en cache dans indicator_values. Utilisé quand on ne connaît
    * pas à l'avance les contextIds pertinents (ex: admin = 1 contexte "global" inconnu).
+   * Si deltaEvent est fourni, tente un calcul incrémental via computeViewIncremental()
+   * pour chaque ligne en cache ; sinon, recalcul complet comme avant.
    */
-  async refreshCachedContextValues(indicatorId: string, contextType: string): Promise<void> {
+  async refreshCachedContextValues(indicatorId: string, contextType: string, deltaEvent?: DeltaEvent): Promise<void> {
     const indicator = await this.indicatorModel.findOne({ where: { id: indicatorId } });
     if (!indicator) return;
 
@@ -724,18 +867,31 @@ export class IndicatorsService {
     if (!rows.length) return;
 
     const vizList = indicator.visualizations ?? [];
-    const uniqueContextIds = [...new Set(rows.map(r => r.contextId.split(':')[0]))];
+    // Conserve le couple complet (contextId de base, suffixe éventuel) : une ligne en cache
+    // peut être "globale" (contextId seul), scopée à une activité ou scopée à un cours
+    // (voir isActivityAware()/isCourseAware()). Les fusionner en ne gardant que le contextId
+    // de base referait recalculer/écraser la mauvaise ligne. Le suffixe est un activityId ou
+    // un courseId selon ce que LA FORMULE déclare - jamais les deux à la fois, donc jamais
+    // ambigu à interpréter une fois qu'on sait laquelle des deux elle utilise.
+    const formula = resolveFormula(indicator);
+    const suffixIsCourse = isCourseAware(formula);
+    const uniqueCacheKeys = [...new Set(rows.map(r => r.contextId))];
 
-    for (const contextId of uniqueContextIds) {
+    for (const cacheKey of uniqueCacheKeys) {
+      const [contextId, suffix] = cacheKey.split(':');
+      const activityId = suffixIsCourse ? undefined : suffix;
+      const courseId = suffixIsCourse ? suffix : undefined;
       for (const vizId of (vizList.length ? vizList.map(v => v.id) : [undefined])) {
         try {
-          const result = await this.computeView(indicatorId, contextType, contextId, undefined, vizId, true);
+          const result = deltaEvent
+            ? await this.computeViewIncremental(indicatorId, contextType, contextId, activityId, vizId, deltaEvent, courseId)
+            : await this.computeView(indicatorId, contextType, contextId, activityId, vizId, true, courseId);
           if (result) {
             this.emitUpdated(indicatorId, indicator.name, contextType, contextId, result.value);
           }
         } catch (err) {
           this.logger.warn(
-            `refreshCachedContextValues échoué - indicatorId=${indicatorId} contextType=${contextType} contextId=${contextId}: ${(err as Error).message}`,
+            `refreshCachedContextValues échoué - indicatorId=${indicatorId} contextType=${contextType} contextId=${cacheKey}: ${(err as Error).message}`,
           );
         }
       }

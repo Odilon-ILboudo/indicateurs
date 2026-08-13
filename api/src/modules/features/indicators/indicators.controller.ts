@@ -10,6 +10,7 @@ import { IndicatorPinsService } from '../indicator-pins/indicator-pins.service';
 import { IndicatorPinContextType } from '../indicator-pins/indicator-pin.entity';
 import { AdminGuard } from '../../core/guards/admin.guard';
 import { AuthGuard, AuthenticatedUser } from '../../core/auth/auth.guard';
+import { CreateIndicatorDto, UpdateIndicatorDto, UpdateIndicatorStatusDto } from './dto/indicator.dto';
 
 interface AuthenticatedRequest extends Request {
   user?: AuthenticatedUser;
@@ -57,10 +58,12 @@ export class IndicatorsController {
     return this.indicatorsService.getFullSchema();
   }
 
-  /** Retourne les cours + groupes d'un enseignant pour le sélecteur de contexte. */
-  @Get('teacher/:teacherId/context')
-  async getTeacherContext(@Param('teacherId') teacherId: string) {
-    return this.indicatorsService.getTeacherContext(teacherId);
+  /** Recherche des cours par nom (toutes ressources, pas seulement celles de l'utilisateur
+   *  courant) pour le sélecteur de contexte du test de formule - 10 résultats par page,
+   *  `offset` pour charger la suite (pagination "charger plus" côté front). */
+  @Get('courses/search')
+  async searchCourses(@Query('q') q?: string, @Query('offset') offset?: string) {
+    return this.indicatorsService.searchCourses(q ?? '', offset ? parseInt(offset, 10) : 0);
   }
 
   /** Retourne les activités actives d'un cours. */
@@ -86,6 +89,14 @@ export class IndicatorsController {
       throw new BadRequestException('contextType et contextId sont requis');
     }
     return this.pinsService.listPins(contextType, contextId);
+  }
+
+  /** Nombre de pins par indicateur (tous cours/activités confondus) - pour le label "N pins"
+   *  affiché dans la liste admin des indicateurs. */
+  @Get('pins/counts')
+  @UseGuards(AuthGuard)
+  async countPinsByIndicator() {
+    return this.pinsService.countPinsByIndicator();
   }
 
   /**
@@ -139,7 +150,7 @@ export class IndicatorsController {
 
   @Post()
   @UseGuards(AuthGuard, AdminGuard)
-  async createIndicator(@Body() definition: any) {
+  async createIndicator(@Body() definition: CreateIndicatorDto) {
     return this.indicatorsService.create(definition);
   }
 
@@ -156,18 +167,20 @@ export class IndicatorsController {
   /**
    * Calcule la formule d'un indicateur pour un contexte donné et persiste le résultat.
    * POST /api/indicators/:id/compute-view
-   * Body: { contextType, contextId, activityId? }
+   * Body: { contextType, contextId, activityId?, courseId? }
+   * `courseId` : uniquement pertinent pour un indicateur `group` course-aware (voir
+   * isCourseAware()) - ignoré pour tous les autres contextType.
    */
   @Post(':id/compute-view')
   async computeView(
     @Param('id') id: string,
-    @Body() body: { contextType: string; contextId: string; activityId?: string; vizId?: string },
+    @Body() body: { contextType: string; contextId: string; activityId?: string; vizId?: string; courseId?: string },
   ) {
     if (!body.contextType || !body.contextId) {
       throw new BadRequestException('contextType et contextId sont requis');
     }
     return this.indicatorsService.computeView(
-      id, body.contextType, body.contextId, body.activityId, body.vizId,
+      id, body.contextType, body.contextId, body.activityId, body.vizId, false, body.courseId,
     );
   }
 
@@ -205,13 +218,13 @@ export class IndicatorsController {
 
   @Patch(':id')
   @UseGuards(AuthGuard, AdminGuard)
-  async updateIndicator(@Param('id') id: string, @Body() data: any) {
+  async updateIndicator(@Param('id') id: string, @Body() data: UpdateIndicatorDto) {
     return this.indicatorsService.update(id, data);
   }
 
   @Patch(':id/status')
   @UseGuards(AuthGuard, AdminGuard)
-  async toggleStatus(@Param('id') id: string, @Body() body: { isActive: boolean }) {
+  async toggleStatus(@Param('id') id: string, @Body() body: UpdateIndicatorStatusDto) {
     return this.indicatorsService.toggleStatus(id, body.isActive);
   }
 
@@ -224,24 +237,25 @@ export class IndicatorsController {
 
   // ── Snapshots (comparaison groupes côte à côte) ──────────────────────────
 
-  /** Liste les snapshots d'un indicateur pour une activité donnée. */
+  /** Liste les snapshots d'un indicateur pour une activité ou un cours donné (l'un ou l'autre). */
   @Get(':id/snapshots')
   async getSnapshots(
     @Param('id') id: string,
-    @Query('activityId') activityId: string,
+    @Query('activityId') activityId?: string,
+    @Query('courseId') courseId?: string,
   ) {
-    if (!activityId) throw new BadRequestException('activityId est requis');
-    return this.indicatorsService.getSnapshots(id, activityId);
+    if (!activityId && !courseId) throw new BadRequestException('activityId ou courseId est requis');
+    return this.indicatorsService.getSnapshots(id, activityId ? { activityId } : { courseId: courseId! });
   }
 
-  /** Crée un snapshot (groupe + activité). Retourne 409 si déjà existant. */
+  /** Crée un snapshot (groupe + activité OU groupe + cours). Retourne 409 si déjà existant. */
   @Post(':id/snapshots')
   async createSnapshot(
     @Param('id') id: string,
-    @Body() body: { contextType: string; contextId: string; activityId: string; title: string },
+    @Body() body: { contextType: string; contextId: string; activityId?: string; courseId?: string; title: string },
   ) {
-    if (!body.contextId || !body.activityId || !body.title) {
-      throw new BadRequestException('contextId, activityId et title sont requis');
+    if (!body.contextId || (!body.activityId && !body.courseId) || !body.title) {
+      throw new BadRequestException('contextId, (activityId ou courseId) et title sont requis');
     }
     return this.indicatorsService.createSnapshot(id, { ...body, contextType: body.contextType ?? 'group' });
   }

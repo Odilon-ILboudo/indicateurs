@@ -5,17 +5,53 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { IndicatorDefinition } from '../indicators/entities/indicator-definition.entity';
 import { IndicatorValue } from '../indicators/entities/indicator-value.entity';
+import { IndicatorsService } from '../indicators/indicators.service';
 
 @Injectable()
 export class AggregationService {
   private readonly logger = new Logger(AggregationService.name);
-  
+  private isRecalculatingTriggerless = false;
+
   constructor(
     @InjectRepository(IndicatorDefinition, 'indicators')
     private indicatorDefinitionModel: Repository<IndicatorDefinition>,
     @InjectRepository(IndicatorValue, 'indicators')
     private indicatorValueModel: Repository<IndicatorValue>,
+    private readonly indicatorsService: IndicatorsService,
   ) {}
+
+  /** Indicateurs actifs sans événement déclencheur (case "Activer des événements déclencheurs"
+   *  décochée dans le wizard) : pas de mise à jour temps réel possible, donc recalcul périodique
+   *  via recalculate() - même logique de calcul que le flux événementiel, juste déclenchée par
+   *  le temps plutôt que par un événement PLaTon. */
+  @Cron(CronExpression.EVERY_MINUTE)
+  async recalculateTriggerlessIndicators() {
+    if (this.isRecalculatingTriggerless) return;
+    this.isRecalculatingTriggerless = true;
+
+    try {
+      const indicators = await this.indicatorDefinitionModel.find({ where: { isActive: true } });
+      const triggerless = indicators.filter(i => !i.requiredEvents?.length);
+
+      let updated = 0;
+      let failed = 0;
+      for (const indicator of triggerless) {
+        try {
+          await this.indicatorsService.recalculate(indicator.id);
+          updated++;
+        } catch (err) {
+          failed++;
+          this.logger.warn(`Recalcul minute échoué pour "${indicator.name}": ${(err as Error).message}`);
+        }
+      }
+
+      if (triggerless.length > 0) {
+        this.logger.debug(`Recalcul minute (sans événement) : ${updated} ok, ${failed} échoués sur ${triggerless.length}`);
+      }
+    } finally {
+      this.isRecalculatingTriggerless = false;
+    }
+  }
 
   @Cron(CronExpression.EVERY_DAY_AT_1AM)
   async dailyAggregation() {

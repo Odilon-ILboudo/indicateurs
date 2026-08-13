@@ -5,27 +5,28 @@ import { MatIconModule } from '@angular/material/icon';
 import { NzFormModule } from 'ng-zorro-antd/form';
 import { NzInputNumberModule } from 'ng-zorro-antd/input-number';
 import { NzButtonModule } from 'ng-zorro-antd/button';
+import { NzPopconfirmModule } from 'ng-zorro-antd/popconfirm';
 import { NzModalRef, NZ_MODAL_DATA } from 'ng-zorro-antd/modal';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { IndicatorService } from '../../core/services/indicator.service';
-import { IndicatorDefinition, IndicatorPinContextType } from '../../core/models/indicator.model';
+import { IndicatorDefinition, IndicatorPinContextType, IndicatorPin } from '../../core/models/indicator.model';
 
 export interface PinIndicatorModalData {
   indicator: IndicatorDefinition;
   contextType: IndicatorPinContextType;
   contextId: string;
+  /** Présent si l'indicateur est déjà figé sur cette ressource - bascule la modale en mode
+   *  édition (seuils pré-remplis avec CE pin, pas les seuils par défaut de l'indicateur) et
+   *  affiche le bouton "Défiger". */
+  existingPin?: IndicatorPin | null;
 }
 
-/**
- * Figer un indicateur existant sur un cours/une activité précis : tous les
- * membres l'ont alors actif et non désactivable, avec les seuils définis ici
- * (pré-remplis avec les seuils par défaut de l'indicateur, librement
- * redéfinissables). N'écrit jamais dans les préférences perso de l'utilisateur.
- */
+/** Figer un indicateur sur un cours/une activité précis, ou modifier/retirer un pin déjà posé
+ *  (mode édition si `data.existingPin` est fourni). N'écrit jamais dans les préférences perso. */
 @Component({
   selector: 'ui-pin-indicator-modal',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, NzFormModule, NzInputNumberModule, NzButtonModule],
+  imports: [CommonModule, FormsModule, MatIconModule, NzFormModule, NzInputNumberModule, NzButtonModule, NzPopconfirmModule],
   template: `
     <div class="pin-indicator-modal">
       <p class="info">
@@ -58,8 +59,20 @@ export interface PinIndicatorModalData {
       </nz-form-item>
 
       <div class="form-actions">
+        <button *ngIf="isEditMode"
+          nz-button nzDanger
+          nz-popconfirm
+          nzPopconfirmTitle="Les étudiants ne seront plus obligés d'avoir cet indicateur sur cette ressource."
+          nzPopconfirmPlacement="top"
+          (nzOnConfirm)="unpin()"
+          [nzLoading]="unpinning"
+          style="margin-right: auto">
+          Défiger
+        </button>
         <button nz-button (click)="close()">Annuler</button>
-        <button nz-button nzType="primary" [nzLoading]="saving" (click)="save()">Figer l'indicateur</button>
+        <button nz-button nzType="primary" [nzLoading]="saving" (click)="save()">
+          {{ isEditMode ? 'Enregistrer les seuils' : "Figer l'indicateur" }}
+        </button>
       </div>
     </div>
   `,
@@ -85,12 +98,18 @@ export class PinIndicatorModalComponent implements OnInit {
     critical: null,
   };
   protected saving = false;
+  protected unpinning = false;
+  protected readonly isEditMode = !!this.data.existingPin;
 
   ngOnInit(): void {
+    // En édition, on repart des seuils du pin déjà posé (pas des seuils par défaut de
+    // l'indicateur) - sinon rouvrir la modale écraserait silencieusement une personnalisation
+    // déjà faite pour cette ressource.
+    const source = this.data.existingPin?.thresholdsOverride ?? this.data.indicator.thresholds;
     this.thresholds = {
-      good: this.data.indicator.thresholds?.good ?? null,
-      warning: this.data.indicator.thresholds?.warning ?? null,
-      critical: this.data.indicator.thresholds?.critical ?? null,
+      good: source?.good ?? null,
+      warning: source?.warning ?? null,
+      critical: source?.critical ?? null,
     };
   }
 
@@ -106,12 +125,28 @@ export class PinIndicatorModalComponent implements OnInit {
         : null,
     ).subscribe({
       next: () => {
-        this.messageService.success(`"${this.data.indicator.name}" figé pour cette ressource`);
+        this.messageService.success(
+          this.isEditMode ? `Seuils mis à jour pour "${this.data.indicator.name}"` : `"${this.data.indicator.name}" figé pour cette ressource`,
+        );
         this.modalRef.close(true);
       },
       error: () => {
-        this.messageService.error("Erreur lors de la création du pin");
+        this.messageService.error(this.isEditMode ? "Erreur lors de la mise à jour des seuils" : "Erreur lors de la création du pin");
         this.saving = false;
+      },
+    });
+  }
+
+  unpin(): void {
+    this.unpinning = true;
+    this.indicatorService.deletePin(this.data.indicator.id, this.data.contextType, this.data.contextId).subscribe({
+      next: () => {
+        this.messageService.success(`"${this.data.indicator.name}" défigé pour cette ressource`);
+        this.modalRef.close(true);
+      },
+      error: () => {
+        this.messageService.error('Erreur lors du défigeage');
+        this.unpinning = false;
       },
     });
   }

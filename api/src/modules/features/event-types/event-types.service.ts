@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { IndicatorEventType } from './event-type.entity';
 import { IndicatorEventRule } from '../event-rules/indicator-event-rule.entity';
+import { CreateEventTypeDto, UpdateEventTypeDto } from './dto/event-type.dto';
 
 @Injectable()
 export class EventTypesService implements OnModuleInit {
@@ -43,13 +44,13 @@ export class EventTypesService implements OnModuleInit {
     return evt;
   }
 
-  async create(dto: { name: string; label: string; description?: string }) {
+  async create(dto: CreateEventTypeDto) {
     const exists = await this.repo.findOne({ where: { name: dto.name } });
     if (exists) throw new ConflictException(`L'événement "${dto.name}" existe déjà`);
     return this.repo.save({ ...dto, isActive: true });
   }
 
-  async update(id: string, dto: Partial<{ name: string; label: string; description: string; isActive: boolean }>) {
+  async update(id: string, dto: UpdateEventTypeDto) {
     const evt = await this.findOne(id);
     Object.assign(evt, dto);
     return this.repo.save(evt);

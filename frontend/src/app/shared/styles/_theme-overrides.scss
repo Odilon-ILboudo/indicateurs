@@ -61,6 +61,24 @@
   background-color: var(--brand-background-dialog) !important;
 }
 
+// Le thème ng-zorro par défaut ne donne que 2px de border-radius aux modales (.ant-modal-content)
+// - à peine perceptible, surtout sur les petites modales (Figer un indicateur, Paramètres de la
+// carte...), et incohérent avec le reste de l'app qui utilise 8-10px partout ailleurs (modales
+// custom, sections du wizard). Header/footer arrondis en haut/bas seulement, pour ne pas casser
+// la continuité visuelle avec le corps.
+.ant-modal-content {
+  border-radius: 10px !important;
+  overflow: hidden;
+}
+
+.ant-modal-header {
+  border-radius: 10px 10px 0 0 !important;
+}
+
+.ant-modal-footer {
+  border-radius: 0 0 10px 10px !important;
+}
+
 .ant-tabs-tab {
   color: var(--brand-text-primary) !important;
 }

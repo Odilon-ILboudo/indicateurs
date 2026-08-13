@@ -13,10 +13,30 @@
           <p class="error-msg">Une erreur est survenue lors de la connexion.</p>
           <button mat-raised-button color="primary" (click)="redirectToPlaton()">Réessayer</button>
         } @else if (!connecting) {
-          <button mat-raised-button color="primary" (click)="redirectToPlaton()">SE CONNECTER</button>
+          @if (!showLocalForm) {
+            <button mat-raised-button color="primary" (click)="redirectToPlaton()">SE CONNECTER</button>
+
+            @if (!isProduction) {
+              <button mat-stroked-button color="primary" (click)="toggleLocalForm()">Compte local (dev)</button>
+            }
+          } @else {
+            <mat-form-field appearance="outline">
+              <mat-label>Nom d'utilisateur</mat-label>
+              <input matInput [(ngModel)]="localUsername" name="localUsername" (keyup.enter)="signInLocally()" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Mot de passe</mat-label>
+              <input matInput type="password" [(ngModel)]="localPassword" name="localPassword" (keyup.enter)="signInLocally()" />
+            </mat-form-field>
+            @if (localError) {
+              <p class="error-msg">{{ localError }}</p>
+            }
+            <button mat-raised-button color="primary" (click)="signInLocally()">Se connecter</button>
+            <button mat-button (click)="toggleLocalForm()">Retour</button>
+          }
         }
       </mat-card-actions>
-    
+
   </main>
 </section>
 <section class="login-illustration">

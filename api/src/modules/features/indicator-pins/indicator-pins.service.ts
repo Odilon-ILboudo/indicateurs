@@ -16,6 +16,18 @@ export class IndicatorPinsService {
     return this.pinRepository.find({ where: { contextType, contextId } });
   }
 
+  /** Nombre de pins par indicateur, tous cours/activités confondus - pour le label affiché
+   *  dans l'admin ("N pins"), sans avoir à lister chaque cours/activité concerné. */
+  async countPinsByIndicator(): Promise<Record<string, number>> {
+    const rows: { indicatorId: string; count: string }[] = await this.pinRepository
+      .createQueryBuilder('pin')
+      .select('pin.indicatorId', 'indicatorId')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('pin.indicatorId')
+      .getRawMany();
+    return Object.fromEntries(rows.map(r => [r.indicatorId, parseInt(r.count, 10)]));
+  }
+
   async createPin(
     userId: string,
     indicatorId: string,

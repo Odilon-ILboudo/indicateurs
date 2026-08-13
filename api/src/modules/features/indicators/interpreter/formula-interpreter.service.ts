@@ -434,22 +434,28 @@ export class FormulaInterpreterService {
     const table = FormulaInterpreterService.LEGACY_TABLE_MAP[rawTable] ?? rawTable;
 
     // Cas group_id : déclenche une requête JOIN vers CourseGroupsMember/CourseGroups.
-    // L'activityId est résolu depuis le contexte (TARGET_ACTIVITY_ID via configuration).
+    // Périmètre requis dans le contexte : soit une activité précise (activityId), soit
+    // tout un cours à la fois (courseId, agrège toutes ses activités) - l'un ou l'autre,
+    // jamais aucun.
     const wantsGroup = (contextFields as string[]).includes('group_id');
     if (wantsGroup && context.groupId) {
-      const activityId = context.activityId;
-      if (!activityId) {
-        this.logger.warn(`Étape [fetch] ignorée : activityId manquant pour groupe ${context.groupId}`);
+      const scope = context.activityId
+        ? { activityId: context.activityId }
+        : context.courseId
+          ? { courseId: context.courseId }
+          : null;
+      if (!scope) {
+        this.logger.warn(`Étape [fetch] ignorée : activityId/courseId manquant pour groupe ${context.groupId}`);
         return [];
       }
       const extraFilters: Record<string, string> = {};
       for (const col of contextFields as string[]) {
-        if (col === 'group_id' || col === 'activity_id') continue;
+        if (col === 'group_id' || col === 'activity_id' || col === 'course_id') continue;
         const ctxKey = FormulaInterpreterService.CONTEXT_FIELD_MAP[col];
         const val = ctxKey ? context[ctxKey] : undefined;
         if (val) extraFilters[col] = val as string;
       }
-      return this.platonService.queryTableForGroup(table, context.groupId, activityId, extraFilters);
+      return this.platonService.queryTableForGroup(table, context.groupId, scope, extraFilters);
     }
 
     // Cas standard : filtres simples col = val

@@ -30,7 +30,7 @@ const REQUIRED_EVENT_LABELS: Record<string, string> = {
   'lesson.completed': 'Fin de leçon',
   'resource.viewed': 'Consultation d’une ressource',
 };
-import { IndicatorDefinition, IndicatorScope, IndicatorVisualization } from '../../core/models/indicator.model';
+import { IndicatorDefinition, IndicatorScope, IndicatorVisualization, contextIcon } from '../../core/models/indicator.model';
 import { buildIndicatorDisplayRows, IndicatorDisplayRow } from '../../shared/utils/indicator-family-grouping';
 import { getCurrentUserId } from '../../core/auth/current-user';
 
@@ -97,15 +97,6 @@ const CTX_LABELS: Record<string, string> = {
   activity: 'Activité',
   teacher:  'Enseignant',
   admin:    'Admin',
-};
-
-const CTX_ICONS: Record<string, string> = {
-  learner:  'person',
-  group:    'group',
-  course:   'school',
-  activity: 'assignment',
-  teacher:  'co_present',
-  admin:    'admin_panel_settings',
 };
 
 // ── Modal de détail d'un indicateur ──────────────────────────────────────────
@@ -194,7 +185,7 @@ const CTX_ICONS: Record<string, string> = {
 
         <div class="view-card" *ngFor="let viz of ind.visualizations">
           <div class="view-header">
-            <mat-icon class="view-viz-icon" [style.color]="viz.color">{{ viz.icon || vizIcon(viz.type) }}</mat-icon>
+            <mat-icon class="view-viz-icon" [style.color]="viz.color">{{ contextIcon(ind.contextType) }}</mat-icon>
             <span class="view-label">{{ viz.label || vizLabel(viz.type) }}</span>
             <span class="view-type-chip" [style.background]="viz.color || vizColor(viz.type)">
               {{ vizLabel(viz.type) }}
@@ -570,9 +561,8 @@ export class IndicatorViewModalComponent {
   }
 
   ctxLabel(ctx: string): string  { return CTX_LABELS[ctx] ?? ctx; }
-  ctxIcon(ctx: string): string   { return CTX_ICONS[ctx] ?? 'label'; }
+  readonly contextIcon = contextIcon;
   vizLabel(type: string): string { return VIZ_LABELS[type] ?? type; }
-  vizIcon(type: string): string  { return VIZ_ICONS[type] ?? 'widgets'; }
   vizColor(type: string): string { return VIZ_COLORS[type] ?? '#8c8c8c'; }
   stepLabel(type: string): string { return STEP_LABELS[type] ?? type; }
   stepColor(type: string): string { return STEP_COLORS[type] ?? '#8c8c8c'; }

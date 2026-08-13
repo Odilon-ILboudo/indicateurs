@@ -228,7 +228,8 @@ Deux consumers avec routing key `'#'` (reçoivent tous les types d'événements)
 |---|---|
 | `activity` | `computeView(activityId, forceRefresh)` + emit WS |
 | `course` | `computeView(courseId, forceRefresh)` + emit WS |
-| `group` | `refreshSnapshots()` + `refreshActivityViews()` (émettent WS eux-mêmes) |
+| `group`, activity-aware | `refreshSnapshots({activityId})` + `refreshActivityViews()` (émettent WS eux-mêmes) |
+| `group`, course-aware | `refreshSnapshots({courseId})` + `refreshCourseGroupViews()` (agrège toutes les activités du cours pour ce groupe) |
 | `teacher` | `getTeacherByCourse(courseId)` → `computeView` + emit WS |
 | `admin` + futurs | `refreshCachedContextValues()` |
 

@@ -16,7 +16,7 @@ import { NzMessageService } from 'ng-zorro-antd/message';
 import { FormsModule } from '@angular/forms';
 import { IndicatorService } from '../../../core/services/indicator.service';
 import { IndicatorSocketService } from '../../../core/services/indicator-socket.service';
-import { DashboardContext, IndicatorDefinition, IndicatorThresholds, IndicatorValue, IndicatorVisualization } from '../../../core/models/indicator.model';
+import { DashboardContext, IndicatorDefinition, IndicatorThresholds, IndicatorValue, IndicatorVisualization, contextIcon } from '../../../core/models/indicator.model';
 import { getCurrentUserId } from '../../../core/auth/current-user';
 import { IndicatorConfigModalComponent } from './indicator-config-modal.component';
 import { ModalDataService } from './modal-data.service';
@@ -74,9 +74,13 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
   activeVizId: string | null = null;
   userColorPreference: string | null = null;
 
+  /** `mouseenter`/`mouseleave` ne remontent PAS (contrairement à mouseover/mouseout) : un
+   *  stopPropagation() sur ces événements n'a aucun effet sur le tooltip du parent. Seul moyen
+   *  fiable d'éviter deux tooltips superposés (carte + bouton) : désactiver explicitement celui
+   *  de la carte tant que le pointeur est sur un élément qui a déjà le sien. */
+  protected suppressCardTooltip = false;
+
   // Configuration modal
-  configColor: string = '';
-  configVizId: string | null = null;
   isSavingConfig: boolean = false;
 
   // Édition inline du titre
@@ -190,18 +194,28 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
     this.isLoading = true;
     const scope = this.context.scope;
 
-    if (scope === 'course' || scope === 'group' || scope === 'activity') {
-      if (scope === 'group' && !this.context.activityId) {
+    // learner/teacher/admin + activityId OU courseId : indicateur personnel activity-aware ou
+    // course-aware (filtré par activity_id ou course_id), calculé à la demande comme
+    // course/group/activity, jamais depuis la valeur "globale" précalculée (voir
+    // isActivityAware()/isCourseAware() et la page d'activité/de cours qui fournit ce contexte).
+    const isPersonal = scope === 'learner' || scope === 'teacher' || scope === 'admin';
+    const isScopedPersonal = isPersonal && (!!this.context.activityId || !!this.context.courseId);
+
+    if (scope === 'course' || scope === 'group' || scope === 'activity' || isScopedPersonal) {
+      // group/personnel : activityId (une activité) OU courseId (tout le cours, isCourseAware)
+      // requis, l'un ou l'autre - voir DashboardContext.courseId.
+      if ((scope === 'group' || isPersonal) && !this.context.activityId && !this.context.courseId) {
         this.isLoading = false;
         this.cdr.detectChanges();
         return;
       }
 
       const activityId = scope === 'activity' ? undefined : this.context.activityId;
+      const courseId = (scope === 'group' || isPersonal) ? this.context.courseId : undefined;
       const vizId = this.activeViz?.id;
 
       this.indicatorService.computeView(
-        this.indicator.id, scope, this.context.scopeId, activityId, vizId,
+        this.indicator.id, scope, this.context.scopeId, activityId, vizId, courseId,
       ).subscribe({
         next: (result) => {
           this.value = { value: result.value, timestamp: new Date(), metadata: result.metadata };
@@ -242,14 +256,26 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
 
   get viz() { return this.activeViz; }
 
-  getThresholdColor(): string {
-    if (!this.value) return '#d9d9d9';
+  /** Icône fixe par contexte (apprenant/enseignant/cours/...) - jamais celle de la
+   *  visualisation, pour rester reconnaissable d'un coup d'œil quel que soit l'indicateur. */
+  readonly contextIcon = contextIcon;
+
+  /** `null` si aucun seuil n'est configuré - le template retire alors la bordure de statut
+   *  au lieu de retomber sur une couleur par défaut. */
+  getThresholdColor(): string | null {
+    if (!this.value) return null;
     const val = this.value.value;
     const t = this.thresholdsOverride ?? this.indicator?.thresholds;
-    if (!t || (t.good == null && t.warning == null)) return '#d9d9d9';
+    if (!t || (t.good == null && t.warning == null)) return null;
     if (t.good != null && val <= t.good)       return '#52c41a';
     if (t.warning != null && val <= t.warning) return '#fa8c16';
     return '#ff4d4f';
+  }
+
+  /** Couleur affichée pour la valeur/l'unité/l'icône : préférence perso de l'utilisateur en
+   *  priorité, sinon la couleur configurée par l'admin à l'étape 2, sinon un gris neutre. */
+  get displayColor(): string {
+    return this.userColorPreference || this.activeViz?.color || '#7f8c8d';
   }
 
   isChartVisualization(): boolean {
@@ -301,7 +327,8 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
     // Passer les données via le service
     this.modalData.setData(
       this.indicator?.visualizations || [],
-      this.visibleVisualizations.map(v => v.id)
+      this.visibleVisualizations.map(v => v.id),
+      this.activeVizId,
     );
 
     const modal = this.modal.create({
@@ -324,51 +351,19 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
     const allVizIds = enabledVizIds.length === this.visibleVisualizations.length ? null : enabledVizIds;
 
     this.indicatorService.setEnabledVizIds(userId, this.indicator.id, allVizIds);
+
+    // La visualisation choisie pour piloter la carte (icône/valeur/graphique) - un seul choix,
+    // toujours parmi les visualisations activées (voir indicator-config-modal.component.ts).
+    const chosenVizId = componentInstance.getSelectedActiveVizId();
+    if (chosenVizId && chosenVizId !== this.activeVizId) {
+      this.indicatorService.setVizPreference(userId, this.indicator.id, chosenVizId);
+      this.activeVizId = chosenVizId;
+    }
+
     this.message.success('Visualisations sauvegardées');
     this.isSavingConfig = false;
     this.cdr.detectChanges();
 
     return Promise.resolve();
-  }
-
-  private savePreferences(modal: any): Promise<void> {
-    this.isSavingConfig = true;
-    const userId = getCurrentUserId();
-
-    // Construire displayPreferences avec la clé viz_{vizId}
-    const vizIdToSave = this.configVizId || this.activeVizId;
-    const displayPreferences = {
-      [`viz_${vizIdToSave}`]: this.configColor,
-    };
-
-    return new Promise((resolve, reject) => {
-      // Appeler l'API pour sauvegarder les préférences
-      this.indicatorService.updateUserPreference(userId, this.indicator.id, {
-        displayPreferences,
-        activeVizId: this.configVizId ?? undefined,
-      }).subscribe({
-        next: () => {
-          this.message.success('Préférences sauvegardées');
-
-          // Mettre à jour la couleur de l'icône immédiatement pour cette viz
-          this.userColorPreference = this.configColor;
-
-          // Mettre à jour la visualisation active si elle a changé
-          if (this.configVizId && this.configVizId !== this.activeVizId) {
-            this.activeVizId = this.configVizId;
-          }
-
-          this.isSavingConfig = false;
-          this.cdr.detectChanges();
-          this.loadValue();
-          resolve();
-        },
-        error: (err) => {
-          this.message.error('Erreur lors de la sauvegarde');
-          this.isSavingConfig = false;
-          reject(err);
-        },
-      });
-    });
   }
 }

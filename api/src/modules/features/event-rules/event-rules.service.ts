@@ -1,26 +1,16 @@
-import { Injectable, Inject, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, Logger, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Repository, DataSource } from 'typeorm';
 import { Client } from 'pg';
 import {
   IndicatorEventRule,
-  EventRuleOperation,
-  EventRuleCondition,
   EventRuleContextMapping,
 } from './indicator-event-rule.entity';
+import { IndicatorDefinition } from '../indicators/entities/indicator-definition.entity';
 import { EventTypesService } from '../event-types/event-types.service';
 import { PlatonService } from '../../core/platon/platon.service';
-
-export interface CreateEventRuleBody {
-  eventTypeId?: string;
-  newEventType?: { name: string; label: string; description?: string };
-  sourceTable: string;
-  watchedColumn?: string | null;
-  operation: EventRuleOperation;
-  condition: EventRuleCondition;
-  contextMapping: EventRuleContextMapping;
-}
+import { CreateEventRuleDto, UpdateEventRuleDto } from './dto/event-rule.dto';
 
 @Injectable()
 export class EventRulesService {
@@ -29,6 +19,8 @@ export class EventRulesService {
   constructor(
     @InjectRepository(IndicatorEventRule, 'indicators')
     private readonly repo: Repository<IndicatorEventRule>,
+    @InjectRepository(IndicatorDefinition, 'indicators')
+    private readonly indicatorRepo: Repository<IndicatorDefinition>,
     private readonly eventTypesSvc: EventTypesService,
     private readonly platonSvc: PlatonService,
     private readonly config: ConfigService,
@@ -47,7 +39,7 @@ export class EventRulesService {
     return rule;
   }
 
-  async create(dto: CreateEventRuleBody): Promise<IndicatorEventRule> {
+  async create(dto: CreateEventRuleDto): Promise<IndicatorEventRule> {
     await this.platonSvc.assertValidTableColumn(dto.sourceTable, dto.watchedColumn ?? null);
     this.assertContextMapping(dto.sourceTable, dto.contextMapping);
 
@@ -70,7 +62,7 @@ export class EventRulesService {
     });
   }
 
-  async update(id: string, dto: Partial<CreateEventRuleBody>): Promise<IndicatorEventRule> {
+  async update(id: string, dto: UpdateEventRuleDto): Promise<IndicatorEventRule> {
     const rule = await this.findOne(id);
 
     const sourceTable = dto.sourceTable ?? rule.sourceTable;
@@ -103,6 +95,7 @@ export class EventRulesService {
 
   async remove(id: string): Promise<void> {
     const rule = await this.findOne(id);
+    await this.assertNoActiveIndicatorDependency(rule);
     rule.isActive = false;
     await this.repo.save(rule);
   }
@@ -129,6 +122,7 @@ export class EventRulesService {
 
   async hardDelete(id: string): Promise<{ success: boolean; message?: string; sql: string }> {
     const rule = await this.findOne(id);
+    await this.assertNoActiveIndicatorDependency(rule);
 
     if (rule.triggerInstalled) {
       const sql = await this.buildUninstallDdl(rule);
@@ -163,6 +157,7 @@ export class EventRulesService {
 
   async deleteAndUninstall(id: string): Promise<{ success: boolean; message?: string; sql: string }> {
     const rule = await this.findOne(id);
+    await this.assertNoActiveIndicatorDependency(rule);
 
     if (!rule.triggerInstalled) {
       rule.isActive = false;
@@ -254,6 +249,25 @@ export class EventRulesService {
 
   private assertContextMapping(sourceTable: string, mapping: EventRuleContextMapping): void {
     if (!mapping?.userId) throw new NotFoundException('contextMapping.userId est obligatoire (RawEvent.userId est requis pour tout événement)');
+  }
+
+  /** Le lien entre un indicateur et une règle se fait par le NOM de l'event type
+   *  (IndicatorDefinition.requiredEvents contient des noms, pas des ids de règle) - donc
+   *  bloque dès qu'un indicateur actif référence ce nom, même si d'autres règles actives
+   *  partagent le même eventTypeId (pas de faux négatif possible). */
+  private async assertNoActiveIndicatorDependency(rule: IndicatorEventRule): Promise<void> {
+    const eventTypeName = rule.eventType?.name;
+    if (!eventTypeName) return;
+
+    const activeIndicators = await this.indicatorRepo.find({ where: { isActive: true } });
+    const dependents = activeIndicators.filter(ind => ind.requiredEvents?.includes(eventTypeName));
+    if (dependents.length > 0) {
+      throw new ConflictException(
+        `Impossible : les indicateurs actifs suivants dépendent de l'événement "${eventTypeName}" : ` +
+        `${dependents.map(i => `"${i.name}"`).join(', ')}. Désactivez-les d'abord, ou retirez cet ` +
+        `événement de leur configuration.`,
+      );
+    }
   }
 
   // ── Génération du DDL (jamais de concaténation non validée) ─────────────────

@@ -1,5 +1,7 @@
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+
+const VALID_MEMBER_ROLES = ['student', 'teacher'];
 
 @Injectable()
 export class CoursesService {
@@ -220,6 +222,82 @@ export class CoursesService {
       })),
       total: rows.length,
     };
+  }
+
+  /** Un seul membre, hydraté avec les infos utilisateur (même forme que listMembers). */
+  private async getMemberById(memberId: string): Promise<Record<string, unknown> | null> {
+    const rows: Record<string, unknown>[] = await this.dataSource.query(
+      `SELECT
+         cm.id, cm.course_id AS "courseId", cm.user_id AS "userId", cm.role,
+         cm.created_at AS "createdAt",
+         u.username, u.first_name AS "firstName", u.last_name AS "lastName"
+       FROM "CourseMembers" cm
+       LEFT JOIN "Users" u ON u.id = cm.user_id
+       WHERE cm.id = $1`,
+      [memberId],
+    );
+    if (!rows.length) return null;
+    const r = rows[0];
+    return {
+      id: r.id,
+      courseId: r.courseId,
+      userId: r.userId,
+      role: r.role,
+      createdAt: r.createdAt,
+      user: r.userId ? {
+        id: r.userId,
+        username: r.username,
+        firstName: r.firstName,
+        lastName: r.lastName,
+        displayName: `${r.firstName ?? ''} ${r.lastName ?? ''}`.trim() || r.username,
+      } : null,
+    };
+  }
+
+  async createMember(courseId: string, input: { userId: string; role: string }, actingUserId?: string) {
+    if (!(await this.hasActivityWritePermission(courseId, actingUserId))) {
+      throw new ForbiddenException("Droit d'écriture requis sur ce cours pour ajouter un membre");
+    }
+    if (!VALID_MEMBER_ROLES.includes(input.role)) {
+      throw new ConflictException(`Rôle invalide : "${input.role}"`);
+    }
+    try {
+      const rows = await this.dataSource.query(
+        `INSERT INTO "CourseMembers" (user_id, course_id, role) VALUES ($1, $2, $3) RETURNING id`,
+        [input.userId, courseId, input.role],
+      );
+      return this.getMemberById(rows[0].id);
+    } catch (err: unknown) {
+      if ((err as { code?: string })?.code === '23505') {
+        throw new ConflictException('Cet utilisateur est déjà membre de ce cours');
+      }
+      throw err;
+    }
+  }
+
+  async deleteMember(courseId: string, memberId: string, actingUserId?: string): Promise<void> {
+    if (!(await this.hasActivityWritePermission(courseId, actingUserId))) {
+      throw new ForbiddenException("Droit d'écriture requis sur ce cours pour retirer un membre");
+    }
+    await this.dataSource.query(
+      `DELETE FROM "CourseMembers" WHERE id = $1 AND course_id = $2`,
+      [memberId, courseId],
+    );
+  }
+
+  async updateMemberRole(courseId: string, memberId: string, role: string, actingUserId?: string) {
+    if (!(await this.hasActivityWritePermission(courseId, actingUserId))) {
+      throw new ForbiddenException("Droit d'écriture requis sur ce cours pour changer un rôle");
+    }
+    if (!VALID_MEMBER_ROLES.includes(role)) {
+      throw new ConflictException(`Rôle invalide : "${role}"`);
+    }
+    const rows = await this.dataSource.query(
+      `UPDATE "CourseMembers" SET role = $1, updated_at = now() WHERE id = $2 AND course_id = $3 RETURNING id`,
+      [role, memberId, courseId],
+    );
+    if (!rows.length) throw new NotFoundException('Membre introuvable');
+    return this.getMemberById(rows[0].id);
   }
 
   async listGroups(courseId: string) {

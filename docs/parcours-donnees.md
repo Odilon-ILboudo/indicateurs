@@ -67,11 +67,11 @@ pages. `apiUrl = ${environment.apiUrl}/indicators`,
 | `previewFormulaSteps(formula, context)` | `POST {apiUrl}/preview-steps` | E.2 |
 | `getExecutionLogs(id, limit=50)` | `GET {apiUrl}/:id/logs?limit=` | E.5 |
 | `getPlatonSchema()` | `GET {apiUrl}/schema` | E.2, E.6 |
-| `computeView(id, contextType, contextId, activityId?, vizId?)` | `POST {apiUrl}/:id/compute-view` | B.2, C, F |
+| `computeView(id, contextType, contextId, activityId?, vizId?, courseId?)` | `POST {apiUrl}/:id/compute-view` | B.2, C, F |
 | `getTeacherContext(teacherId)` | `GET {apiUrl}/teacher/:teacherId/context` | A.2, E.2 |
 | `getCourseActivities(courseId)` | `GET {apiUrl}/course/:courseId/activities` | A.2, E.2 |
 | `getCourseStudents(courseId)` | `GET {apiUrl}/course/:courseId/students` | E.2 |
-| `getSnapshots(id, activityId)` | `GET {apiUrl}/:id/snapshots?activityId=` | F |
+| `getSnapshots(id, scope)` | `GET {apiUrl}/:id/snapshots?activityId=` ou `?courseId=` | F |
 | `createSnapshot(id, body)` | `POST {apiUrl}/:id/snapshots` | F |
 | `updateSnapshotTitle(id, snapshotId, title)` | `PATCH {apiUrl}/:id/snapshots/:snapshotId` | F |
 | `deleteSnapshot(id, snapshotId)` | `DELETE {apiUrl}/:id/snapshots/:snapshotId` | F |
@@ -319,7 +319,7 @@ Méthode privée appelée par `createPreference` (POST) et
   ici (le calcul se fait à la demande via `compute-view`, voir B.2).
 - si `formula?.pipeline?.length` vide → `return` sans calcul.
 - sinon,
-  `formulaInterpreter.interpret(formulaToUse, { userId, activityId: process.env.TARGET_ACTIVITY_ID, indicatorId: indicator.id })`
+  `formulaInterpreter.interpret(formulaToUse, { userId, indicatorId: indicator.id })`
   (point d'entrée `formula-interpreter.service.ts`). En cas d'erreur,
   warning loggé, `value` reste `0`.
 - `indicatorValueRepository.upsert({ indicatorId, contextType: indicator.contextType, contextId: userId, value, metadata: {...} }, { conflictPaths: ['indicatorId','contextType','contextId'] })`
@@ -579,25 +579,29 @@ Bouton "Événements & déclencheurs" (`admin-indicator-manager.component.ts`
    backend (`courses.controller.ts` → `courses.service.ts` →
    table PLaTon `CourseGroups`).
 3. `loadAllSnapshots()` : pour chaque indicateur de
-   `groupIndicators`, `indicatorService.getSnapshots(ind.id, activityId)`
-   (`indicator.service.ts`) → **`GET /api/indicators/:id/snapshots?activityId=`**
-   → `indicators.controller.ts` `getSnapshots` →
+   `groupIndicators`, `indicatorService.getSnapshots(ind.id, this.scope)`
+   (`indicator.service.ts`), `scope` étant `{activityId}` ou `{courseId}`
+   selon que le panneau est affiché sur une page d'activité ou une page de
+   cours (voir `isCourseAware()`) → **`GET /api/indicators/:id/snapshots?activityId=`**
+   (ou `?courseId=`) → `indicators.controller.ts` `getSnapshots` →
    `indicators.service.ts` → repo `snapshotModel`
-   (table `indicator_snapshots`, `where: { indicatorId, activityId }`,
+   (table `indicator_snapshots`, `where: { indicatorId, ...scope }`,
    triées par `createdAt`).
 4. `toRow(snapshot)` : construit un `DashboardContext`
-   (`scope: 'group', scopeId: snapshot.contextId, activityId`) et des
-   `queryParams` (`from: 'group-snapshot', groupId, groupName, activityId,
-   courseId, activityName, courseName`) → passés à `<ui-indicator-card>`
-   (template) → **cascade B.2** avec `contextType: 'group'`, puis
-   navigation vers `indicator-detail` (C, branche `group-snapshot`).
+   (`scope: 'group', scopeId: snapshot.contextId, activityId` ou `courseId`)
+   et des `queryParams` (`from: 'group-snapshot', groupId, groupName,
+   activityId?, courseId, activityName, courseName`) → passés à
+   `<ui-indicator-card>` (template) → **cascade B.2** avec
+   `contextType: 'group'`, puis navigation vers `indicator-detail`
+   (C, branche `group-snapshot`).
 5. **Ajout** : `addSnapshot(panel)` (formulaire, dropdown
    filtré sur les groupes déjà ajoutés) →
-   `indicatorService.createSnapshot(panel.indicator.id, {contextType:'group', contextId: group.id, activityId, title: group.name})`
+   `indicatorService.createSnapshot(panel.indicator.id, {contextType:'group', contextId: group.id, ...this.scope, title: group.name})`
    (`indicator.service.ts`) → **`POST /api/indicators/:id/snapshots`**
    → `indicators.controller.ts` `createSnapshot` →
    `indicators.service.ts` :
    - Vérifie l'unicité `(indicatorId, contextType, contextId, activityId)`
+     ou `(indicatorId, contextType, contextId, courseId)` selon le scope,
      dans `indicator_snapshots` → `ConflictException` (409) si doublon (géré
      côté UI, message d'erreur affiché).
    - sinon `create` + `save` → insert dans `indicator_snapshots`.
@@ -617,9 +621,10 @@ Bouton "Événements & déclencheurs" (`admin-indicator-manager.component.ts`
 
 ### F.3 Rafraîchissement automatique des snapshots - `refreshSnapshots`
 
-`indicators.service.ts` `refreshSnapshots(indicatorId, activityId)` -
-**non exposée par une route** ; appelée en fire-and-forget depuis
-l'ingestion d'événements (voir I.3). Flux :
+`indicators.service.ts` `refreshSnapshots(indicatorId, scope, deltaEvent?)`,
+`scope` étant `{activityId}` ou `{courseId}` (indicateur `group` course-aware,
+`isCourseAware()`) - **non exposée par une route** ; appelée en fire-and-forget
+depuis l'ingestion d'événements (voir I.3). Flux :
 
 1. Récupère tous les `indicator_snapshots` de
    `(indicatorId, activityId)`. Si vide → return.
@@ -996,7 +1001,7 @@ dont `requiredEvents` contient `event.type` :
 3. **Sinon** → `computeWithRowMap` / `interpret()` (SQL complet depuis SessionData)
 4. `UPSERT indicator_values` (valeur + métadonnées JSONB)
 5. `EventEmitter2.emit('indicator.updated', {...})` → `IndicatorsGateway` → WebSocket
-6. Fire-and-forget : `refreshSnapshots(indicatorId, activityId)` si présent
+6. Fire-and-forget : `refreshSnapshots(indicatorId, {activityId})` si présent
 
 #### Consumer `indicators.aggregate` → `onAggregateEvent`
 
@@ -1007,7 +1012,8 @@ dont `requiredEvents` contient `event.type` :
 |---|---|
 | `activity` | `computeView(activityId, forceRefresh=true)` + emit WS |
 | `course` | `computeView(courseId, forceRefresh=true)` + emit WS |
-| `group` | `refreshSnapshots()` + `refreshActivityViews()` (émettent WS eux-mêmes) |
+| `group`, activity-aware | `refreshSnapshots({activityId})` + `refreshActivityViews()` (émettent WS eux-mêmes) |
+| `group`, course-aware (`isCourseAware`) | `refreshSnapshots({courseId})` + `refreshCourseGroupViews(indicatorId, courseId)` (`courseId` déduit de `event.courseId` ou `getCourseIdForActivity`) |
 | `teacher` | `getTeacherByCourse(courseId)` → `computeView` + emit WS |
 | `admin` + futurs | `refreshCachedContextValues(indicatorId, contextType)` |
 

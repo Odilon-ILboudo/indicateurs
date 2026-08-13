@@ -1,7 +1,8 @@
-import { Controller, Get, Param, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { CoursesService } from './courses.service';
 import { AuthGuard, AuthenticatedUser } from '../../core/auth/auth.guard';
+import { CreateCourseMemberDto, UpdateCourseMemberRoleDto } from './dto/course-member.dto';
 
 interface AuthenticatedRequest extends Request {
   user?: AuthenticatedUser;
@@ -105,6 +106,34 @@ export class CoursesController {
     @Query('search') search?: string,
   ) {
     return this.coursesService.listMembers(id, { roles, role, search });
+  }
+
+  @Post(':id/members')
+  createMember(
+    @Param('id') id: string,
+    @Body() body: CreateCourseMemberDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.coursesService.createMember(id, body, request.user?.id);
+  }
+
+  @Delete(':id/members/:memberId')
+  deleteMember(
+    @Param('id') id: string,
+    @Param('memberId') memberId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.coursesService.deleteMember(id, memberId, request.user?.id);
+  }
+
+  @Patch(':id/members/:memberId')
+  updateMemberRole(
+    @Param('id') id: string,
+    @Param('memberId') memberId: string,
+    @Body() body: UpdateCourseMemberRoleDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.coursesService.updateMemberRole(id, memberId, body.role, request.user?.id);
   }
 
   @Get(':id')

@@ -29,6 +29,20 @@ import { ModalDataService } from './modal-data.service';
           </label>
         </div>
       </div>
+
+      <div class="form-group">
+        <label>Couleur de la carte (icône, valeur, graphique)</label>
+        <div class="viz-checkboxes">
+          <label *ngFor="let v of enabledVisualizations" class="viz-checkbox">
+            <input
+              type="checkbox"
+              [checked]="isActiveVizSelected(v.id)"
+              (change)="selectActiveViz(v.id)" />
+            <span class="color-swatch" [style.background]="v.color || '#7f8c8d'"></span>
+            <span>{{ v.label }}</span>
+          </label>
+        </div>
+      </div>
     </div>
   `,
   styles: [`
@@ -78,6 +92,15 @@ import { ModalDataService } from './modal-data.service';
     .viz-checkbox input[type="checkbox"] {
       cursor: pointer;
     }
+
+    .color-swatch {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 1px solid rgba(0,0,0,0.15);
+      flex-shrink: 0;
+    }
   `],
 })
 export class IndicatorConfigModalComponent implements OnInit {
@@ -90,6 +113,9 @@ export class IndicatorConfigModalComponent implements OnInit {
 
   visibleVisualizations: IndicatorVisualization[] = [];
   selectedVizIds = new Set<string>();
+  /** Visualisation dont la couleur/valeur pilote la carte (icône + valeur + graphique) - un
+   *  seul choix possible, toujours parmi les visualisations actuellement activées. */
+  private selectedActiveVizId: string | null = null;
 
   ngOnInit(): void {
     // Récupérer les données du service
@@ -97,6 +123,16 @@ export class IndicatorConfigModalComponent implements OnInit {
 
     // Initialiser avec les visualisations actuellement activées
     this.modalData.enabledVizIds.forEach(vizId => this.selectedVizIds.add(vizId));
+
+    this.selectedActiveVizId = this.modalData.activeVizId && this.selectedVizIds.has(this.modalData.activeVizId)
+      ? this.modalData.activeVizId
+      : (this.visibleVisualizations.find(v => this.selectedVizIds.has(v.id))?.id ?? null);
+  }
+
+  /** Sous-ensemble de visibleVisualizations réellement cochées - seules celles-ci peuvent
+   *  piloter la couleur/valeur de la carte (pas de sens de choisir une visualisation masquée). */
+  get enabledVisualizations(): IndicatorVisualization[] {
+    return this.visibleVisualizations.filter(v => this.selectedVizIds.has(v.id));
   }
 
   isVizEnabled(vizId: string): boolean {
@@ -107,6 +143,11 @@ export class IndicatorConfigModalComponent implements OnInit {
     if (this.selectedVizIds.has(vizId)) {
       if (this.selectedVizIds.size === 1) return;
       this.selectedVizIds.delete(vizId);
+      // La visualisation démasquée ne peut plus piloter la carte - repli sur la première
+      // visualisation restée activée.
+      if (this.selectedActiveVizId === vizId) {
+        this.selectedActiveVizId = this.visibleVisualizations.find(v => this.selectedVizIds.has(v.id))?.id ?? null;
+      }
     } else {
       this.selectedVizIds.add(vizId);
     }
@@ -116,12 +157,26 @@ export class IndicatorConfigModalComponent implements OnInit {
     return this.selectedVizIds.size === 1 && this.selectedVizIds.has(vizId);
   }
 
+  isActiveVizSelected(vizId: string): boolean {
+    return this.selectedActiveVizId === vizId;
+  }
+
+  /** Choix unique (case cochée = celle-ci, les autres se décochent) - pas de retour à un mode
+   *  "automatique" : il y a toujours exactement une visualisation active. */
+  selectActiveViz(vizId: string): void {
+    this.selectedActiveVizId = vizId;
+  }
+
   onVisibilityChange(): void {
     // Callback pour notifier les changements
   }
 
   getEnabledVizIds(): string[] {
     return Array.from(this.selectedVizIds);
+  }
+
+  getSelectedActiveVizId(): string | null {
+    return this.selectedActiveVizId;
   }
 
   getVizTypeLabel(type: string): string {

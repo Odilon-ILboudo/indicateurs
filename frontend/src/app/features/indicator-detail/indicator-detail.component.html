@@ -16,7 +16,7 @@
     <div class="header">
       <div class="title-section">
         <mat-icon [style.color]="indicator.visualizations[0]?.color || '#7f8c8d'">
-          {{ indicator.visualizations[0]?.icon || 'analytics' }}
+          {{ contextIcon(indicator.contextType) }}
         </mat-icon>
         <h1>{{ indicator.name }}</h1>
         <nz-tag [nzColor]="isTeacher ? 'blue' : 'green'">
@@ -68,14 +68,20 @@
         <span class="ctx-chip" *ngIf="groupSnapshotCourseName">
           <mat-icon>local_library</mat-icon>{{ groupSnapshotCourseName }}
         </span>
-        <mat-icon class="ctx-sep">chevron_right</mat-icon>
-        <span class="ctx-chip"><mat-icon>widgets</mat-icon>{{ groupSnapshotActivityName }}</span>
+        <mat-icon class="ctx-sep" *ngIf="!groupSnapshotIsCourseScoped">chevron_right</mat-icon>
+        <span class="ctx-chip" *ngIf="!groupSnapshotIsCourseScoped"><mat-icon>widgets</mat-icon>{{ groupSnapshotActivityName }}</span>
         <mat-icon class="ctx-sep">chevron_right</mat-icon>
         <span class="ctx-chip scope"><mat-icon>groups</mat-icon>{{ groupSnapshotGroupName }}</span>
       </div>
-      <a [routerLink]="['/dashboard/courses', groupSnapshotCourseId, 'activities', groupSnapshotActivityId]"
+      <a *ngIf="!groupSnapshotIsCourseScoped"
+        [routerLink]="['/dashboard/courses', groupSnapshotCourseId, 'activities', groupSnapshotActivityId]"
         class="ctx-back-link">
         <mat-icon>arrow_back</mat-icon> Retour à l'activité
+      </a>
+      <a *ngIf="groupSnapshotIsCourseScoped"
+        [routerLink]="['/dashboard/courses', groupSnapshotCourseId]"
+        class="ctx-back-link">
+        <mat-icon>arrow_back</mat-icon> Retour au cours
       </a>
     </div>
 
@@ -99,7 +105,7 @@
       <div class="ctx-chips">
         <span class="ctx-chip"><mat-icon>local_library</mat-icon>{{ courseContextCourseName }}</span>
       </div>
-      <a [routerLink]="['/dashboard/courses', activeContextId]" class="ctx-back-link">
+      <a [routerLink]="['/dashboard/courses', courseContextCourseId]" class="ctx-back-link">
         <mat-icon>arrow_back</mat-icon> Retour au cours
       </a>
     </div>
@@ -132,9 +138,9 @@
 
               <!-- CARD -->
               <div class="view-card" *ngIf="viz.type === 'card'">
-                <div class="scalar-value" [style.color]="getThresholdColor(viz, results[viz.id].value)">
+                <div class="scalar-value" [style.color]="viz.color || '#5470c6'">
                   {{ results[viz.id].value | number:'1.0-2' }}
-                  <span class="unit">{{ viz.unit || '' }}</span>
+                  <span class="unit" [style.color]="viz.color || '#5470c6'">{{ viz.unit || '' }}</span>
                 </div>
               </div>
 

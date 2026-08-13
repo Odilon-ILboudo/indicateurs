@@ -1,5 +1,5 @@
 // src/modules/features/users/users.controller.ts
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { PlatonService } from '../../core/platon/platon.service';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -7,6 +7,26 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 @Controller('users')
 export class UsersController {
   constructor(private readonly platonService: PlatonService) {}
+
+  /**
+   * Recherche d'utilisateurs pour la modale "Ajouter un membre" du front (UserSearchBarComponent,
+   * stub de @platon/core/browser). Enveloppe { success, data: { resources, total } } attendue
+   * telle quelle par UserService.search() côté frontend.
+   */
+  @Get()
+  async searchUsers(
+    @Query('search') search?: string,
+    @Query('roles') roles?: string | string[],
+    @Query('limit') limit?: string,
+  ) {
+    const roleList = roles == null ? undefined : Array.isArray(roles) ? roles : [roles];
+    const resources = await this.platonService.searchUsers(
+      search ?? '',
+      roleList,
+      limit ? parseInt(limit, 10) : 10,
+    );
+    return { success: true, data: { resources, total: resources.length } };
+  }
 
   @Get(':id')
   async getUserById(@Param('id') id: string) {

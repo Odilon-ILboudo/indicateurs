@@ -2,6 +2,7 @@
 // Ported from @platon/core/browser UserSearchBarComponent
 import { CommonModule } from '@angular/common'
 import {
+  booleanAttribute,
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
@@ -73,7 +74,7 @@ export class UserSearchBarComponent implements OnInit, OnChanges, ControlValueAc
   /**
    * If true, the search bar will allow to select multiple users or groups (default: true)
    */
-  @Input() multi = true
+  @Input({ transform: booleanAttribute }) multi = true
 
   /**
    * List of users or groups to exclude from the search results.
@@ -83,23 +84,23 @@ export class UserSearchBarComponent implements OnInit, OnChanges, ControlValueAc
   /**
    * If true, the search bar will be disabled. (default: false)
    */
-  @Input() disabled = false
+  @Input({ transform: booleanAttribute }) disabled = false
 
   /**
    * Allow to search for user groups. (default: false)
    */
-  @Input() allowGroup = false
+  @Input({ transform: booleanAttribute }) allowGroup = false
 
   /**
    * If true, only user groups will be searched. (default: false)
    */
-  @Input() onlyGroups = false
+  @Input({ transform: booleanAttribute }) onlyGroups = false
 
   /**
    * It true, the search result will will be automatically selected and not displayed in a list of results with a remove button.
    * (default: false)
    */
-  @Input() autoSelect = false
+  @Input({ transform: booleanAttribute }) autoSelect = false
 
   /**
    * Custom filters to apply to the search.

@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { EventTypesService } from './event-types.service';
+import { CreateEventTypeDto, UpdateEventTypeDto } from './dto/event-type.dto';
 import { AdminGuard } from '../../core/guards/admin.guard';
 import { AuthGuard } from '../../core/auth/auth.guard';
 
@@ -19,16 +20,13 @@ export class EventTypesController {
 
   @Post()
   @UseGuards(AuthGuard, AdminGuard)
-  create(@Body() body: { name: string; label: string; description?: string }) {
+  create(@Body() body: CreateEventTypeDto) {
     return this.svc.create(body);
   }
 
   @Patch(':id')
   @UseGuards(AuthGuard, AdminGuard)
-  update(
-    @Param('id') id: string,
-    @Body() body: Partial<{ name: string; label: string; description: string; isActive: boolean }>,
-  ) {
+  update(@Param('id') id: string, @Body() body: UpdateEventTypeDto) {
     return this.svc.update(id, body);
   }
 
