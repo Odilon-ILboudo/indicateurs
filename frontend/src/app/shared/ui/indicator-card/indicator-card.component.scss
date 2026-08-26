@@ -10,21 +10,25 @@
   background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
   border: 1px solid rgba(0, 0, 0, 0.08);
   
-  &:hover {
+  // :not(:has(.card-actions:hover)) exclut le survol des petits boutons d'action (Paramètres,
+  // Figer, ...) : ces boutons ne mesurent que 24px, un translateY de 6px suffit à les faire
+  // sortir de sous le curseur pendant la transition, ce qui fait perdre puis regagner le survol
+  // en boucle (clignotement). Le survol du reste de la carte garde l'animation normale.
+  &:hover:not(:has(.card-actions:hover)) {
     transform: translateY(-6px);
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.02);
     border-color: rgba(24, 144, 255, 0.3);
-    
+
     .arrow-icon {
       opacity: 1;
       transform: translateX(4px);
     }
-    
+
     .icon-bg {
       transform: scale(1.05);
     }
   }
-  
+
   &.loading {
     opacity: 0.7;
     cursor: wait;

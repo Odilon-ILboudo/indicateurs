@@ -19,7 +19,7 @@ Pour explorer les bases Postgres via l'interface web pgAdmin, voir [pgadmin.md](
 1. `init-db` (image `postgres:13-alpine`, éphémère) crée la base `indicators` si elle n'existe pas (idempotent).
 2. `migrate` (réutilise l'image `indicateurs-api`) applique les migrations TypeORM en attente pour construire tout le schéma (tables/index/contraintes) - voir la section [Schéma de la base `indicators` (migrations TypeORM)](#schéma-de-la-base-indicators-migrations-typeorm) plus bas.
 
-`api` ne démarre qu'une fois les deux terminés avec succès (`depends_on: init-db, migrate: condition: service_completed_successfully`).
+`api` ne démarre qu'une fois les deux terminés avec succès et RabbitMQ en bonne santé (`depends_on: init-db, migrate: condition: service_completed_successfully`, `rabbitmq: condition: service_healthy`).
 
 ---
 
@@ -173,7 +173,11 @@ Le déploiement se fait par SSH vers le serveur qui héberge déjà PLaTon et in
 | `DEPLOY_PORT` | Port SSH (optionnel, défaut `22`) |
 | `DEPLOY_PATH` | Chemin absolu du dossier `indicateurs/` sur le serveur (ex : `/opt/indicateurs`) |
 
-Le job référence un environnement GitHub nommé `production` (`environment: production` dans le workflow) - optionnel à configurer dans *Settings → Environments*, mais permet d'ajouter un reviewer obligatoire avant chaque déploiement si souhaité, sans toucher au workflow.
+Le workflow contient une ligne `environment: production` commentée - la
+décommenter active un environnement GitHub nommé `production` (à configurer
+dans *Settings → Environments*), ce qui permet d'ajouter un reviewer
+obligatoire avant chaque déploiement si souhaité, sans autre modification du
+workflow.
 
 **Prérequis serveur** : le dossier `DEPLOY_PATH` doit déjà être un clone du repo (`git clone git@github.com:Odilon-ILboudo/indicateurs.git`) avec un `.env` complet (voir *Configuration requise* plus haut) et une clé de déploiement GitHub (deploy key) autorisée en lecture sur le repo pour que le `git fetch` fonctionne sans intervention manuelle.
 

@@ -4,4 +4,3 @@ export { IndicatorDetailComponent } from '../../features/indicator-detail/indica
 export { IndicatorSelectorComponent } from '../../features/indicator-selector/indicator-selector.component';
 
 export { AdminIndicatorManagerComponent } from '../../features/admin/admin-indicator-manager.component';
-export { IndicatorConfigComponent } from '../../features/admin/indicator-config.component';

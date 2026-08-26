@@ -99,20 +99,6 @@ export class IndicatorsController {
     return this.pinsService.countPinsByIndicator();
   }
 
-  /**
-   * Retourne la configuration de l'indicateur (contextType + visualizations + formula).
-   * GET /api/indicators/:id/context-configs
-   */
-  @Get(':id/context-configs')
-  async getContextConfigs(@Param('id') id: string) {
-    const indicator = await this.indicatorsService.findById(id);
-    return {
-      contextType: indicator.contextType,
-      visualizations: indicator.visualizations,
-      formula: indicator.formula,
-    };
-  }
-
   @Get(':id')
   async getIndicator(@Param('id') id: string) {
     return this.indicatorsService.findById(id);
@@ -152,16 +138,6 @@ export class IndicatorsController {
   @UseGuards(AuthGuard, AdminGuard)
   async createIndicator(@Body() definition: CreateIndicatorDto) {
     return this.indicatorsService.create(definition);
-  }
-
-  @Post('dashboard')
-  async getDashboardIndicators(
-    @Body() request: {
-      indicators: string[];
-      context: { contextType: string; contextId: string; userId: string };
-    },
-  ) {
-    return this.indicatorsService.getDashboardValues(request);
   }
 
   /**

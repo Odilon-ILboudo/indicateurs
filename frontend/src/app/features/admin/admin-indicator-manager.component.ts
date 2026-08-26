@@ -1,6 +1,7 @@
 // frontend/src/app/features/admin/admin-indicator-manager.component.ts
 import { CommonModule } from '@angular/common';
-import { ChangeDetectorRef, Component, OnInit, TemplateRef, ViewChild, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, Input, OnInit, TemplateRef, ViewChild, inject } from '@angular/core';
+import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { NzTableModule } from 'ng-zorro-antd/table';
@@ -20,9 +21,11 @@ import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzTabsModule } from 'ng-zorro-antd/tabs';
 import { NzRateModule } from 'ng-zorro-antd/rate';
+import { NzPaginationModule } from 'ng-zorro-antd/pagination';
+import { forkJoin } from 'rxjs';
 import { IndicatorService } from '../../core/services/indicator.service';
 import { IndicatorDefinition, IndicatorFeedback, IndicatorScope, contextIcon } from '../../core/models/indicator.model';
-import { IndicatorConfigComponent } from './indicator-config.component';
+import { IndicatorListStateService } from '../../core/services/indicator-list-state.service';
 import { IndicatorBuilderComponent, CONTEXT_LABELS, IndicatorFamilyPreset } from './indicator-builder.component';
 import { NewIndicatorChoiceModalComponent, NewIndicatorChoiceResult } from './new-indicator-choice-modal.component';
 import { buildIndicatorDisplayRows, IndicatorDisplayRow } from '../../shared/utils/indicator-family-grouping';
@@ -188,13 +191,37 @@ export class IndicatorFamilyStartModalComponent {
     NzSwitchModule, NzTagModule, NzTooltipModule,
     NzPopconfirmModule, NzBadgeModule, NzDividerModule,
     NzEmptyModule, NzSpinModule, NzTabsModule, NzRateModule,
-    NzSelectModule,
+    NzSelectModule, NzInputModule, NzPaginationModule,
   ],
   template: `
     <div class="admin-manager">
 
-      <!-- En-tête -->
-      <div class="header">
+      <!-- En-tête : page de famille dédiée -->
+      <div *ngIf="familyNameFilter" style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px">
+        <button nz-button nzSize="small" (click)="goBackToList()" style="align-self:flex-start">
+          Retour à la liste
+        </button>
+        <div class="header" style="margin:0">
+          <h2 style="margin:0;display:flex;align-items:center;gap:8px">
+            <mat-icon style="color:#722ed1">folder_special</mat-icon>
+            {{ familyNameFilter }}
+            <nz-tag nzColor="purple">{{ familyMemberCount() }} indicateur{{ familyMemberCount() > 1 ? 's' : '' }}</nz-tag>
+          </h2>
+          <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
+            <button nz-button (click)="openAddExistingToFamily(familyNameFilter)" class="icon-btn">
+              <mat-icon>playlist_add</mat-icon>
+              Ajouter un indicateur existant
+            </button>
+            <button nz-button nzType="primary" (click)="createNewInFamily(familyNameFilter)" class="icon-btn">
+              <mat-icon>add</mat-icon>
+              Nouvel indicateur dans cette famille
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- En-tête : liste principale -->
+      <div class="header" *ngIf="!familyNameFilter">
         <div>
           <h2 style="margin:0">Gestion des indicateurs</h2>
           <p style="margin:4px 0 0;color:#888;font-size:13px">
@@ -213,14 +240,20 @@ export class IndicatorFamilyStartModalComponent {
         </div>
       </div>
 
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <nz-tabs style="flex:1" [nzSelectedIndex]="groupingFilter === 'standalone' ? 0 : 1" (nzSelectedIndexChange)="onTabChange($event)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <nz-tabs *ngIf="!familyNameFilter" style="flex:1;min-width:220px" [nzSelectedIndex]="groupingFilter === 'standalone' ? 0 : 1" (nzSelectedIndexChange)="onTabChange($event)">
           <nz-tab nzTitle="Indicateurs uniques"></nz-tab>
           <nz-tab nzTitle="Familles"></nz-tab>
         </nz-tabs>
+        <input nz-input placeholder="Rechercher par nom..." style="width:220px"
+          [(ngModel)]="searchText" (ngModelChange)="applyGroupingFilter()" />
+        <nz-select [(ngModel)]="contextTypeFilterValue" (ngModelChange)="applyGroupingFilter()" style="width:160px">
+          <nz-option nzValue="all" nzLabel="Tous les contextes"></nz-option>
+          <nz-option *ngFor="let opt of contextTypeOptions" [nzValue]="opt.value" [nzLabel]="opt.label"></nz-option>
+        </nz-select>
         <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:#595959">
           Statut
-          <mat-icon class="info-icon" nz-tooltip="Filtre sur la complétude réelle du formulaire (nom, contexte, au moins une visualisation, pipeline valide) : &quot;Incomplets&quot; = enregistrés via &quot;Sauvegarder le brouillon&quot; sans terminer le wizard, ou un champ obligatoire manquant. Indépendant du statut actif/inactif (interrupteur de publication séparé). Se combine avec l'onglet Uniques/Familles sélectionné à gauche." nzTooltipPlacement="top">info_outline</mat-icon>
+          <mat-icon class="info-icon" nz-tooltip="Filtre sur la complétude réelle du formulaire (nom, contexte, au moins une visualisation, pipeline valide) : &quot;Incomplets&quot; = enregistrés via &quot;Sauvegarder le brouillon&quot; sans terminer le wizard, ou un champ obligatoire manquant. Indépendant du statut actif/inactif (interrupteur de publication séparé)." nzTooltipPlacement="top">info_outline</mat-icon>
         </span>
         <nz-select [(ngModel)]="completenessFilter" (ngModelChange)="applyGroupingFilter()" style="width:160px">
           <nz-option nzValue="all" nzLabel="Tous"></nz-option>
@@ -229,7 +262,38 @@ export class IndicatorFamilyStartModalComponent {
         </nz-select>
       </div>
 
-      <nz-spin [nzSpinning]="loading">
+      <!-- Grille de cartes des familles : onglet Familles, hors page dédiée -->
+      <nz-spin [nzSpinning]="loading" *ngIf="!familyNameFilter && groupingFilter === 'families'">
+        <div class="family-card-grid">
+          <div class="family-card" *ngFor="let fam of pagedFamilyCards" (click)="openFamilyPage(fam.familyName)">
+            <div class="family-card-header">
+              <mat-icon style="color:#722ed1">folder_special</mat-icon>
+              <strong>{{ fam.familyName }}</strong>
+            </div>
+            <div class="family-card-footer">
+              <nz-tag nzColor="purple">{{ fam.members.length }} indicateur{{ fam.members.length > 1 ? 's' : '' }}</nz-tag>
+              <span class="family-card-actions" (click)="$event.stopPropagation()">
+                <mat-icon class="family-edit-icon" (click)="renameFamily(fam)" nz-tooltip="Renommer la famille">edit</mat-icon>
+                <mat-icon class="family-edit-icon" (click)="openAddExistingToFamily(fam.familyName)" nz-tooltip="Ajouter un indicateur existant">playlist_add</mat-icon>
+                <mat-icon class="family-edit-icon" (click)="createNewInFamily(fam.familyName)" nz-tooltip="Créer un nouvel indicateur dans cette famille">add_circle_outline</mat-icon>
+              </span>
+              <mat-icon style="color:#722ed1">arrow_forward</mat-icon>
+            </div>
+          </div>
+        </div>
+        <nz-empty *ngIf="!loading && familyCards.length === 0" nzNotFoundContent="Aucune famille - créez-en une avec le bouton ci-dessus."></nz-empty>
+        <nz-pagination
+          *ngIf="familyCards.length > 0"
+          style="margin-top:16px;text-align:center;display:block"
+          [nzPageIndex]="familyPageIndex"
+          (nzPageIndexChange)="familyPageIndex = $event"
+          [nzPageSize]="familyPageSize"
+          [nzTotal]="familyCards.length">
+        </nz-pagination>
+      </nz-spin>
+
+      <!-- Tableau : onglet Indicateurs uniques, ou page dédiée d'une famille -->
+      <nz-spin [nzSpinning]="loading" *ngIf="familyNameFilter || groupingFilter === 'standalone'">
         <nz-table
           #table
           [nzData]="displayRows"
@@ -249,28 +313,8 @@ export class IndicatorFamilyStartModalComponent {
 
           <tbody>
             <ng-container *ngFor="let row of table.data" [ngSwitch]="row.kind">
-
-              <!-- Ligne d'en-tête de famille, repliable -->
-              <tr *ngSwitchCase="'family'" class="family-row" (click)="toggleFamily(row.familyName)">
-                <td colspan="5">
-                  <span style="display:inline-flex;align-items:center;gap:6px;line-height:1;width:100%">
-                    <mat-icon style="font-size:18px;width:18px;height:18px;line-height:1;color:#722ed1">{{ row.expanded ? 'expand_more' : 'chevron_right' }}</mat-icon>
-                    <mat-icon style="font-size:16px;width:16px;height:16px;line-height:1;color:#722ed1">folder_special</mat-icon>
-                    <strong>{{ row.familyName }}</strong>
-                    <nz-tag nzColor="purple">{{ row.members.length }} indicateur{{ row.members.length > 1 ? 's' : '' }}</nz-tag>
-                    <span style="margin-left:auto;display:inline-flex;gap:4px" (click)="$event.stopPropagation()">
-                      <mat-icon class="family-edit-icon" (click)="renameFamily(row)" nz-tooltip="Renommer la famille">edit</mat-icon>
-                      <mat-icon class="family-edit-icon" (click)="openAddExistingToFamily(row.familyName)" nz-tooltip="Ajouter un indicateur existant">playlist_add</mat-icon>
-                      <mat-icon class="family-edit-icon" (click)="createNewInFamily(row.familyName)" nz-tooltip="Créer un nouvel indicateur dans cette famille">add_circle_outline</mat-icon>
-                    </span>
-                  </span>
-                </td>
-              </tr>
-
-              <!-- Indicateur autonome ou membre d'une famille dépliée : même rendu et fonctionnalités qu'un indicateur unique -->
               <ng-container *ngSwitchCase="'standalone'" [ngTemplateOutlet]="indicatorRow" [ngTemplateOutletContext]="{ $implicit: row.indicator, isMember: false }" />
               <ng-container *ngSwitchCase="'member'" [ngTemplateOutlet]="indicatorRow" [ngTemplateOutletContext]="{ $implicit: row.indicator, isMember: true }" />
-
             </ng-container>
           </tbody>
 
@@ -345,13 +389,6 @@ export class IndicatorFamilyStartModalComponent {
                 <mat-icon style="font-size:16px;line-height:1.3">rate_review</mat-icon>
               </button>
 
-              <!--
-              <button nz-button nzType="default" nzSize="small"
-                nz-tooltip="Paramètres d'affichage"
-                (click)="openConfig(ind)">
-                <mat-icon style="font-size:16px;line-height:1.3">settings</mat-icon>
-              </button>
-              -->
 
               <!-- Logs d'exécution -->
               <button
@@ -475,15 +512,15 @@ export class IndicatorFamilyStartModalComponent {
     [nzWidth]="480"
     (nzOnCancel)="addExistingModalVisible = false">
     <ng-container *nzModalContent>
-      <p style="color:#595959;margin-bottom:10px">Cliquez sur un indicateur pour le sélectionner.</p>
+      <p style="color:#595959;margin-bottom:10px">Cliquez sur un ou plusieurs indicateurs pour les sélectionner.</p>
       <p *ngIf="standaloneOptions.length === 0" style="color:#8c8c8c;font-style:italic">
         Aucun indicateur unique disponible.
       </p>
       <div *ngIf="standaloneOptions.length > 0" class="standalone-picker">
         <div *ngFor="let opt of standaloneOptions"
           class="standalone-picker-item"
-          [class.standalone-picker-item--selected]="addExistingSelectedId === opt.value"
-          (click)="addExistingSelectedId = opt.value; previewedStandaloneId = null">
+          [class.standalone-picker-item--selected]="addExistingSelectedIds.includes(opt.value)"
+          (click)="toggleAddExistingSelection(opt.value)">
           <span class="standalone-picker-label">{{ opt.label }}</span>
           <div class="standalone-picker-actions" (click)="$event.stopPropagation()">
             <button nz-button nzType="text" nzSize="small" class="standalone-eye-btn"
@@ -491,7 +528,7 @@ export class IndicatorFamilyStartModalComponent {
               (click)="addExistingModalVisible = false; previewedStandaloneId = opt.value">
               <mat-icon>visibility</mat-icon>
             </button>
-            <mat-icon *ngIf="addExistingSelectedId === opt.value"
+            <mat-icon *ngIf="addExistingSelectedIds.includes(opt.value)"
               style="font-size:16px;width:16px;height:16px;line-height:1;color:#1677ff">check_circle</mat-icon>
           </div>
         </div>
@@ -501,10 +538,10 @@ export class IndicatorFamilyStartModalComponent {
     <ng-template #addExistingFooter>
       <button nz-button (click)="addExistingModalVisible = false">Annuler</button>
       <button nz-button nzType="primary"
-        [disabled]="!addExistingSelectedId"
+        [disabled]="!addExistingSelectedIds.length"
         [nzLoading]="addExistingLoading"
         (click)="confirmAddExistingToFamily()">
-        Ajouter à la famille
+        Ajouter {{ addExistingSelectedIds.length || '' }} indicateur{{ addExistingSelectedIds.length > 1 ? 's' : '' }} à la famille
       </button>
     </ng-template>
   </nz-modal>
@@ -644,6 +681,19 @@ export class IndicatorFamilyStartModalComponent {
     .member-row td:first-child { padding-left: 28px; }
     .family-edit-icon { font-size:16px; width:16px; height:16px; color:#bbb; cursor:pointer; }
     .family-edit-icon:hover { color:#722ed1; }
+    .family-card-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+    }
+    .family-card {
+      cursor: pointer; background: #f9f0ff; border: 1px solid #efdbff; border-radius: 8px;
+      padding: 12px 16px; display: flex; flex-direction: column; gap: 8px;
+      transition: box-shadow .15s, background .15s;
+    }
+    .family-card:hover { background: #efdbff; box-shadow: 0 2px 8px rgba(114,46,209,.15); }
+    .family-card-header { display: flex; align-items: center; gap: 8px; }
+    .family-card-header strong { flex: 1; word-break: break-word; }
+    .family-card-footer { display: flex; align-items: center; gap: 8px; }
+    .family-card-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
     .standalone-picker {
       max-height: 280px; overflow-y: auto;
       border: 1px solid #f0f0f0; border-radius: 6px;
@@ -727,6 +777,8 @@ export class AdminIndicatorManagerComponent implements OnInit {
   private readonly modalSvc     = inject(NzModalService);
   private readonly messageSvc   = inject(NzMessageService);
   private readonly cdr          = inject(ChangeDetectorRef);
+  private readonly router       = inject(Router);
+  private readonly listState    = inject(IndicatorListStateService);
   @ViewChild('renameFamilyTpl') private renameFamilyTplRef!: TemplateRef<any>;
   renameFamilyInput = '';
   readonly contextIcon = contextIcon;
@@ -762,9 +814,29 @@ export class AdminIndicatorManagerComponent implements OnInit {
 
   indicators: IndicatorDefinition[] = [];
   displayRows: IndicatorDisplayRow[] = [];
+  /** Cartes de l'onglet Familles (une par famille) - affichées en grille de 3, paginées à 5
+   *  lignes (15/page) via `pagedFamilyCards`. */
+  familyCards: { familyName: string; members: IndicatorDefinition[] }[] = [];
+  familyPageIndex = 1;
+  readonly familyPageSize = 15;
   expandedFamilies = new Set<string>();
   groupingFilter: 'families' | 'standalone' = 'standalone';
   completenessFilter: 'all' | 'complete' | 'incomplete' = 'all';
+  searchText = '';
+  contextTypeFilterValue: IndicatorScope | 'all' = 'all';
+  readonly contextTypeOptions: { value: IndicatorScope; label: string }[] = [
+    { value: 'learner', label: 'Apprenant' },
+    { value: 'teacher', label: 'Enseignant' },
+    { value: 'admin', label: 'Admin' },
+    { value: 'course', label: 'Cours' },
+    { value: 'activity', label: 'Activité' },
+    { value: 'group', label: 'Groupe' },
+  ];
+
+  /** Non-null : la vue courante est la page dédiée d'une famille (route
+   *  /dashboard/indicators/family/:name) - la liste est alors restreinte à cette seule famille,
+   *  affichée à plat (jamais repliée), et les onglets Uniques/Familles n'ont plus de sens. */
+  @Input() familyNameFilter: string | null = null;
   /** Nombre de pins par indicateur (tous cours/activités confondus) - label informatif. */
   pinCountsByIndicatorId: Record<string, number> = {};
   loading = false;
@@ -775,25 +847,38 @@ export class AdminIndicatorManagerComponent implements OnInit {
 
   openAddExistingToFamily(familyName: string): void {
     this.addExistingFamilyName = familyName;
-    this.addExistingSelectedId = null;
+    this.addExistingSelectedIds = [];
     this.standaloneIndicators = this.indicators.filter(i => !i.familyName);
     this.standaloneOptions = this.standaloneIndicators.map(i => ({ label: i.name, value: i.id }));
     this.addExistingModalVisible = true;
   }
 
+  toggleAddExistingSelection(id: string): void {
+    this.previewedStandaloneId = null;
+    const idx = this.addExistingSelectedIds.indexOf(id);
+    if (idx === -1) this.addExistingSelectedIds.push(id);
+    else this.addExistingSelectedIds.splice(idx, 1);
+  }
+
+  /** Assigne la famille à tous les indicateurs sélectionnés en parallèle (un seul aller-retour
+   *  visible pour l'utilisateur) plutôt qu'un par un - voir historique de cette limitation. */
   confirmAddExistingToFamily(): void {
-    if (!this.addExistingSelectedId) return;
+    if (!this.addExistingSelectedIds.length) return;
     this.addExistingLoading = true;
-    this.indicatorSvc.updateIndicator(this.addExistingSelectedId, { familyName: this.addExistingFamilyName }).subscribe({
-      next: updated => {
+    const ids = [...this.addExistingSelectedIds];
+    forkJoin(ids.map(id => this.indicatorSvc.updateIndicator(id, { familyName: this.addExistingFamilyName }))).subscribe({
+      next: updatedList => {
         this.cleanupFamilyPlaceholder(this.addExistingFamilyName);
-        this.indicators = this.indicators.map(i => i.id === updated.id ? { ...i, familyName: this.addExistingFamilyName } : i);
+        const updatedIds = new Set(updatedList.map(u => u.id));
+        this.indicators = this.indicators.map(i => updatedIds.has(i.id) ? { ...i, familyName: this.addExistingFamilyName } : i);
         this.expandedFamilies.add(this.addExistingFamilyName);
         this.applyGroupingFilter();
         this.addExistingLoading = false;
         this.addExistingModalVisible = false;
         this.cdr.markForCheck();
-        this.messageSvc.success(`Indicateur ajouté à la famille « ${this.addExistingFamilyName} »`);
+        this.messageSvc.success(
+          `${ids.length} indicateur${ids.length > 1 ? 's' : ''} ajouté${ids.length > 1 ? 's' : ''} à la famille « ${this.addExistingFamilyName} »`,
+        );
       },
       error: () => { this.addExistingLoading = false; this.messageSvc.error('Erreur lors de l\'ajout'); },
     });
@@ -876,7 +961,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
   // Ajout d'un indicateur existant à une famille
   addExistingModalVisible = false;
   addExistingFamilyName = '';
-  addExistingSelectedId: string | null = null;
+  addExistingSelectedIds: string[] = [];
   addExistingLoading = false;
   standaloneIndicators: IndicatorDefinition[] = [];
   standaloneOptions: { label: string; value: string }[] = [];
@@ -907,19 +992,25 @@ export class AdminIndicatorManagerComponent implements OnInit {
   deletingFeedback = new Set<string>();
 
   ngOnInit(): void {
+    if (!this.familyNameFilter) {
+      this.groupingFilter = this.listState.admin.groupingFilter;
+      this.completenessFilter = this.listState.admin.completenessFilter;
+      this.searchText = this.listState.admin.searchText;
+      this.contextTypeFilterValue = this.listState.admin.contextTypeFilterValue;
+    }
     this.load();
   }
 
   private load(): void {
     this.loading = true;
     this.indicatorSvc.loadAllForAdmin().subscribe({
-      next: list => { this.indicators = list; this.applyGroupingFilter(); this.loading = false; },
-      error: ()  => { this.loading = false; },
+      next: list => { this.indicators = list; this.applyGroupingFilter(); this.loading = false; this.cdr.markForCheck(); },
+      error: ()  => { this.loading = false; this.cdr.markForCheck(); },
     });
 
     this.indicatorSvc.countPinsByIndicator().subscribe({
-      next: counts => { this.pinCountsByIndicatorId = counts; },
-      error: () => { this.pinCountsByIndicatorId = {}; },
+      next: counts => { this.pinCountsByIndicatorId = counts; this.cdr.markForCheck(); },
+      error: () => { this.pinCountsByIndicatorId = {}; this.cdr.markForCheck(); },
     });
   }
 
@@ -929,27 +1020,64 @@ export class AdminIndicatorManagerComponent implements OnInit {
     this.applyGroupingFilter();
   }
 
-  /** Reconstruit `displayRows` (familles repliables ou indicateurs uniques) selon l'onglet
-   *  courant, combiné au filtre Complet/Incomplet (isComplete - indépendant de isActive,
-   *  l'interrupteur de publication manuelle). */
+  /** Reconstruit `displayRows` selon le mode courant, combiné aux filtres recherche/contexte/
+   *  complétude. En mode "page de famille" (`familyNameFilter`), la liste est restreinte à
+   *  cette seule famille et toujours affichée à plat (onglet Uniques/Familles ignoré) ; sinon,
+   *  comportement habituel (onglet + familles jamais dépliées, le clic navigue). */
   applyGroupingFilter(): void {
-    let filtered = this.groupingFilter === 'families'
-      ? this.indicators.filter(ind => !!ind.familyName)
-      : this.indicators.filter(ind => !ind.familyName);
+    let filtered: IndicatorDefinition[];
+    if (this.familyNameFilter) {
+      filtered = this.indicators.filter(ind => ind.familyName === this.familyNameFilter);
+      this.expandedFamilies.add(this.familyNameFilter);
+    } else {
+      // Persiste l'état des filtres/onglet de la liste principale pour que "Retour à la
+      // liste" les restaure au lieu de repartir des valeurs par défaut.
+      this.listState.admin.groupingFilter = this.groupingFilter;
+      this.listState.admin.completenessFilter = this.completenessFilter;
+      this.listState.admin.searchText = this.searchText;
+      this.listState.admin.contextTypeFilterValue = this.contextTypeFilterValue;
+      filtered = this.groupingFilter === 'families'
+        ? this.indicators.filter(ind => !!ind.familyName)
+        : this.indicators.filter(ind => !ind.familyName);
+    }
+    if (this.searchText.trim()) {
+      const q = this.searchText.trim().toLowerCase();
+      filtered = filtered.filter(ind => ind.name.toLowerCase().includes(q));
+    }
+    if (this.contextTypeFilterValue !== 'all') {
+      filtered = filtered.filter(ind => ind.contextType === this.contextTypeFilterValue);
+    }
     if (this.completenessFilter !== 'all') {
       filtered = filtered.filter(ind =>
         this.completenessFilter === 'complete' ? ind.isComplete : !ind.isComplete);
     }
-    this.displayRows = buildIndicatorDisplayRows(filtered, this.expandedFamilies);
+    const rows = buildIndicatorDisplayRows(filtered, this.expandedFamilies);
+    // En page de famille dédiée, la ligne d'en-tête de famille est redondante avec le titre
+    // de la page (voir header ci-dessus) : on ne garde que les membres, à plat.
+    this.displayRows = this.familyNameFilter ? rows.filter(r => r.kind !== 'family') : rows;
+    this.familyCards = rows.filter((r): r is Extract<IndicatorDisplayRow, { kind: 'family' }> => r.kind === 'family');
+    this.familyPageIndex = 1;
   }
 
-  toggleFamily(familyName: string): void {
-    if (this.expandedFamilies.has(familyName)) {
-      this.expandedFamilies.delete(familyName);
-    } else {
-      this.expandedFamilies.add(familyName);
-    }
-    this.applyGroupingFilter();
+  get pagedFamilyCards(): { familyName: string; members: IndicatorDefinition[] }[] {
+    const start = (this.familyPageIndex - 1) * this.familyPageSize;
+    return this.familyCards.slice(start, start + this.familyPageSize);
+  }
+
+  /** Clic sur une ligne de famille dans la liste principale : navigue vers sa page dédiée
+   *  plutôt que de la déplier sur place. */
+  openFamilyPage(familyName: string): void {
+    this.router.navigate(['/dashboard/indicators/family', familyName]);
+  }
+
+  goBackToList(): void {
+    this.router.navigate(['/dashboard/indicators']);
+  }
+
+  /** Nombre d'indicateurs de la famille affichée (indépendant des filtres recherche/contexte/
+   *  complétude appliqués sur cette page, contrairement à `displayRows`). */
+  familyMemberCount(): number {
+    return this.indicators.filter(ind => ind.familyName === this.familyNameFilter).length;
   }
 
   hasFormula(ind: IndicatorDefinition): boolean {
@@ -1086,18 +1214,6 @@ export class AdminIndicatorManagerComponent implements OnInit {
       });
     });
   }
-
-  openConfig(indicator: IndicatorDefinition): void {
-    this.modalSvc.create({
-      nzTitle: `Paramètres d'affichage : ${indicator.name}`,
-      nzContent: IndicatorConfigComponent,
-      nzData: { indicator },
-      nzFooter: null,
-      nzWidth: 600,
-    });
-  }
-
-
 
   openLogs(indicator: IndicatorDefinition): void {
     this.logsLoading.add(indicator.id);

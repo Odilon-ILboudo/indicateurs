@@ -139,7 +139,7 @@
               <!-- CARD -->
               <div class="view-card" *ngIf="viz.type === 'card'">
                 <div class="scalar-value" [style.color]="viz.color || '#5470c6'">
-                  {{ results[viz.id].value | number:'1.0-2' }}
+                  {{ results[viz.id].value }}
                   <span class="unit" [style.color]="viz.color || '#5470c6'">{{ viz.unit || '' }}</span>
                 </div>
               </div>

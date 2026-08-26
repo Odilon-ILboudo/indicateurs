@@ -121,33 +121,6 @@ export class IndicatorsService {
     return this.getValues(indicator.id, contextType, contextId, 'day', limit);
   }
 
-  async getDashboardValues(request: {
-    indicators: string[];
-    context: { contextType: string; contextId: string; userId: string };
-  }): Promise<Record<string, any>> {
-    const { indicators, context } = request;
-    const { contextType, contextId } = context;
-    const results: Record<string, any> = {};
-
-    for (const name of indicators) {
-      const indicator = await this.findByName(name);
-      if (indicator) {
-        const values = await this.indicatorValueModel.find({
-          where: { indicatorId: indicator.id, contextType, contextId },
-          order: { metadata: { lastUpdate: 'DESC' } } as any,
-          take: 1,
-        });
-        results[name] = {
-          value: values[0]?.value || 0,
-          metadata: values[0]?.metadata,
-          visualizations: indicator.visualizations,
-        };
-      }
-    }
-
-    return results;
-  }
-
   async create(definition: CreateIndicatorDto): Promise<IndicatorDefinition> {
     const existing = await this.indicatorModel.findOne({ where: { name: definition.name } });
     if (existing) {
@@ -213,6 +186,15 @@ export class IndicatorsService {
     const userIds = prefs.map(p => p.userId);
     this.logger.log(`Recalcul de "${indicator.name}" pour ${userIds.length} utilisateurs (ayant activé cet indicateur)`);
 
+    // Un indicateur personnel (learner/teacher/admin) activity-aware ou course-aware n'a pas
+    // UNE valeur par utilisateur mais une par (utilisateur, activité/cours) - même distinction
+    // que resolveCacheContextId(), pour ne jamais écrire une ligne de cache différente de celle
+    // que la carte lit réellement via computeView().
+    const isPersonal = indicator.contextType === 'learner' || indicator.contextType === 'teacher' || indicator.contextType === 'admin';
+    const activityAware = isPersonal && isActivityAware(formula);
+    const courseAware = isPersonal && isCourseAware(formula);
+
+    let processed = 0;
     let updated = 0;
     let failed = 0;
     const BATCH = 10;
@@ -220,46 +202,54 @@ export class IndicatorsService {
     for (let i = 0; i < userIds.length; i += BATCH) {
       const chunk = userIds.slice(i, i + BATCH);
       await Promise.all(chunk.map(async userId => {
-        try {
-          const sessions = await this.platonService.getUserSessionData(userId);
-          const latestActivityId: string | undefined = sessions.length > 0
-            ? [...sessions].sort((a, b) =>
-                new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-              )[0]?.activity_id ?? undefined
-            : undefined;
+        if (!activityAware && !courseAware) {
+          // Indicateur personnel non scopé : une seule valeur globale par utilisateur.
+          processed++;
+          try {
+            await this.computeView(id, indicator.contextType, userId, undefined, undefined, true);
+            updated++;
+          } catch (err) {
+            failed++;
+            this.logger.warn(`Recalcul échoué pour userId=${userId}: ${(err as Error).message}`);
+          }
+          return;
+        }
 
-          const value = await this.formulaInterpreter.interpret(formula as any, {
-            userId,
-            activityId: latestActivityId,
-            indicatorId: indicator.id,
-          });
-          const isScalar = typeof value === 'number';
-          const scalarValue = isScalar ? value : 0;
-          const existing = await this.indicatorValueModel.findOne({
-            where: { indicatorId: indicator.id, contextType: 'learner', contextId: userId },
-          });
-          await this.indicatorValueModel.upsert(
-            {
-              indicatorId: indicator.id,
-              contextType: 'learner',
-              contextId: userId,
-              value: scalarValue,
-              metadata: buildValueMetadata(existing?.metadata, scalarValue, {
-                structuredValue: isScalar ? undefined : value,
-              }),
-            },
-            { conflictPaths: ['indicatorId', 'contextType', 'contextId'] },
-          );
-          updated++;
+        // Indicateur scopé : une valeur par activité (ou cours) où l'utilisateur a une trace
+        // réelle dans SessionData - computeView() se charge de recalculer et d'écrire la bonne
+        // ligne de cache (avec le suffixe :activityId ou :courseId).
+        let sessions: { activity_id?: string; course_id?: string }[] = [];
+        try {
+          sessions = await this.platonService.getUserSessionData(userId);
         } catch (err) {
           failed++;
           this.logger.warn(`Recalcul échoué pour userId=${userId}: ${(err as Error).message}`);
+          return;
+        }
+        const scopeIds = [...new Set(
+          (activityAware ? sessions.map(s => s.activity_id) : sessions.map(s => s.course_id))
+            .filter((v): v is string => !!v),
+        )];
+
+        for (const scopeId of scopeIds) {
+          processed++;
+          try {
+            if (activityAware) {
+              await this.computeView(id, indicator.contextType, userId, scopeId, undefined, true);
+            } else {
+              await this.computeView(id, indicator.contextType, userId, undefined, undefined, true, scopeId);
+            }
+            updated++;
+          } catch (err) {
+            failed++;
+            this.logger.warn(`Recalcul échoué pour userId=${userId}, scope=${scopeId}: ${(err as Error).message}`);
+          }
         }
       }));
     }
 
-    this.logger.log(`Recalcul terminé - updated: ${updated}, failed: ${failed}`);
-    return { processed: userIds.length, updated, failed };
+    this.logger.log(`Recalcul terminé - processed: ${processed}, updated: ${updated}, failed: ${failed}`);
+    return { processed, updated, failed };
   }
 
   async searchCourses(query: string, offset = 0) {

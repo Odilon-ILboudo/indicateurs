@@ -68,8 +68,8 @@ pages. `apiUrl = ${environment.apiUrl}/indicators`,
 | `getExecutionLogs(id, limit=50)` | `GET {apiUrl}/:id/logs?limit=` | E.5 |
 | `getPlatonSchema()` | `GET {apiUrl}/schema` | E.2, E.6 |
 | `computeView(id, contextType, contextId, activityId?, vizId?, courseId?)` | `POST {apiUrl}/:id/compute-view` | B.2, C, F |
-| `getTeacherContext(teacherId)` | `GET {apiUrl}/teacher/:teacherId/context` | A.2, E.2 |
-| `getCourseActivities(courseId)` | `GET {apiUrl}/course/:courseId/activities` | A.2, E.2 |
+| `searchCourses(query, offset?)` | `GET {apiUrl}/courses/search?q=&offset=` | E.2 (remplace l'ancien `getTeacherContext`, retiré) |
+| `getCourseActivities(courseId)` | `GET {apiUrl}/course/:courseId/activities` | E.2 |
 | `getCourseStudents(courseId)` | `GET {apiUrl}/course/:courseId/students` | E.2 |
 | `getSnapshots(id, scope)` | `GET {apiUrl}/:id/snapshots?activityId=` ou `?courseId=` | F |
 | `createSnapshot(id, body)` | `POST {apiUrl}/:id/snapshots` | F |
@@ -79,6 +79,17 @@ pages. `apiUrl = ${environment.apiUrl}/indicators`,
 | `setVizPreference(userId, id, vizId)` | `PATCH {preferencesUrl}/:id?userId=` body `{activeVizId}` (fire-and-forget) | B.3, C |
 | `getEnabledVizIds`/`isVizEnabled` | cache local, pas de HTTP | D |
 | `setEnabledVizIds(userId, id, vizIds)` | `PATCH {preferencesUrl}/:id?userId=` body `{enabledVizIds}` (fire-and-forget) | D |
+| `searchSimilar(q, excludeId?)` | `GET {apiUrl}/search?q=&excludeId=` | E.1 (détection de doublons) |
+| `getFullSchema()` | `GET {apiUrl}/schema/full` | E.2 (explorateur de schéma admin) |
+| `countPinsByIndicator()` | `GET {apiUrl}/pins/counts` | E.1 (label admin "N pin(s)") |
+| `listPins(contextType, contextId)` | `GET {apiUrl}/pins?contextType=&contextId=` | page cours/activité |
+| `createPin(id, contextType, contextId, thresholdsOverride?)` | `POST {apiUrl}/:id/pins` | page cours/activité |
+| `deletePin(id, contextType, contextId)` | `DELETE {apiUrl}/:id/pins?contextType=&contextId=` | page cours/activité |
+| `getNotifications()` | `GET {apiUrl}/notifications/all` | non câblée dans un composant identifié |
+| `submitFeedback(id, userId, rating, comment?)` | `POST {apiUrl}/:id/feedback` | carte indicateur |
+| `getFeedbacks(id)` | `GET {apiUrl}/:id/feedback` | E.1 (panneau retours d'expérience admin) |
+| `deleteFeedback(id, feedbackId)` | `DELETE {apiUrl}/:id/feedback/:feedbackId` | E.1 |
+| toutes les méthodes `*EventRule*`/`*EventType*` | `/api/event-rules*`, `/api/event-types*` | section 6bis du readme, non détaillées dans ce document |
 
 ---
 
@@ -87,8 +98,9 @@ pages. `apiUrl = ${environment.apiUrl}/indicators`,
 ### A.1 Chargement initial - `/dashboard/overview`
 
 1. `features/dashboard/pages/overview/overview.page.ts` `ngOnInit()` :
-   restaure le contexte enseignant sauvegardé
-   (`dashboard-settings.service.ts` → `getTeacherState()`), puis appelle
+   construit un `DashboardContext` par défaut (`scope` = `teacher`/`admin`/
+   `learner` selon `RoleService`, `academicYear`/`semester` fixes - aucun
+   contexte cours/activité ici, voir A.2), puis appelle
    `loadActiveIndicators()` et `loadIndicators()`.
 2. `loadIndicators()` → `indicatorService.loadIndicators()`
    (`indicator.service.ts`) → **`GET /api/indicators`**
@@ -105,33 +117,26 @@ pages. `apiUrl = ${environment.apiUrl}/indicators`,
    `user-preferences.service.ts` → repo `preferenceRepository`
    (table `user_indicator_preferences`, relation jointe → `indicator_definitions`).
 
-### A.2 Sélecteur de contexte enseignant - `TeacherContextSelectorComponent`
+### A.2 Pas de sélecteur de contexte séparé sur l'overview
 
-`features/dashboard/pages/widgets/teacher-context-selector/teacher-context-selector.component.ts`
+Il n'existe plus de composant dédié pour choisir "quel cours/quelle activité"
+regarder depuis le tableau de bord général : l'overview n'affiche que les
+indicateurs personnels globaux (`learner`/`teacher`/`admin`, non scopés à un
+cours ou une activité précis - voir B.1). Pour voir un indicateur `course`/
+`group`/`activity`, ou un indicateur personnel restreint à un cours/une
+activité, l'utilisateur navigue directement vers la page du cours ou de
+l'activité concernée :
 
-1. `ngOnInit()` :
-   - `indicatorService.getTeacherContext(environment.defaultUserId)` →
-     **`GET /api/indicators/teacher/:teacherId/context`** →
-     `indicators.controller.ts` `getTeacherContext` →
-     `indicators.service.ts` → `PlatonService.getCoursesWithGroupsForTeacher`
-     (`api/src/modules/core/platon/platon.service.ts`) :
-     - `SELECT id, name FROM "Courses" WHERE owner_id = $1`
-     - puis pour chaque cours, `SELECT id, name FROM "CourseGroups" WHERE course_id = $1`
-   - si une sélection précédente existe (`saved.courseId`),
-     `indicatorService.getCourseActivities(saved.courseId)` →
-     **`GET /api/indicators/course/:courseId/activities`** →
-     `indicators.controller.ts` → `indicators.service.ts` →
-     `PlatonService.getActivitiesByCourse` (`platon.service.ts`) :
-     `FROM "Activities" a LEFT JOIN "Resources" r ON r.id = (a.source->>'resource')::uuid WHERE a.course_id = $1`.
-2. `onCourseChange(courseId)` (changement de sélection cours,
-   template `nz-select`) → même appel `getCourseActivities(courseId)`.
-3. `onScopeTypeChange` / `onActivityChange` → `emitContext()` :
-   - construit un `DashboardContext` et l'émet via `@Output() contextChange`
-     → `overview.page.ts` `onTeacherContextChange()`.
-   - la sélection met à jour le contexte global du dashboard : il n'existe pas
-     de route `/api/indicators/precompute-context` dans le backend actuel.
-     Les cartes et la page détail calculent les valeurs `course`/`group`/
-     `activity` à la demande via `computeView()` lorsque l'utilisateur les affiche.
+- Page cours (`courses/course/dashboard/dashboard.page.ts`, alimentée par
+  `CoursePresenter.contextChange`) : indicateurs `course` de ce cours.
+- Onglet "Mes statistiques" du cours (`courses/course/my-stats/my-stats.page.ts`) :
+  indicateurs personnels course-aware + indicateurs `group` scopés au cours entier.
+- Page activité (`courses/course/activity/activity.page.ts`, alimentée par
+  `ActivityPresenter.contextChange`) : indicateurs personnels activity-aware +
+  indicateurs `activity` + indicateurs `group` scopés à l'activité.
+
+Dans les trois cas, les cartes et la page détail calculent les valeurs à la
+demande via `computeView()` lorsque l'utilisateur les affiche - voir C.
 
 ---
 
@@ -161,27 +166,32 @@ pages. `apiUrl = ${environment.apiUrl}/indicators`,
 1. Branche compute-view de `loadValue()` : `activityId = scope === 'activity' ? undefined : context.activityId`,
    puis `indicatorService.computeView(indicator.id, scope, context.scopeId, activityId, vizId)`
    (`indicator.service.ts`) → **`POST /api/indicators/:id/compute-view`**
-   body `{contextType, contextId, activityId?, vizId?}`.
+   body `{contextType, contextId, activityId?, vizId?, courseId?}`.
 2. `indicators.controller.ts` `computeView` → `indicators.service.ts`
    `computeView` :
    1. `findById(indicatorId)` → `IndicatorDefinition`
       (table `indicator_definitions`).
-   2. Résout la visualisation ciblée (`vizId` ou
-      `visualizations[0]`) et la formule effective (formule de la viz, sinon
-      `indicator.formula` legacy). Pas de pipeline → `BadRequestException`.
-   3. Calcule `resolvedActivityId` et la clé de cache
-      `cacheContextId` (inclut `:activityId` et `:vizId` si présents).
+   2. Résout la visualisation ciblée (`vizId` ou `visualizations[0]`, pour le
+      libellé dans un éventuel message d'erreur) et la formule
+      (`indicator.formula` - **1 indicateur = 1 formule**, partagée par
+      toutes les visualisations). Pas de pipeline → `BadRequestException`.
+   3. Calcule la clé de cache `cacheContextId` via `resolveCacheContextId()`
+      (jamais de `vizId` dedans - voir `readme.md` §6 "clé de cache" pour le
+      détail par `contextType`).
    4. **Cache** : si `!forceRefresh`, lecture
       `indicatorValueModel` (table `indicator_values`,
       `where: { indicatorId, contextType, contextId: cacheContextId }`).
       Si trouvé → retour immédiat, **pas d'exécution DSL**.
    5. Construit le `formulaContext` selon `contextType`
       (`{ userId|courseId|groupId, activityId, indicatorId }`).
-   6. **Exécution DSL** :
-      `formulaInterpreter.interpret(formula, formulaContext)` → point
-      d'entrée `interpreter/formula-interpreter.service.ts`
-      `interpret()` (moteur DSL, voir `readme.md` §6 pour le détail des
-      10 types d'étapes).
+   6. **Exécution** : si le pipeline est reconnu par
+      `getIncrementalShape()`, passe par le chemin "calcul complet" du moteur
+      incrémental (`computeWithRowMap`/`computeWithGroupRowMap`/
+      `computeWithCandidateRows`, qui alimentent aussi l'état différentiel en
+      cache pour les événements suivants) ; sinon, retombe sur
+      `formulaInterpreter.interpret(formula, formulaContext)` générique
+      (moteur DSL, voir `readme.md` §6 pour le détail des 10 types d'étapes,
+      et `docs/calcul-differentiel.md` pour le détail des deux chemins).
    7. **Post-traitement noms** : si le résultat est un tableau de
       buckets avec `userIds`, appel
       `PlatonService.getUserNameMap(allIds)`
@@ -223,16 +233,18 @@ parent (voir F pour `from: 'activity'` / `from: 'group-snapshot'`).
 `features/indicator-detail/indicator-detail.component.ts`
 
 1. `ngOnInit()` : lit `route.snapshot.paramMap.get('id')` et
-   `route.snapshot.queryParams`.
-   - Si `q['from'] === 'group-snapshot'` : initialise un contexte
-     `group` depuis les queryParams (`groupId`, `activityId`, ... transmis
-     par `GroupSnapshotsPanelComponent`, voir F).
-   - Si `q['from'] === 'activity'` : initialise un contexte
-     `activity` (transmis par `activity.page.ts`, voir F).
-   - Sinon, si l'utilisateur est enseignant : restaure
-     `dashboard-settings.service.ts` → `getTeacherState()` - affiche la
-     bannière lecture seule "Cours > Activité > Scope" décrite dans
-     `readme.md` §10.
+   `route.snapshot.queryParams`. Cinq branches selon `q['from']` :
+   - `'group-snapshot'` : contexte `group` depuis les queryParams (`groupId`,
+     `activityId` ou `courseId`, ... transmis par `GroupSnapshotsPanelComponent`,
+     voir F).
+   - `'activity'` : contexte `activity` (transmis par `activity.page.ts`).
+   - `'course'` : contexte `course` (transmis par `dashboard.page.ts` du cours).
+   - `'activity-personal'` : carte personnelle (`learner`/`teacher`/`admin`
+     activity-aware) cliquée depuis "Mes statistiques" sur la page activité -
+     `contextType` vient explicitement des query params (pas déduit de `from`,
+     contrairement aux branches ci-dessus), car il dépend de l'indicateur cliqué.
+   - `'course-personal'` : même principe, depuis l'onglet "Mes statistiques"
+     du cours (`my-stats.page.ts`).
    - Appelle `loadIndicator(id)`.
 2. `loadIndicator(id)` :
    - `indicatorService.loadIndicators()` → **`GET /api/indicators`**
@@ -392,7 +404,7 @@ visible pour `canManageIndicators`/`canCreateIndicators` (`RoleService`).
 | Action UI | Appel → URL |
 |---|---|
 | Ouverture du builder (chargement du catalogue DSL) | `getPlatonSchema()` → **`GET /api/indicators/schema`** |
-| Sélection cours/activité pour "Tester" | `getTeacherContext(environment.defaultUserId)` → **`GET /api/indicators/teacher/:teacherId/context`** |
+| Recherche de cours pour "Tester" | `searchCourses(query, offset)` → **`GET /api/indicators/courses/search?q=&offset=`** (autocomplete, `nzServerSearch` + debounce 300ms) |
 | Sélection cours pour "Tester" | `getCourseActivities(courseId)` → **`GET /api/indicators/course/:courseId/activities`** |
 | Sélection cours pour "Tester" (élèves) | `getCourseStudents(courseId)` → **`GET /api/indicators/course/:courseId/students`** |
 | Bouton "Prévisualiser" | `previewFormulaRaw(buildFormulaForViz(v), context)` → **`POST /api/indicators/preview`** |
@@ -444,21 +456,26 @@ jointure sur `CourseMembers`).
 → `indicators.controller.ts` `recalculate` →
 `indicators.service.ts` `recalculate` :
 
-1. Résout la formule effective (`visualizations[].formula` ou
-   `indicator.formula` legacy).
+1. Résout la formule (`indicator.formula`, 1 indicateur = 1 formule) et
+   détermine si elle est activity-aware et/ou course-aware
+   (`isActivityAware`/`isCourseAware`), uniquement pour les contextTypes
+   personnels (`learner`/`teacher`/`admin`).
 2. `preferenceModel` → liste des `userId` ayant activé
    l'indicateur (table `user_indicator_preferences`).
 3. Boucle par lots de 10 (`BATCH`), pour chaque `userId` :
-   - `PlatonService.getUserSessionData(userId)`
+   - **Indicateur non scopé** (pas activity/course-aware, ou contextType
+     autre que learner/teacher/admin) : un seul appel
+     `computeView(id, indicator.contextType, userId, undefined, undefined, true)`
+     - une valeur globale par utilisateur.
+   - **Indicateur scopé** : `PlatonService.getUserSessionData(userId)`
      (`platon.service.ts`) → `SELECT ... FROM "SessionData" WHERE user_id = $1`
-     (table PLaTon `SessionData`).
-   - Détermine `latestActivityId` (session la plus récente).
-   - `formulaInterpreter.interpret(formula, { userId, activityId, indicatorId })`
-     (`formula-interpreter.service.ts`) - écrit aussi un log dans
-     `indicator_execution_logs` (car `indicatorId` fourni).
-   - `indicatorValueModel.upsert(...)` sur `indicator_values`,
-     `contextType: 'learner'`, `contextId: userId`.
-4. Retourne `{ processed, updated, failed }`.
+     (table PLaTon `SessionData`, inclut `course_id`), puis un appel
+     `computeView(...)` **par** `activity_id`/`course_id` distinct trouvé -
+     jamais une seule valeur "dernière session vue". Chaque appel utilise la
+     même clé de cache que celle lue par la carte (`resolveCacheContextId()`,
+     voir B.2).
+4. Retourne `{ processed, updated, failed }` (`processed` = nombre total
+   d'appels `computeView`, pas nombre d'utilisateurs).
 
 ### E.4 Logs d'exécution
 
@@ -989,9 +1006,10 @@ Deux consumers, routing key `'#'` (reçoit tous les types d'événements) :
 
 #### Consumer `indicators.learner` → `onLearnerEvent`
 
-→ `ingestionService.ingestForContext(raw, 'learner')`
-→ `processIndicatorUpdate(indicator, event)` pour chaque indicateur actif
-dont `requiredEvents` contient `event.type` :
+→ `ingestionService.ingestForContext(raw, 'learner')` appelle directement
+`IndicatorsService.computeViewIncremental(indicatorId, 'learner', userId, activityId, undefined, deltaEvent, courseId?)`
+(`indicators.service.ts`) pour chaque indicateur actif dont `requiredEvents`
+contient `event.type` :
 
 1. `getIncrementalShape(formula)` - analyse la formule.
 2. **Si incrémental possible** (shape connue + métadonnées en BDD + sessionId présent) :
@@ -1006,16 +1024,20 @@ dont `requiredEvents` contient `event.type` :
 #### Consumer `indicators.aggregate` → `onAggregateEvent`
 
 → `getAffectedIndicators(event)` filtre `contextType !== 'learner'`
-→ `processAggregateIndicator(indicator, event)` dispatch par `contextType` :
+→ `processAggregateIndicator(indicator, event)` (`ingestion.service.ts`)
+dispatch par `contextType` - chaque branche tente d'abord
+`computeViewIncremental()` (même moteur différentiel que ci-dessus) et ne
+retombe sur un recalcul complet que si le pipeline n'est pas reconnu
+automatiquement :
 
 | contextType | Action |
 |---|---|
-| `activity` | `computeView(activityId, forceRefresh=true)` + emit WS |
-| `course` | `computeView(courseId, forceRefresh=true)` + emit WS |
+| `activity` | `computeViewIncremental(activityId)` + emit WS |
+| `course` | `computeViewIncremental(courseId)` + emit WS |
 | `group`, activity-aware | `refreshSnapshots({activityId})` + `refreshActivityViews()` (émettent WS eux-mêmes) |
 | `group`, course-aware (`isCourseAware`) | `refreshSnapshots({courseId})` + `refreshCourseGroupViews(indicatorId, courseId)` (`courseId` déduit de `event.courseId` ou `getCourseIdForActivity`) |
-| `teacher` | `getTeacherByCourse(courseId)` → `computeView` + emit WS |
-| `admin` + futurs | `refreshCachedContextValues(indicatorId, contextType)` |
+| `teacher` | `getTeacherByCourse(courseId)` → `computeViewIncremental` + emit WS |
+| `admin` + futurs | `refreshCachedContextValues(indicatorId, contextType)` (différentiel si le pipeline s'y prête, recalcul complet sinon) |
 
 ### I.4 WebSocket - `IndicatorsGateway`
 
@@ -1075,7 +1097,7 @@ En production, les événements arrivent exclusivement par le pipeline RabbitMQ 
 | Entité | Table | Écrite par |
 |---|---|---|
 | `IndicatorDefinition` | `indicator_definitions` | `create`/`update`/`toggleStatus`/`delete` (E.1), `incrementUsageCount`/`decrementUsageCount` (D) |
-| `IndicatorValue` | `indicator_values` | `computeView` (B.2), `calculateAndStoreValue` (D.1), `recalculate` (E.3), `processIndicatorUpdate` (I.3) |
+| `IndicatorValue` | `indicator_values` | `computeView` (B.2), `calculateAndStoreValue` (D.1), `recalculate` (E.3), `computeViewIncremental` (I.3) |
 | `IndicatorExecutionLog` | `indicator_execution_logs` | écrite à l'intérieur de `interpret()` (B.2 étape 9, E.3, F.3) si `context.indicatorId` fourni ; lue par `getExecutionLogs` (E.4) |
 | `IndicatorSnapshot` | `indicator_snapshots` | CRUD F.2, lue/rafraîchie par `refreshSnapshots` (F.3) |
 | `UserIndicatorPreference` | `user_indicator_preferences` | CRUD D |

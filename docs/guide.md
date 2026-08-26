@@ -43,6 +43,22 @@ coller → "Appliquer" → "Créer"). Le format exact est celui validé par
 
 ---
 
+## Regrouper les 22 cas en une famille
+
+`familyName` **n'est pas** un champ importable via JSON (absent des clés
+reconnues par `parseIndicatorImport` - voir le gabarit plus haut) : il faut le
+renseigner à la main, indicateur par indicateur, dans l'étape 1 du wizard
+après import, ou en renommant depuis la table de gestion admin (icône crayon
+sur la ligne de famille). Nom et description à utiliser pour les 22 cas de ce
+guide :
+
+| Champ | Valeur |
+|---|---|
+| Nom de la famille | `Tentatives avant réussite` |
+| Description | Nombre moyen de tentatives avant la première réussite (`attempts_at_success`), décliné selon le public (apprenant, groupe de TP, activité, cours, enseignant, admin), le périmètre (une activité ou un cours entier) et la représentation (moyenne globale, détail par exercice/activité, répartition des effectifs) - voir `docs/guide.md` pour les 22 cas. |
+
+---
+
 ## 0. Correctif bloquant à faire AVANT de créer quoi que ce soit
 
 **Aucun des cas de ce guide ne se mettra à jour en temps réel tant que ce point
@@ -171,19 +187,22 @@ version précédente de ce guide.
 ### Cas 3 - moyenne globale, sur tout le cours
 
 **Volontairement sans déclencheur** (`requiredEvents: []`) - c'est le cas
-choisi pour tester le cron plutôt que le temps réel. `recalculate()`
-(`indicators.service.ts:233,238`) a `contextType: 'learner'` codé en dur, et
-le cron (`aggregation.service.ts`, toutes les minutes) l'appelle sur tout
-indicateur actif sans déclencheur, quel que soit son `contextType` réel -
-c'est donc le **seul** contextType pour lequel laisser `requiredEvents` vide
-donne un résultat correct. Pour tout autre contextType (`teacher`/`admin`/
-`group`/`activity`/`course`), le cron écrirait silencieusement sous
-`contextType: 'learner'` au lieu de la vraie valeur - ne pas laisser ces
-contextTypes sans déclencheur.
+choisi pour tester le recalcul périodique plutôt que le temps réel.
+`AggregationService.recalculateTriggerlessIndicators()` tourne à la fréquence
+définie par la variable d'environnement `TRIGGERLESS_RECALC_CRON` (défaut :
+toutes les minutes) et appelle `IndicatorsService.recalculate()` sur tout
+indicateur actif sans déclencheur, quel que soit son `contextType`.
+`recalculate()` gère correctement les trois contextTypes personnels
+(`learner`/`teacher`/`admin`), y compris quand leur formule est restreinte à
+une activité ou à un cours (une valeur est recalculée par activité/cours
+concerné, pas une seule valeur globale). Les contextTypes `group`/`activity`/
+`course` n'ont pas de notion d'utilisateur "abonné" au sens de
+`UserIndicatorPreference` et ne sont donc jamais concernés par ce recalcul
+périodique - ils ont besoin d'un déclencheur réel pour être mis à jour.
 
-Pour observer le cron : créez l'indicateur, activez-le depuis un compte
-étudiant (`UserIndicatorPreference`), puis attendez jusqu'à une minute (ou
-cliquez "Recalculer" côté admin pour ne pas attendre).
+Pour observer le recalcul périodique : créez l'indicateur, activez-le depuis
+un compte étudiant (`UserIndicatorPreference`), puis attendez jusqu'à une
+minute (ou cliquez "Recalculer" côté admin pour ne pas attendre).
 
 ```json
 {
@@ -240,7 +259,7 @@ frontend plutôt que dans la formule).
 {
   "name": "Tentatives avant réussite - Groupe (activité, moyenne globale)",
   "description": "Nombre moyen de tentatives avant la première réussite, tous étudiants et exercices du groupe confondus, sur cette activité.",
-  "interpretationHint": "Une valeur élevée peut indiquer que le groupe a besoin d'un accompagnement supplémentaire sur cette activité.",
+  "interpretationHint": "Moyenne unique pour ce groupe sur cette activité, tous exercices confondus. Une valeur élevée peut indiquer que le groupe a besoin d'un accompagnement supplémentaire - voir la variante \"par exercice\" pour savoir si la difficulté est répartie ou concentrée sur un exercice précis.",
   "contextType": "group",
   "requiredEvents": ["exercice.completed"],
   "thresholds": { "good": 2, "warning": 4 },
@@ -264,7 +283,7 @@ frontend plutôt que dans la formule).
 {
   "name": "Tentatives avant réussite - Groupe (activité, par exercice)",
   "description": "Nombre moyen de tentatives avant la première réussite, détaillé par exercice, pour ce groupe sur cette activité.",
-  "interpretationHint": "Identifie les exercices qui posent le plus de difficulté à l'ensemble du groupe, activité par activité.",
+  "interpretationHint": "Moyenne des tentatives avant réussite calculée séparément pour chaque exercice de l'activité, pour ce groupe uniquement. Permet d'identifier l'exercice précis qui pose difficulté à l'ensemble du groupe.",
   "contextType": "group",
   "requiredEvents": ["exercice.completed"],
   "visualizations": [{ "label": "Tentatives par exercice", "type": "bar-chart", "unit": "tentatives" }],
@@ -282,7 +301,7 @@ frontend plutôt que dans la formule).
 {
   "name": "Tentatives avant réussite - Groupe (activité, répartition par exercice)",
   "description": "Répartition des étudiants du groupe par nombre de tentatives avant réussite, détaillée par exercice.",
-  "interpretationHint": "Combine exercice et nombre de tentatives : utile pour repérer un exercice où plusieurs étudiants ont buté au même endroit.",
+  "interpretationHint": "Pour chaque exercice de l'activité, nombre d'étudiants du groupe ayant réussi en exactement 1, 2, 3... tentatives. Donnée agrégée (comptages uniquement) : utile pour repérer un exercice où plusieurs étudiants du groupe ont buté au même endroit.",
   "contextType": "group",
   "requiredEvents": ["exercice.completed"],
   "visualizations": [{ "label": "Répartition par exercice", "type": "bar-chart", "unit": "étudiants" }],
@@ -300,7 +319,7 @@ frontend plutôt que dans la formule).
 {
   "name": "Tentatives avant réussite - Groupe (activité, répartition globale)",
   "description": "Répartition des étudiants du groupe par nombre moyen de tentatives avant la première réussite, tous exercices confondus.",
-  "interpretationHint": "Une répartition étalée (beaucoup d'étudiants loin de la moyenne) peut signaler un groupe hétérogène, à la différence d'une répartition resserrée.",
+  "interpretationHint": "Chaque étudiant du groupe est regroupé selon sa propre moyenne de tentatives sur cette activité, puis réparti en tranches. Donnée nominative (réservée aux enseignants/admin) : une répartition étalée peut signaler un groupe hétérogène, à la différence d'une répartition resserrée.",
   "contextType": "group",
   "requiredEvents": ["exercice.completed"],
   "visualizations": [{ "label": "Répartition des effectifs", "type": "histogram", "unit": "tentatives" }],
@@ -320,7 +339,7 @@ automatiquement, pas besoin de `join` sur `Users`.
 {
   "name": "Tentatives avant réussite - Groupe (cours entier, moyenne globale)",
   "description": "Nombre moyen de tentatives avant la première réussite, tous étudiants et activités du groupe confondus, sur tout le cours.",
-  "interpretationHint": "Vue d'ensemble du groupe sur tout le cours, moins sensible aux variations d'une seule activité.",
+  "interpretationHint": "Moyenne unique pour ce groupe sur l'ensemble du cours, toutes activités confondues. Vue d'ensemble moins sensible aux variations d'une seule activité que les moyennes par activité.",
   "contextType": "group",
   "requiredEvents": ["exercice.completed"],
   "thresholds": { "good": 2, "warning": 4 },
@@ -344,7 +363,7 @@ automatiquement, pas besoin de `join` sur `Users`.
 {
   "name": "Tentatives avant réussite - Groupe (cours entier, par activité)",
   "description": "Nombre moyen de tentatives avant la première réussite, détaillé par activité, pour ce groupe sur tout le cours.",
-  "interpretationHint": "Situe les activités les plus difficiles pour ce groupe sur l'ensemble du cours.",
+  "interpretationHint": "Moyenne des tentatives avant réussite calculée séparément pour chaque activité du cours, pour ce groupe uniquement. Situe les activités les plus difficiles pour ce groupe.",
   "contextType": "group",
   "requiredEvents": ["exercice.completed"],
   "visualizations": [{ "label": "Tentatives par activité", "type": "bar-chart", "unit": "tentatives" }],
@@ -364,7 +383,7 @@ lisible qu'au cas 4 (`Activities` n'a pas de colonne `name` exploitable).
 {
   "name": "Tentatives avant réussite - Groupe (cours entier, répartition par activité)",
   "description": "Répartition des étudiants du groupe par nombre de tentatives avant réussite, détaillée par activité, sur tout le cours.",
-  "interpretationHint": "Combine activité et nombre de tentatives, à l'échelle du cours entier.",
+  "interpretationHint": "Pour chaque activité du cours, nombre d'étudiants du groupe ayant réussi en exactement 1, 2, 3... tentatives. Donnée agrégée (comptages uniquement), à l'échelle du cours entier.",
   "contextType": "group",
   "requiredEvents": ["exercice.completed"],
   "visualizations": [{ "label": "Répartition par activité", "type": "bar-chart", "unit": "étudiants" }],
@@ -384,7 +403,7 @@ lisible que le cas 10.
 {
   "name": "Tentatives avant réussite - Groupe (cours entier, répartition globale)",
   "description": "Répartition des étudiants du groupe par nombre moyen de tentatives avant la première réussite, toutes activités du cours confondues.",
-  "interpretationHint": "Répartition du groupe sur l'ensemble du cours - une hétérogénéité qui persiste sur plusieurs activités mérite un signalement particulier.",
+  "interpretationHint": "Chaque étudiant du groupe est regroupé selon sa propre moyenne de tentatives sur l'ensemble du cours, puis réparti en tranches. Donnée nominative (réservée aux enseignants/admin) : une hétérogénéité qui persiste sur tout le cours mérite un signalement particulier.",
   "contextType": "group",
   "requiredEvents": ["exercice.completed"],
   "visualizations": [{ "label": "Répartition des effectifs", "type": "histogram", "unit": "tentatives" }],
@@ -411,7 +430,7 @@ référence :
 {
   "name": "Tentatives avant réussite - Activité",
   "description": "Nombre moyen de tentatives avant la première réussite, tous étudiants et groupes confondus, sur cette activité.",
-  "interpretationHint": "Vue globale de l'activité, tous groupes confondus - utile pour comparer un groupe précis (cas 5) à l'ensemble des étudiants.",
+  "interpretationHint": "Moyenne unique sur toute l'activité : tous les exercices, tous les groupes et tous les étudiants sont mélangés dans un seul chiffre. Donne une vue d'ensemble rapide, mais masque si la difficulté vient d'un exercice précis ou est répartie uniformément - voir \"Tentatives avant réussite - Activité (par exercice)\" pour ce détail.",
   "contextType": "activity",
   "requiredEvents": ["exercice.completed"],
   "thresholds": { "good": 2, "warning": 4 },
@@ -437,7 +456,7 @@ Une version existe (`Tentatives v2 - Activité`) mais fait un `sum`, pas une
 {
   "name": "Tentatives avant réussite - Activité (par exercice)",
   "description": "Nombre moyen de tentatives avant la première réussite, détaillé par exercice, tous groupes confondus.",
-  "interpretationHint": "Comparaison possible avec le cas 6 (par groupe) pour savoir si un exercice difficile l'est pour un groupe en particulier ou pour tous.",
+  "interpretationHint": "Moyenne des tentatives avant réussite calculée séparément pour chaque exercice de l'activité (tous groupes et étudiants confondus au sein de chaque exercice). Permet de repérer quel exercice précis pose problème, contrairement à \"Tentatives avant réussite - Activité\" qui donne une seule moyenne mélangeant tous les exercices.",
   "contextType": "activity",
   "requiredEvents": ["exercice.completed"],
   "visualizations": [{ "label": "Tentatives par exercice", "type": "bar-chart", "unit": "tentatives" }],
@@ -453,9 +472,9 @@ Une version existe (`Tentatives v2 - Activité`) mais fait un `sum`, pas une
 
 ```json
 {
-  "name": "Tentatives avant réussite - Activité (répartition par exercice)",
+  "name": "Nombre de tentatives avant réussite par exercice: répartition des étudiants",
   "description": "Répartition des étudiants par nombre de tentatives avant réussite, détaillée par exercice, tous groupes confondus.",
-  "interpretationHint": "Comme le cas 7, mais à l'échelle de toute l'activité - donnée nominative, réservée aux enseignants/admin.",
+  "interpretationHint": "Pour chaque exercice de l'activité, nombre d'étudiants ayant réussi en exactement 1, 2, 3... tentatives. Donnée agrégée (comptages uniquement, aucun étudiant nommé) : montre si la réussite est rapide pour la plupart des étudiants ou si une minorité a eu besoin de beaucoup plus de tentatives, exercice par exercice.",
   "contextType": "activity",
   "requiredEvents": ["exercice.completed"],
   "visualizations": [{ "label": "Répartition par exercice", "type": "bar-chart", "unit": "étudiants" }],
@@ -476,7 +495,7 @@ l'activité entière : à restreindre à `teacher`/`admin` par prudence.
 {
   "name": "Tentatives avant réussite - Activité (répartition globale)",
   "description": "Répartition des étudiants par nombre moyen de tentatives avant la première réussite, tous exercices et groupes confondus.",
-  "interpretationHint": "Comme le cas 8, à l'échelle de toute l'activité - donnée nominative, réservée aux enseignants/admin.",
+  "interpretationHint": "Chaque étudiant est regroupé selon sa propre moyenne de tentatives (arrondie à l'entier) sur l'ensemble des exercices de l'activité, tous groupes confondus, puis les étudiants sont répartis en tranches. Donnée nominative : chaque tranche liste les étudiants concernés - réservé aux enseignants/admin.",
   "contextType": "activity",
   "requiredEvents": ["exercice.completed"],
   "visualizations": [{ "label": "Répartition des effectifs", "type": "histogram", "unit": "tentatives" }],
@@ -499,8 +518,7 @@ voit les noms de ses camarades.
 > réussite - Cours` déjà en base (son pipeline actuel regroupe par nom de
 > ressource via un `js` - ce n'est pas une vraie moyenne globale au sens du
 > cas 17 ci-dessous) - le nom est une colonne `UNIQUE`, coller un JSON avec un
-> nom déjà pris échoue avec un conflit (`409`, voir plus haut dans ce guide
-> pour le correctif apporté à ce message d'erreur).
+> nom déjà pris échoue avec un conflit (`409`).
 
 ### Cas 17 - moyenne globale, sur tout le cours
 
@@ -508,7 +526,7 @@ voit les noms de ses camarades.
 {
   "name": "Tentatives avant réussite - Cours (moyenne globale)",
   "description": "Nombre moyen de tentatives avant la première réussite, tous étudiants, groupes et activités confondus, sur tout le cours.",
-  "interpretationHint": "Vue globale du cours, tous groupes et activités confondus.",
+  "interpretationHint": "Moyenne unique sur tout le cours : toutes les activités, tous les groupes et tous les étudiants sont mélangés dans un seul chiffre. Vue rapide qui masque si la difficulté vient d'une activité précise - voir \"Tentatives avant réussite - Cours (par activité)\" pour ce détail.",
   "contextType": "course",
   "requiredEvents": ["exercice.completed"],
   "thresholds": { "good": 2, "warning": 4 },
@@ -532,7 +550,7 @@ voit les noms de ses camarades.
 {
   "name": "Tentatives avant réussite - Cours (par activité)",
   "description": "Nombre moyen de tentatives avant la première réussite, détaillé par activité, tous groupes confondus, sur tout le cours.",
-  "interpretationHint": "Situe les activités les plus difficiles du cours, tous groupes confondus.",
+  "interpretationHint": "Moyenne des tentatives avant réussite calculée séparément pour chaque activité du cours, tous groupes et étudiants confondus. Permet de repérer quelle activité précise pose problème plutôt qu'une moyenne globale qui les mélange toutes.",
   "contextType": "course",
   "requiredEvents": ["exercice.completed"],
   "visualizations": [{ "label": "Tentatives par activité", "type": "bar-chart", "unit": "tentatives" }],
@@ -552,7 +570,7 @@ lisible qu'au cas 4 et au cas 10.
 {
   "name": "Tentatives avant réussite - Cours (répartition par activité)",
   "description": "Répartition des étudiants par nombre de tentatives avant réussite, détaillée par activité, tous groupes confondus, sur tout le cours.",
-  "interpretationHint": "Combine activité et nombre de tentatives sur tout le cours - donnée nominative, réservée aux enseignants/admin.",
+  "interpretationHint": "Pour chaque activité du cours, nombre d'étudiants ayant réussi en exactement 1, 2, 3... tentatives. Donnée agrégée (comptages uniquement, aucun étudiant nommé) : montre si la réussite est rapide pour la plupart des étudiants ou concentrée sur quelques activités précises.",
   "contextType": "course",
   "requiredEvents": ["exercice.completed"],
   "visualizations": [{ "label": "Répartition par activité", "type": "bar-chart", "unit": "étudiants" }],
@@ -573,7 +591,7 @@ indirectement (pas de nom listé, mais donnée fine) : à restreindre à
 {
   "name": "Tentatives avant réussite - Cours (répartition globale)",
   "description": "Répartition des étudiants par nombre moyen de tentatives avant la première réussite, toutes activités et groupes confondus, sur tout le cours.",
-  "interpretationHint": "Répartition de tous les étudiants du cours - donnée nominative, réservée aux enseignants/admin.",
+  "interpretationHint": "Chaque étudiant du cours est regroupé selon sa propre moyenne de tentatives (arrondie à l'entier) sur l'ensemble des activités, puis réparti en tranches. Donnée nominative : chaque tranche liste les étudiants concernés - réservé aux enseignants/admin.",
   "contextType": "course",
   "requiredEvents": ["exercice.completed"],
   "visualizations": [{ "label": "Répartition des effectifs", "type": "histogram", "unit": "tentatives" }],
@@ -627,7 +645,7 @@ Même limite et même pipeline que le cas 21, seul `contextType` change :
 {
   "name": "Tentatives avant réussite - Plateforme (vue admin)",
   "description": "Nombre moyen de tentatives avant la première réussite, sur toute la plateforme.",
-  "interpretationHint": "Indicateur global plateforme, identique pour tous les administrateurs.",
+  "interpretationHint": "Moyenne du nombre de tentatives avant réussite sur l'ensemble de la plateforme : tous les utilisateurs, cours et activités sont mélangés dans un seul chiffre. Identique pour tous les administrateurs, aucun filtrage par cours possible.",
   "contextType": "admin",
   "requiredEvents": ["exercice.completed"],
   "thresholds": { "good": 2, "warning": 4 },
@@ -680,10 +698,11 @@ Toujours dans `/dashboard/indicators` (rôle Admin), table de gestion :
 
 ### Note sur le type de visualisation "Graphique ligne"
 
-`line-chart` affiche `result.metadata.history`, jamais alimenté par
-`computeView` (toujours `[]`) - la courbe reste vide même avec une formule
-correcte. Limite frontend connue, non résolue - éviter ce type pour les 22 cas
-ci-dessus.
+`line-chart` affiche `result.metadata.history`, alimenté par `computeView`
+(chaque calcul en cache ajoute une entrée `{value, timestamp}` à l'historique
+stocké en base). Seul le tout premier calcul d'un indicateur (aucune ligne en
+cache) n'a pas encore d'historique - la courbe se remplit dès la deuxième
+consultation.
 
 ### Note sur le format attendu par `bar-chart` et `histogram`
 

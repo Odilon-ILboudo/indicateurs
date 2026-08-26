@@ -63,12 +63,12 @@ PGPASSWORD=test psql -h localhost -p 5432 -U platon -d platon \
 
 **Table `platon_outbox_events`** - reçoit un enregistrement à chaque réponse :
 
-| Colonne      | Type        | Description                          |
-|--------------|-------------|--------------------------------------|
-| `id`         | BIGSERIAL   | Clé primaire auto-incrémentée        |
-| `event_type` | VARCHAR     | Toujours `exercise.answered`         |
-| `payload`    | JSONB       | userId, sessionId, activityId, grade |
-| `created_at` | TIMESTAMPTZ | Horodatage automatique               |
+| Colonne      | Type        | Description                                              |
+|--------------|-------------|-----------------------------------------------------------|
+| `id`         | BIGSERIAL   | Clé primaire auto-incrémentée                              |
+| `event_type` | VARCHAR     | Toujours `exercise.answered`                               |
+| `payload`    | JSONB       | userId, sessionId, activityId, courseId, grade, attempts, timestamp |
+| `created_at` | TIMESTAMPTZ | Horodatage automatique                                     |
 
 **Trigger `trg_platon_outbox_session_data`** - se déclenche sur `SessionData` après `INSERT OR UPDATE OF grade`.
 
@@ -216,7 +216,12 @@ Deux consumers avec routing key `'#'` (reçoivent tous les types d'événements)
 ### Consumer `indicators.learner`
 
 - **Ce qu'il traite :** indicateurs `contextType = 'learner'`
-- **Comment :** `ingestForContext(raw, 'learner')` → `processIndicatorUpdate()` - calcul incrémental si éligible, sinon SQL complet
+- **Comment :** `ingestForContext(raw, 'learner')` appelle directement
+  `IndicatorsService.computeViewIncremental()` (calcul différentiel si le
+  pipeline s'y prête, recalcul complet sinon - voir `calcul-differentiel.md`).
+  `courseId` n'est résolu via PLaTon que si la formule en a réellement besoin
+  (`isCourseAware`) ; `computeViewIncremental` choisit lui-même `activityId`
+  ou `courseId` selon ce que la formule déclare.
 - **Résultat :** met à jour `indicator_values` pour `(indicatorId, learner, userId)` + émet WS
 
 ### Consumer `indicators.aggregate`
@@ -226,12 +231,16 @@ Deux consumers avec routing key `'#'` (reçoivent tous les types d'événements)
 
 | contextType | Action |
 |---|---|
-| `activity` | `computeView(activityId, forceRefresh)` + emit WS |
-| `course` | `computeView(courseId, forceRefresh)` + emit WS |
+| `activity` | `computeViewIncremental(activityId)` + emit WS |
+| `course` | `computeViewIncremental(courseId)` + emit WS |
 | `group`, activity-aware | `refreshSnapshots({activityId})` + `refreshActivityViews()` (émettent WS eux-mêmes) |
 | `group`, course-aware | `refreshSnapshots({courseId})` + `refreshCourseGroupViews()` (agrège toutes les activités du cours pour ce groupe) |
-| `teacher` | `getTeacherByCourse(courseId)` → `computeView` + emit WS |
-| `admin` + futurs | `refreshCachedContextValues()` |
+| `teacher` | `getTeacherByCourse(courseId)` → `computeViewIncremental` + emit WS |
+| `admin` + futurs | `refreshCachedContextValues()` (différentiel si le pipeline s'y prête, recalcul complet sinon) |
+
+Toutes ces branches tentent d'abord le calcul différentiel et ne retombent
+sur un recalcul complet que si le pipeline n'est pas reconnu automatiquement
+(voir `calcul-differentiel.md`).
 
 ---
 

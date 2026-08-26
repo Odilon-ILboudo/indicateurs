@@ -29,8 +29,8 @@ visualisations, seuils) mais sert de base à plusieurs formes de réutilisation 
    copiés pour démarrer un nouvel indicateur - réutilisation au sens "patron",
    pas instance partagée.
 
-4. **Réutilisation au sein d'un cercle**
-   Plusieurs indicateurs partageant un `circleName` réutilisent la même *idée
+4. **Réutilisation au sein d'une famille**
+   Plusieurs indicateurs partageant un `familyName` réutilisent la même *idée
    métier* (souvent un pipeline très similaire), chacun adapté à un
    `contextType` cible - réutilisation conceptuelle plus que technique.
 
@@ -56,19 +56,37 @@ indicateurs*.
 
   // Optionnel - relie cet indicateur à ses "sœurs" du même thème mais
   // scopées à d'autres contextType. Voir readme.md §8.
-  "circleName": "Tentatives avant réussite",
+  "familyName": "Tentatives avant réussite",
 
   // Événements PLaTon qui déclenchent un recalcul / refresh
   "requiredEvents": ["exercise.answered"],
 
   "isActive": true,
+  // Complétude réelle du formulaire (nom, contexte, au moins une visualisation,
+  // pipeline valide) - indépendant de isActive. Piloté par le bouton "Sauvegarder
+  // le brouillon" du wizard, affiché comme badge "Incomplet" côté admin.
+  "isComplete": true,
   "usageCount": 12,
+
+  // Optionnel - restreint la visibilité de l'indicateur (en plus des règles par
+  // contextType, voir readme.md §8) à une liste de rôles PLaTon.
+  "visibilityRoles": null,
+
+  // Optionnel - id de l'indicateur dont celui-ci a été créé par réutilisation
+  // (bouton "Réutiliser" du wizard). Aucun lien vivant : une simple copie à la
+  // création, jamais relue ni synchronisée ensuite.
+  "baseIndicatorId": null,
+
+  // true uniquement pour le membre "placeholder" créé automatiquement quand on
+  // démarre une nouvelle famille sans indicateur existant à y mettre tout de
+  // suite - jamais vu ni modifiable depuis l'UI normale.
+  "isFamilyPlaceholder": false,
 
   // Seuils de performance globaux (optionnel) - partagés par toutes les visualisations.
   // good  : valeur ≤ good    → vert
   // warning : valeur ≤ warning → orange
-  // Difficile (rouge) = valeur > warning, déduit automatiquement.
-  "thresholds": { "good": 2, "warning": 4 },
+  // critical : valeur ≥ critical → rouge foncé (optionnel, sinon rouge dès > warning)
+  "thresholds": { "good": 2, "warning": 4, "critical": 6 },
 
   // Aide à l'analyse (optionnel) - affiché dans le panneau latéral de la page détail.
   "interpretationHint": "Un résultat élevé signifie que l'étudiant a eu du mal à réussir.",
@@ -119,12 +137,16 @@ indicateurs*.
 | `name` | Nom affiché, unique. |
 | `description` | Texte libre, affiché en infobulle/aide. |
 | `contextType` | Le contexte auquel appartient l'indicateur - fixe pour toute sa durée de vie. Détermine `contextId` lors du calcul (`userId` pour `learner`, `courseId`/`groupId`/`activityId` pour les autres) et qui peut le voir (table de visibilité, readme §8). |
-| `circleName` | `null` ou nom partagé par d'autres indicateurs traitant du même thème sous un autre `contextType`. Sert uniquement à l'affichage groupé (repliable) côté admin/sélecteur - aucun lien technique entre les membres d'un cercle. |
-| `requiredEvents` | Liste d'événements PLaTon (`exercise.answered`, …) qui, lors de l'ingestion, déclenchent un recalcul de la valeur `learner` et un `refreshSnapshots()` des snapshots de groupe liés à l'activité concernée. Le wizard ne propose que les événements **configurés et installés** (voir readme.md §6bis, `event-rules`) - impossible d'y saisir une valeur libre. |
-| `isActive` | Indicateur visible/calculable ou désactivé globalement. |
+| `familyName` | `null` ou nom partagé par d'autres indicateurs traitant du même thème sous un autre `contextType`. Sert uniquement à l'affichage groupé côté admin/sélecteur (pages dédiées par famille) - aucun lien technique entre les membres d'une famille. |
+| `isFamilyPlaceholder` | `true` uniquement pour la ligne technique créée en démarrant une nouvelle famille sans indicateur existant à y ajouter tout de suite - invisible dans les listes normales, remplacée dès qu'un premier membre réel est ajouté. |
+| `baseIndicatorId` | `null` ou id de l'indicateur source d'une réutilisation (bouton "Réutiliser" du wizard) - copie ponctuelle à la création, sans lien vivant ensuite. |
+| `requiredEvents` | Liste d'événements PLaTon (`exercice.completed`, …) qui, lors de l'ingestion, déclenchent une mise à jour temps réel de la valeur. Le wizard ne propose que les événements **configurés et installés** (voir readme.md §6bis, `event-rules`) - impossible d'y saisir une valeur libre. Vide et case "Activer des événements déclencheurs" décochée = recalcul périodique à la place (voir `AggregationService.recalculateTriggerlessIndicators`, fréquence configurable via `TRIGGERLESS_RECALC_CRON`). |
+| `isActive` | Indicateur visible/calculable ou désactivé globalement. Forcé à `false` à chaque sauvegarde (création ou édition) - une réactivation manuelle explicite est toujours nécessaire. |
+| `isComplete` | Complétude réelle du formulaire (nom, contexte, au moins une visualisation, pipeline valide), indépendante de `isActive` - affichée comme badge "Incomplet" côté admin quand fausse. |
+| `visibilityRoles` | `null` ou liste de rôles PLaTon auxquels restreindre la visibilité de l'indicateur, en plus des règles par `contextType` (readme §8). |
 | `usageCount` | Compteur d'utilisation (nombre d'utilisateurs l'ayant activé). |
 | `formula` | **Formule unique partagée par toutes les visualisations** - pipeline DSL (1 indicateur = 1 formule). |
-| `thresholds` | `{ good?: number; warning?: number }` - seuils globaux optionnels : ≤ good = vert, ≤ warning = orange, > warning = rouge. Affectent la couleur de la valeur (card) et la légende du panneau latéral. |
+| `thresholds` | `{ good?: number; warning?: number; critical?: number }` - seuils globaux optionnels : ≤ good = vert, ≤ warning = orange, ≥ critical (si défini) = rouge foncé, sinon rouge dès > warning. Affectent la couleur de la valeur (card) et la légende du panneau latéral. |
 | `interpretationHint` | Texte libre optionnel affiché dans le panneau latéral de la page détail pour guider l'interprétation des résultats. |
 | `visualizations[]` | Voir ci-dessous - au moins une, généralement la première = vue par défaut. |
 

@@ -26,7 +26,10 @@ La solution : **mémoriser l'état intermédiaire** entre deux événements. Qua
 Étudiant répond
        │
        ▼
-RabbitMQ → IngestionService.processIndicatorUpdate()
+RabbitMQ → IngestionService.ingestForContext() / processAggregateIndicator()
+       │
+       ▼
+       IndicatorsService.computeViewIncremental()
        │
        ├─ getIncrementalShape(formula)   ← analyse le pipeline DSL
        │
@@ -256,14 +259,16 @@ Le `js` après `extract` ne reçoit que des nombres - il n'a pas besoin des rows
 
 ---
 
-## 7. Les chemins dans `processIndicatorUpdate`
+## 7. Les chemins dans `computeViewIncremental`
 
-**Fichier** : `api/src/modules/features/ingestion/ingestion.service.ts`
+**Fichier** : `api/src/modules/features/indicators/indicators.service.ts`
 
-Cette méthode est appelée pour chaque couple `(indicateur, événement)`. Elle décide quel chemin emprunter.
+Cette méthode est appelée pour chaque couple `(indicateur, événement)`, depuis
+`IngestionService.ingestForContext()`/`processAggregateIndicator()`. Elle
+décide quel chemin emprunter.
 
 ```
-processIndicatorUpdate(indicator, event)
+computeViewIncremental(indicator, event)
         │
         ├─ 1. getIncrementalShape(formula) → shape ou null
         │
@@ -422,8 +427,8 @@ Le calcul différentiel n'est **jamais** utilisé dans ces cas :
 
 | Cas | Mécanisme |
 |---|---|
-| Admin clique "Recalculer" | `POST /indicators/:id/recalculate` → `interpret()` depuis zéro, metadata réinitialisée |
-| `computeView(forceRefresh=true)` | ignore le cache, recalcule depuis zéro, écrase le JSONB |
+| Admin clique "Recalculer" | `POST /indicators/:id/recalculate` → `computeView(forceRefresh=true)` |
+| `computeView(forceRefresh=true)` | ignore le cache, recalcule depuis zéro via le chemin SQL complet correspondant (`computeWithRowMap`/`computeWithGroupRowMap`/`computeWithCandidateRows` si le pipeline est incrémentable, `interpret()` générique sinon), écrase le JSONB |
 | `refreshSnapshots` (refresh d'un snapshot épinglé) | passe `deltaEvent` → tente différentiel, sinon `computeView(forceRefresh=true)` |
 | `refreshActivityViews` (toutes les vues cachées d'une activité) | idem |
 
@@ -504,6 +509,6 @@ fetch(SessionData, [user_id, activity_id])
 | Fichier | Rôle |
 |---|---|
 | `interpreter/formula-interpreter.service.ts` | Analyse le pipeline (`getIncrementalShape`), calculs complets (`computeWithRowMap` etc.), calcul des résultats depuis l'état (`computeResultFrom*`), `applyPostSteps` async |
-| `ingestion/ingestion.service.ts` | Orchestre la décision différentiel vs total dans `processIndicatorUpdate` |
-| `indicators/indicators.service.ts` | `computeView` (calcul à la demande), `computeViewIncremental` (mise à jour lors des refreshes de snapshots/vues) |
+| `ingestion/ingestion.service.ts` | Reçoit l'événement (`ingestForContext`/`processAggregateIndicator`) et appelle `computeViewIncremental` avec le bon contexte selon le `contextType` |
+| `indicators/indicators.service.ts` | `computeView` (calcul à la demande), `computeViewIncremental` (orchestre la décision différentiel vs total pour chaque événement), `recalculate` (recalcul périodique/manuel) |
 | `indicators/entities/indicator-value.entity.ts` | Table `indicator_values` qui stocke valeur + métadonnées |

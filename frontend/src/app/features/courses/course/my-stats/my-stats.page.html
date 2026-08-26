@@ -1,0 +1,73 @@
+<ng-container *ngIf="context.course as course">
+  <ng-container *ngIf="loading">
+    <nz-spin nzSimple></nz-spin>
+  </ng-container>
+
+  <ng-container *ngIf="!loading">
+
+    <!-- ── Sous-section : mes statistiques personnelles (learner/teacher/admin) ── -->
+    <h4 class="section-title">Mes statistiques</h4>
+    <ng-container *ngIf="hasIndicators; else noIndicators">
+      <nz-row [nzGutter]="[16, 16]">
+        <nz-col
+          *ngFor="let ind of learnerIndicators"
+          nzXs="24" nzSm="12" nzMd="12" nzLg="8" nzXl="8">
+          <ui-indicator-card
+            [indicator]="ind"
+            [context]="learnerContext"
+            [clickable]="true"
+            [queryParams]="learnerQueryParams"
+            [showPinButton]="false"
+          />
+        </nz-col>
+        <nz-col
+          *ngFor="let ind of teacherIndicators"
+          nzXs="24" nzSm="12" nzMd="12" nzLg="8" nzXl="8">
+          <ui-indicator-card
+            [indicator]="ind"
+            [context]="teacherContext"
+            [clickable]="true"
+            [queryParams]="teacherQueryParams"
+            [showPinButton]="false"
+          />
+        </nz-col>
+        <nz-col
+          *ngFor="let ind of adminIndicators"
+          nzXs="24" nzSm="12" nzMd="12" nzLg="8" nzXl="8">
+          <ui-indicator-card
+            [indicator]="ind"
+            [context]="adminContext"
+            [clickable]="true"
+            [queryParams]="adminQueryParams"
+            [showPinButton]="false"
+          />
+        </nz-col>
+      </nz-row>
+    </ng-container>
+    <ng-template #noIndicators>
+      <nz-empty
+        nzNotFoundContent="Aucun indicateur personnel n'a été activé pour ce cours."
+        style="margin: 16px 0 24px">
+      </nz-empty>
+    </ng-template>
+
+    <!-- ── Sous-section : indicateurs par groupe (tout le cours, isCourseAware) ── -->
+    <ng-container *ngIf="groupIndicators.length > 0">
+      <nz-divider [nzText]="groupTitle" nzOrientation="left"></nz-divider>
+      <ng-template #groupTitle>
+        <span class="section-divider-btn" (click)="collapsedGroup = !collapsedGroup">
+          <mat-icon class="section-chevron" [class.collapsed]="collapsedGroup">expand_more</mat-icon>
+          Indicateurs par groupe
+        </span>
+      </ng-template>
+
+      <app-group-snapshots-panel
+        *ngIf="!collapsedGroup"
+        [groupIndicators]="groupIndicators"
+        [courseId]="course.id"
+        [courseName]="course.name"
+      />
+    </ng-container>
+
+  </ng-container>
+</ng-container>

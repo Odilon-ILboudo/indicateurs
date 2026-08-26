@@ -27,8 +27,9 @@ export class PlatonService {
    */
   async getUserSessionData(userId: string) {
     return this.dataSource.query(
-      `SELECT 
+      `SELECT
          activity_id,
+         course_id,
          grade,
          attempts,
          created_at

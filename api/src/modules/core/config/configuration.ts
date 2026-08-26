@@ -42,15 +42,7 @@ export default () => ({
 
   jwtSecret: process.env.JWT_SECRET || 'secret',
 
-  redis: {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379', 10),
-    password: process.env.REDIS_PASSWORD,
-  },
-
   aggregation: {
-    dailyHour: parseInt(process.env.DAILY_AGGREGATION_HOUR || '1', 10),
-    weeklyDayOfWeek: parseInt(process.env.WEEKLY_AGGREGATION_DAY || '1', 10),
     // Fréquence du recalcul périodique des indicateurs actifs sans déclencheur (voir
     // AggregationService.recalculateTriggerlessIndicators) - expression cron standard.
     // Défaut : toutes les minutes, comme avant l'introduction de cette variable.

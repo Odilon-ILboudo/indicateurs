@@ -1,0 +1,37 @@
+:host {
+  display: block;
+  padding: 8px 0;
+}
+
+nz-empty {
+  margin: 2rem 0;
+}
+
+h4.section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--brand-background-sidebar, #3C2964);
+  margin-bottom: 16px;
+}
+
+.section-divider-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--brand-background-sidebar, #3C2964);
+  user-select: none;
+
+  &:hover { color: #722ed1; }
+}
+
+.section-chevron {
+  font-size: 18px !important;
+  width: 18px !important;
+  height: 18px !important;
+  transition: transform 0.2s ease;
+
+  &.collapsed { transform: rotate(-90deg); }
+}

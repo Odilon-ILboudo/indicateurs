@@ -75,7 +75,7 @@ const isolate = new ivm.Isolate({ memoryLimit: 32 }); // 32 Mo max
 const context = await isolate.createContext();
 await context.global.set('input', new ivm.ExternalCopy(input).copyInto());
 const script = await isolate.compileScript(`(function(input) { ${code} })(input)`);
-const result = await script.run(context, { timeout: 2000 });
+const result = await script.run(context, { timeout: 2000, copy: true });
 isolate.dispose();
 ```
 
@@ -205,8 +205,15 @@ Ce filtre est appliqué à deux endroits :
 
 ## 3. Ce qui reste à faire
 
-- **Authentification sur les routes d'écriture** : `POST /indicators`,
-  `PATCH /indicators/:id`, `POST /indicators/preview` sont accessibles sans
-  authentification. Un guard réel doit être branché avant tout déploiement
-  exposé - c'est la priorité principale. Sans auth, n'importe qui peut créer
-  des indicateurs avec des étapes `js` et déclencher leur exécution.
+- **Authentification incomplète sur certaines routes** : `POST /indicators` et
+  `PATCH /indicators/:id` sont protégées (`AuthGuard`+`AdminGuard`), mais
+  plusieurs routes qui exécutent une formule (donc du code `js`) restent
+  accessibles sans authentification : `POST /indicators/preview`,
+  `POST /indicators/preview-steps`, `POST /indicators/:id/compute-view`,
+  `POST /indicators/:id/snapshots`, `PATCH /indicators/:id/snapshots/:snapshotId`,
+  `DELETE /indicators/:id/snapshots/:snapshotId`,
+  `POST /indicators/:id/feedback`. Un guard réel doit être branché sur ces
+  routes avant tout déploiement exposé - c'est la priorité principale.
+  `preview`/`preview-steps` sont les plus sensibles : elles acceptent une
+  formule arbitraire dans le corps de la requête, donc n'importe qui peut
+  déclencher l'exécution d'une étape `js` sans même avoir créé d'indicateur.

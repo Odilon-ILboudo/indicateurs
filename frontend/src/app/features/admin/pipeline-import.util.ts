@@ -414,6 +414,13 @@ function validatePipelineColumns(pipeline: PipelineStep[], platonSchema: PlatonT
   }
 }
 
+/** `true` si `text` est du JSON strictement valide - utilisé pour rejeter du JSON collé par
+ *  erreur en mode YAML (le YAML est un sur-ensemble du JSON, `yaml.load` l'accepterait
+ *  silencieusement sinon) : voir `parseIndicatorImport` et `formatImportText`. */
+export function looksLikeJson(text: string): boolean {
+  try { JSON.parse(text); return true; } catch { return false; }
+}
+
 /** Parse et valide un import YAML/JSON complet d'indicateur (pas seulement le pipeline).
  *  `platonSchema` peut être vide (validation des tables/colonnes alors ignorée) - utile pour
  *  valider avant que le schéma PLaTon soit chargé. Lève `PipelineError`/`Error` sur tout
@@ -424,6 +431,16 @@ export function parseIndicatorImport(
   platonSchema: PlatonTableSchema[] = [],
 ): { pipeline: PipelineStep[]; meta: ImportedIndicatorMeta } {
   if (!text.trim()) throw new Error('Le champ est vide. Collez votre indicateur ci-dessus avant d\'appliquer.');
+
+  // Mode strict : le YAML est un sur-ensemble du JSON (js-yaml accepterait silencieusement du
+  // JSON collé par erreur en mode YAML) - on rejette explicitement ce cas plutôt que de laisser
+  // passer, pour que le mode sélectionné corresponde vraiment au texte collé.
+  if (mode === 'yaml' && looksLikeJson(text)) {
+    throw new Error(
+      'Ce texte est du JSON valide, pas du YAML. Sélectionnez le mode JSON, ou reformulez en syntaxe YAML (indentation, sans accolades).',
+    );
+  }
+
   let raw: any;
   try {
     raw = mode === 'yaml' ? yaml.load(text) : JSON.parse(text);

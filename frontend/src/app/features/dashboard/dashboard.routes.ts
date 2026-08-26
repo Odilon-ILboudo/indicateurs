@@ -4,6 +4,8 @@ import { DashboardPage } from './dashboard.page';
 import { IndicatorDetailComponent } from '../../shared/ui';
 import { OverviewPage } from './pages/overview/overview.page';
 import { IndicatorsPage } from './pages/indicators/indicators.page';
+import { FamilyIndicatorsPage } from './pages/indicators/family-indicators.page';
+import { SelectorFamilyIndicatorsPage } from './pages/indicators/selector-family-indicators.page';
 
 export default [
   {
@@ -13,6 +15,16 @@ export default [
       { path: '', redirectTo: 'overview', pathMatch: 'full' },
       { path: 'overview', component: OverviewPage, data: { title: 'Tableau de bord' } },
       { path: 'indicators', component: IndicatorsPage, data: { title: 'Indicateurs' } },
+      {
+        path: 'indicators/family/:name',
+        component: FamilyIndicatorsPage,
+        data: { title: 'Famille d\'indicateurs' },
+      },
+      {
+        path: 'indicators/selector-family/:name',
+        component: SelectorFamilyIndicatorsPage,
+        data: { title: 'Famille d\'indicateurs' },
+      },
       {
         path: 'indicator/:id',
         component: IndicatorDetailComponent,

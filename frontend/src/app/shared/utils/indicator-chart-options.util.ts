@@ -54,7 +54,7 @@ export function buildIndicatorChartOptions(
       detail: {
         valueAnimation: true,
         offsetCenter: [0, '60%'],
-        formatter: (v: number) => unit ? `{value|${v.toFixed(1)}}\n{unit|${unit}}` : `{value|${v.toFixed(1)}}`,
+        formatter: (v: number) => unit ? `{value|${v}}\n{unit|${unit}}` : `{value|${v}}`,
         rich: {
           value: { fontSize: 22, fontWeight: 700, color: '#333', lineHeight: 26 },
           unit: { fontSize: 12, color: '#888', lineHeight: 16 },

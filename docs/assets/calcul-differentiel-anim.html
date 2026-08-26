@@ -1,0 +1,557 @@
+<title>Calcul différentiel</title>
+<style>
+  :root {
+    --bg: #f7f5fb;
+    --surface: #ffffff;
+    --ink: #23202e;
+    --muted: #6c6478;
+    --border: #d9d2ea;
+    --accent: #722ed1;
+    --accent-soft: #722ed11a;
+    --accent-glow: #722ed1;
+    --dim: #cfc7de;
+    --db: #c8720c;
+    --db-soft: #c8720c1a;
+    --cache: #1c8a4b;
+    --cache-soft: #1c8a4b1a;
+    --font-sans: -apple-system, "Segoe UI", "Inter", system-ui, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #18151f; --surface: #221e2c; --ink: #ede9f5; --muted: #a99fbb; --border: #3c3548;
+      --accent: #a985ea; --accent-soft: #a985ea24; --accent-glow: #c8aef2; --dim: #3a3446;
+      --db: #e8a23c; --db-soft: #e8a23c22; --cache: #58d194; --cache-soft: #58d19422;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #18151f; --surface: #221e2c; --ink: #ede9f5; --muted: #a99fbb; --border: #3c3548;
+    --accent: #a985ea; --accent-soft: #a985ea24; --accent-glow: #c8aef2; --dim: #3a3446;
+    --db: #e8a23c; --db-soft: #e8a23c22; --cache: #58d194; --cache-soft: #58d19422;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--ink); font-family: var(--font-sans);
+    margin: 0; padding: 40px 24px 64px;
+    display: flex; flex-direction: column; align-items: center; gap: 24px;
+  }
+  header { max-width: 740px; width: 100%; display: flex; flex-direction: column; gap: 6px; }
+  h1 { font-size: 1.35rem; font-weight: 700; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); font-size: 0.92rem; max-width: 68ch; }
+
+  .stage {
+    width: 100%; max-width: 740px; position: relative;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 26px 28px 24px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+
+  .fly-layer { position: absolute; inset: 0; pointer-events: none; z-index: 30; overflow: visible; }
+  .fly-chip {
+    position: absolute; left: 0; top: 0; width: 20px; height: 20px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-weight: 700; font-size: 8.5px; color: white;
+    background: var(--db); box-shadow: 0 3px 10px rgba(0,0,0,.28);
+  }
+  .fly-chip.result { background: var(--accent); }
+
+  .mode-label {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); min-height: 20px;
+  }
+  .mode-label .pill {
+    padding: 2px 10px; border-radius: 999px; border: 1px solid var(--accent); color: var(--accent);
+    opacity: 0; transition: opacity .25s ease;
+  }
+  .mode-label .pill.show { opacity: 1; }
+
+  /* ── Ligne source → cartes ─────────────────────────────────────────── */
+  .lane { display: flex; align-items: center; gap: 14px; }
+  .source {
+    flex: none; width: 168px; min-height: 54px; border-radius: 10px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    text-align: center; padding: 8px 10px;
+    border: 1.5px solid var(--border); background: var(--bg);
+    transition: border-color .4s ease, background .4s ease, box-shadow .4s ease;
+  }
+  .source .icon { font-size: 18px; line-height: 1; }
+  .source .label { font-size: 0.72rem; font-weight: 700; color: var(--muted); }
+  .source.active-db { border-color: var(--db); background: var(--db-soft); }
+  .source.active-db .label { color: var(--db); }
+  .source.active-cache { border-color: var(--cache); background: var(--cache-soft); }
+  .source.active-cache .label { color: var(--cache); }
+  .source.pulse-once { animation: srcPulse .8s ease; }
+  @keyframes srcPulse { 0% { box-shadow: 0 0 0 0 var(--accent-glow); } 60% { box-shadow: 0 0 0 6px transparent; } }
+
+  .track {
+    position: relative; flex: none; width: 40px; height: 3px; border-radius: 2px;
+    background: repeating-linear-gradient(90deg, var(--border) 0 6px, transparent 6px 11px);
+    overflow: visible;
+  }
+  .track.flowing {
+    background: repeating-linear-gradient(90deg, var(--db) 0 6px, transparent 6px 11px);
+    background-size: 200% 100%;
+    animation: flow .9s linear infinite;
+  }
+  .track.flowing.cache-flow {
+    background: repeating-linear-gradient(90deg, var(--cache) 0 6px, transparent 6px 11px);
+    background-size: 200% 100%;
+  }
+  @keyframes flow { from { background-position: 0 0; } to { background-position: -34px 0; } }
+
+  /* ── Aire de lecture/calcul : ce qui rend le mécanisme visible ──────── */
+  .staging {
+    flex: none; width: 76px; min-height: 40px; border-radius: 10px;
+    border: 1.5px dashed var(--border); background: var(--bg);
+    display: flex; align-items: center; justify-content: center; gap: 4px; flex-wrap: wrap;
+    padding: 3px;
+  }
+  .chip {
+    width: 20px; height: 20px; border-radius: 50%; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-weight: 700; font-size: 8.5px; color: white;
+    background: var(--db); box-shadow: 0 2px 6px var(--db-soft);
+    transition: transform .4s ease, opacity .4s ease;
+  }
+  .chip.result { background: var(--accent); box-shadow: 0 2px 6px var(--accent-soft); }
+  .chip.merging { transform: scale(0.3); opacity: 0; }
+  .chip.pop { animation: chipPop .35s ease; }
+  @keyframes chipPop { from { transform: scale(0.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+  .cards-wrap { flex: 1; min-width: 0; overflow-x: auto; }
+  .cards { display: flex; gap: 3px; width: max-content; }
+  .card {
+    width: 23px; height: 38px; border-radius: 6px; flex: none;
+    background: var(--surface); border: 1.5px dashed var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-weight: 700; font-size: 9px; color: var(--dim);
+    transition: background .3s ease, border-color .3s ease, color .3s ease,
+                transform .3s ease, box-shadow .3s ease;
+  }
+  .card.pending::before { content: "?"; opacity: 0.4; }
+  .card.from-db { border-style: solid; border-color: var(--db); background: var(--db-soft); color: var(--ink); }
+  .card.from-cache { border-style: solid; border-color: var(--cache); background: var(--cache-soft); color: var(--ink); }
+  .card.flash-db {
+    transform: translateY(-4px) scale(1.08);
+    box-shadow: 0 0 0 3px var(--db), 0 6px 14px var(--db-soft);
+    border-color: var(--db); background: var(--db); color: white;
+  }
+  .card.flash-event {
+    transform: translateY(-4px) scale(1.08);
+    box-shadow: 0 0 0 3px var(--accent-glow), 0 6px 14px var(--accent-soft);
+    border-color: var(--accent); background: var(--accent); color: white;
+  }
+  .card.enter { animation: dropIn .5s cubic-bezier(.2,.9,.3,1.3) both; }
+  @keyframes dropIn { from { transform: translateY(-46px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  .detail-line {
+    font-family: var(--font-sans); font-size: 0.78rem; color: var(--muted);
+    min-height: 16px; display: flex; align-items: center; font-style: italic;
+  }
+
+  .readout { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+  .metric { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 92px; }
+  .metric .value {
+    font-family: var(--font-mono); font-size: 1.6rem; font-weight: 700; color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+  .metric .value.pulse { animation: pulseVal .7s ease; }
+  @keyframes pulseVal { 0% { transform: scale(1.25); } 100% { transform: scale(1); } }
+  .metric .caption { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; }
+  button {
+    font-family: var(--font-sans); font-size: 0.86rem; font-weight: 600;
+    padding: 9px 16px; border-radius: 8px; cursor: pointer;
+    border: 1.5px solid var(--accent); background: transparent; color: var(--accent);
+    transition: background .15s ease, color .15s ease;
+  }
+  button:hover { background: var(--accent-soft); }
+  button.primary { background: var(--accent); color: white; }
+  button.primary:hover { filter: brightness(1.08); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  figcaption {
+    max-width: 740px; width: 100%; font-size: 0.88rem; color: var(--muted); line-height: 1.55;
+  }
+  figcaption strong { color: var(--ink); }
+  figcaption code {
+    font-family: var(--font-mono); font-size: 0.85em; background: var(--accent-soft);
+    padding: 0.05em 0.4em; border-radius: 4px; color: var(--ink);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card, .metric .value, .track, .source, .chip, .fly-chip { transition: none !important; animation: none !important; }
+  }
+</style>
+
+<header>
+  <h1>Calcul différentiel : d'où vient chaque valeur</h1>
+  <p>
+    10 étudiants, même moyenne finale (4,42) obtenue des deux façons - ce qui change, c'est la
+    <strong>source</strong> de chaque valeur : la base de données à chaque fois pour les 10, ou une
+    valeur déjà calculée et stockée en base (<code>indicators</code>) pour les 9 premiers plus
+    l'événement du 10<sup>e</sup> qui vient d'arriver.
+    Les petits jetons ronds sont les <strong>tentatives brutes</strong> lues pour un étudiant - regardez-les
+    voyager, se fondre en une moyenne, puis se ranger dans la case.
+  </p>
+</header>
+
+<div class="stage">
+  <div class="fly-layer" id="flyLayer" aria-hidden="true"></div>
+
+  <div class="mode-label">
+    <span id="pillFull" class="pill">Recalcul complet</span>
+    <span id="pillIncr" class="pill">Calcul différentiel</span>
+  </div>
+
+  <div class="lane">
+    <div class="source" id="srcDb">
+      <span class="icon">🗄️</span>
+      <span class="label">SessionData<br>(base PLaTon)</span>
+    </div>
+    <div class="track" id="trackDb"></div>
+    <div class="staging" id="stagingFull"></div>
+    <div class="track" id="trackDbOut"></div>
+    <div class="cards-wrap"><div class="cards" id="cardsFull"></div></div>
+  </div>
+
+  <div class="lane" id="laneIncr" style="display:none">
+    <div class="source" id="srcCache">
+      <span class="icon">💾</span>
+      <span class="label">Métadonnées<br>(base indicators)</span>
+    </div>
+    <div class="track" id="trackCache"></div>
+    <div class="cards-wrap"><div class="cards" id="cardsIncr8"></div></div>
+  </div>
+  <div class="lane" id="laneEvent" style="display:none">
+    <div class="source" id="srcSessionOne">
+      <span class="icon">🗄️</span>
+      <span class="label">SessionData<br>(PLaTon) · 1 ligne</span>
+    </div>
+    <div class="track" id="trackSessionOne"></div>
+    <div class="cards-wrap"><div class="cards" id="cardsIncr9"></div></div>
+  </div>
+
+  <div class="detail-line" id="detailLine">En attente - lancez une des deux animations ci-dessous.</div>
+
+  <div class="readout">
+    <div class="metric">
+      <span class="value" id="valSum">-</span>
+      <span class="caption">Moyenne</span>
+    </div>
+    <div class="metric">
+      <span class="value" id="valTouched">0</span>
+      <span class="caption">Lignes lues</span>
+    </div>
+    <div class="metric">
+      <span class="value" id="valDuree">-</span>
+      <span class="caption">Durée (démo)</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="primary" id="btnFull">▶ Rejouer "recalcul complet"</button>
+    <button id="btnIncr">▶ Rejouer "calcul différentiel"</button>
+    <button id="btnReset">↺ Réinitialiser</button>
+  </div>
+
+</div>
+
+<figcaption>
+  <strong>Ce que lit vraiment chaque carte</strong> : <code>SessionData</code> ne contient jamais une
+  moyenne déjà calculée par étudiant - juste une ligne par tentative d'exercice. Pour chaque étudiant, les
+  <strong>jetons oranges</strong> qui quittent la base représentent ses tentatives individuelles
+  ("tentatives avant première réussite") ; ils se posent dans la case grise (<em>aire de calcul</em>), s'y
+  fondent en un seul <strong>jeton violet</strong> - sa moyenne personnelle - qui part ensuite se ranger
+  dans sa carte. Rien n'apparaît dans une carte sans avoir fait ce trajet.<br><br>
+  <strong>Recalcul complet</strong> : les 10 cartes restent vides (<code>?</code>) jusqu'à ce que ce trajet
+  ait eu lieu pour chaque étudiant, un par un - <strong>19 lectures</strong> au total (certains étudiants
+  ont retenté), pour reconstruire la moyenne finale à partir de zéro :
+  <code>somme des 19 tentatives / 19 = 4.42</code>.
+  <strong>Calcul différentiel</strong> : les 9 premières moyennes personnelles viennent directement de la
+  <strong>base <code>indicators</code></strong> (propre à Indicateurs, colonne
+  <code>indicator_values.metadata</code>, qui garde la valeur de chaque tentative individuelle déjà
+  calculée lors d'un appel précédent - une vraie lecture SQL, pas un cache en mémoire) - aucun
+  jeton ne part de <code>SessionData</code> pour elles, moyenne déjà à 4.17. Seule la tentative du nouvel
+  étudiant fait ce trajet, <strong>ciblée sur cette unique session</strong> (base de PLaTon, jamais un
+  balayage de toute la table) - <strong>1 seule lecture</strong> contre 19. Ce déclenchement se fait via un
+  événement reçu (RabbitMQ), non représenté ici : c'est le sujet d'un autre schéma, le pipeline d'ingestion.
+  Dans les deux cas, le résultat
+  final combine <strong>toutes les tentatives individuelles</strong> (pas une seconde moyenne des 10
+  moyennes personnelles affichées) : c'est ce que fait réellement le code.<br><br>
+  <strong>Durée</strong> : temps de <em>cette démonstration</em>, volontairement ralentie pour rester
+  visible - pas une mesure de latence serveur réelle. Ce qui compte est le <strong>rapport</strong> entre
+  les deux durées, pas leur valeur absolue.
+</figcaption>
+
+<script>
+(function () {
+  // 29 étudiants déjà connus (chacun avec ses propres tentatives avant première réussite) +
+  // 1 nouvel étudiant (l'événement qui vient d'arriver) = 30. SessionData contient une ligne par
+  // tentative, jamais une moyenne déjà prête : chaque carte doit donc être calculée à partir des
+  // valeurs individuelles de son étudiant, pas lue telle quelle.
+  const STUDENTS = [
+    [2, 5], [8, 3], [6, 1], [4, 7], [3, 5], [2, 6], [4, 1], [8, 3], [5, 2],
+  ];
+  const NEW_STUDENT = [9];
+  const ALL_STUDENTS = [...STUDENTS, NEW_STUDENT];
+
+  function personalAvg(rows) { return rows.reduce((a, b) => a + b, 0) / rows.length; }
+  function fmt(v) { return Number.isInteger(v) ? String(v) : v.toFixed(1); }
+  function flatSum(students) { return students.reduce((a, rows) => a + rows.reduce((x, y) => x + y, 0), 0); }
+  function flatCount(students) { return students.reduce((a, rows) => a + rows.length, 0); }
+
+  const pillFull = document.getElementById('pillFull');
+  const pillIncr = document.getElementById('pillIncr');
+  const laneIncr = document.getElementById('laneIncr');
+  const laneEvent = document.getElementById('laneEvent');
+  const laneFullRow = document.querySelector('.lane'); // première .lane = recalcul complet
+
+  const flyLayer = document.getElementById('flyLayer');
+  const stagingFull = document.getElementById('stagingFull');
+
+  const srcDb = document.getElementById('srcDb');
+  const trackDb = document.getElementById('trackDb');
+  const trackDbOut = document.getElementById('trackDbOut');
+  const cardsFull = document.getElementById('cardsFull');
+
+  const srcCache = document.getElementById('srcCache');
+  const trackCache = document.getElementById('trackCache');
+  const cardsIncr8 = document.getElementById('cardsIncr8');
+
+  const srcSessionOne = document.getElementById('srcSessionOne');
+  const trackSessionOne = document.getElementById('trackSessionOne');
+  const cardsIncr9 = document.getElementById('cardsIncr9');
+
+  const detailLine = document.getElementById('detailLine');
+  const valSum = document.getElementById('valSum');
+  const valTouched = document.getElementById('valTouched');
+  const valDuree = document.getElementById('valDuree');
+  const btnFull = document.getElementById('btnFull');
+  const btnIncr = document.getElementById('btnIncr');
+  const btnReset = document.getElementById('btnReset');
+
+  let running = false;
+  let durationTimer = null;
+
+  function setButtons(disabled) {
+    btnFull.disabled = disabled; btnIncr.disabled = disabled; btnReset.disabled = disabled;
+  }
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+  function pulseValue(el, text) {
+    el.textContent = text; el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse');
+  }
+  function makeEmptyCards(container, count) {
+    container.innerHTML = '';
+    const els = [];
+    for (let i = 0; i < count; i++) {
+      const c = document.createElement('div');
+      c.className = 'card pending';
+      container.appendChild(c);
+      els.push(c);
+    }
+    return els;
+  }
+  function setDetail(text) { detailLine.textContent = text; }
+  function startDuration() {
+    const t0 = performance.now();
+    valDuree.textContent = '0.0s';
+    durationTimer = setInterval(() => {
+      valDuree.textContent = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+    }, 100);
+    return t0;
+  }
+  function stopDuration(t0) {
+    clearInterval(durationTimer); durationTimer = null;
+    valDuree.textContent = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+  }
+
+  // ── Jetons volants : rendent visible le trajet réel d'une valeur ──────
+  function rectCenter(el, containerRect) {
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2 - containerRect.left, y: r.top + r.height / 2 - containerRect.top };
+  }
+  function flyChip(fromEl, toEl, text, isResult, duration) {
+    return new Promise(resolve => {
+      const containerRect = flyLayer.getBoundingClientRect();
+      const from = rectCenter(fromEl, containerRect);
+      const to = rectCenter(toEl, containerRect);
+      const chip = document.createElement('div');
+      chip.className = 'fly-chip' + (isResult ? ' result' : '');
+      chip.textContent = text;
+      flyLayer.appendChild(chip);
+      const anim = chip.animate([
+        { transform: `translate(${from.x - 10}px, ${from.y - 10}px) scale(.5)`, opacity: 0 },
+        { transform: `translate(${from.x - 10}px, ${from.y - 10}px) scale(1)`, opacity: 1, offset: 0.15 },
+        { transform: `translate(${to.x - 10}px, ${to.y - 10}px) scale(1)`, opacity: 1 },
+      ], { duration, easing: 'cubic-bezier(.3,.6,.3,1)' });
+      anim.onfinish = () => { chip.remove(); resolve(); };
+    });
+  }
+  function addStaticChip(container, text, isResult) {
+    const c = document.createElement('div');
+    c.className = 'chip pop' + (isResult ? ' result' : '');
+    c.textContent = text;
+    container.appendChild(c);
+    return c;
+  }
+  function clearStaging(container) { container.innerHTML = ''; }
+  async function mergeStagingToResult(container, avgText) {
+    const chips = Array.from(container.children);
+    if (chips.length > 1) {
+      chips.forEach(c => c.classList.add('merging'));
+      await sleep(400); // vitesse de la fusion des jetons en une moyenne
+    }
+    clearStaging(container);
+    addStaticChip(container, avgText, true);
+    await sleep(350); // temps d'affichage du jeton "résultat" avant qu'il ne parte vers la carte
+  }
+
+  function resetStage() {
+    laneFullRow.style.display = '';
+    laneIncr.style.display = 'none';
+    laneEvent.style.display = 'none';
+    makeEmptyCards(cardsFull, ALL_STUDENTS.length);
+    makeEmptyCards(cardsIncr8, STUDENTS.length);
+    makeEmptyCards(cardsIncr9, 1);
+    clearStaging(stagingFull);
+    flyLayer.innerHTML = '';
+    trackDb.classList.remove('flowing');
+    trackDbOut.classList.remove('flowing');
+    trackCache.classList.remove('flowing');
+    trackSessionOne.classList.remove('flowing');
+    srcDb.classList.remove('active-db');
+    srcCache.classList.remove('active-cache');
+    srcSessionOne.classList.remove('active-db');
+    valSum.textContent = '-';
+    valTouched.textContent = '0';
+    valDuree.textContent = '-';
+    setDetail('En attente - lancez une des deux animations ci-dessous.');
+    pillFull.classList.remove('show');
+    pillIncr.classList.remove('show');
+  }
+
+  async function playFullRecompute() {
+    if (running) return;
+    running = true; setButtons(true);
+    pillIncr.classList.remove('show'); pillFull.classList.add('show');
+    laneFullRow.style.display = ''; laneIncr.style.display = 'none'; laneEvent.style.display = 'none';
+
+    const cardEls = makeEmptyCards(cardsFull, ALL_STUDENTS.length);
+    clearStaging(stagingFull);
+    valSum.textContent = '-'; valTouched.textContent = '0';
+    srcDb.classList.add('active-db');
+    const t0 = startDuration();
+
+    let linesRead = 0;
+    for (let i = 0; i < ALL_STUDENTS.length; i++) {
+      const rows = ALL_STUDENTS[i];
+      const avg = personalAvg(rows);
+      const label = i === STUDENTS.length ? 'Nouvel étudiant' : `Étudiant ${i + 1} / ${ALL_STUDENTS.length}`;
+      setDetail(label);
+
+      trackDb.classList.add('flowing');
+      for (const v of rows) {
+        // Vitesse du trajet SessionData -> aire de calcul (1 jeton = 1 tentative brute).
+        await flyChip(srcDb, stagingFull, String(v), false, 450);
+        addStaticChip(stagingFull, String(v), false);
+        linesRead += 1;
+        valTouched.textContent = String(linesRead);
+        await sleep(180);
+      }
+      trackDb.classList.remove('flowing');
+
+      await mergeStagingToResult(stagingFull, fmt(avg));
+
+      trackDbOut.classList.add('flowing');
+      // Vitesse du trajet aire de calcul -> case de l'étudiant (valeur déjà moyennée).
+      await flyChip(stagingFull, cardEls[i], fmt(avg), true, 450);
+      trackDbOut.classList.remove('flowing');
+      clearStaging(stagingFull);
+
+      const c = cardEls[i];
+      c.classList.remove('pending');
+      c.textContent = fmt(avg);
+      c.classList.add('from-db', 'flash-db');
+      await sleep(350);
+      c.classList.remove('flash-db');
+      await sleep(150);
+    }
+    srcDb.classList.remove('active-db');
+    const total = flatSum(ALL_STUDENTS) / flatCount(ALL_STUDENTS);
+    pulseValue(valSum, total.toFixed(2));
+    setDetail(`Terminé : ${flatCount(ALL_STUDENTS)} tentatives individuelles relues et réagrégées depuis zéro.`);
+    stopDuration(t0);
+
+    running = false; setButtons(false);
+  }
+
+  async function playIncremental() {
+    if (running) return;
+    running = true; setButtons(true);
+    pillFull.classList.remove('show'); pillIncr.classList.add('show');
+    laneFullRow.style.display = 'none'; laneIncr.style.display = ''; laneEvent.style.display = '';
+
+    const cardEls8 = makeEmptyCards(cardsIncr8, STUDENTS.length);
+    const cardEls9 = makeEmptyCards(cardsIncr9, 1);
+    valSum.textContent = '-'; valTouched.textContent = '0';
+    const t0 = startDuration();
+
+    // 9 moyennes personnelles : déjà calculées lors d'un appel précédent et stockées telles
+    // quelles dans indicator_values.metadata (base "indicators", une vraie ligne SQL, pas un
+    // cache en mémoire) - pas de lecture de SessionData pour elles, donc aucun jeton ne voyage.
+    srcCache.classList.add('active-cache');
+    trackCache.classList.add('flowing', 'cache-flow');
+    setDetail('9 moyennes personnelles déjà stockées en base (indicators) - aucune lecture.');
+    await sleep(750);
+    STUDENTS.forEach((rows, i) => {
+      cardEls8[i].classList.remove('pending');
+      cardEls8[i].textContent = fmt(personalAvg(rows));
+      cardEls8[i].classList.add('from-cache');
+    });
+    trackCache.classList.remove('flowing');
+    const baseSum = flatSum(STUDENTS);
+    const baseCount = flatCount(STUDENTS);
+    pulseValue(valSum, (baseSum / baseCount).toFixed(2));
+    await sleep(700);
+
+    // 10e étudiant : sa (seule) tentative est lue dans SessionData (PLaTon), ciblée sur cette
+    // session précise - jamais un balayage de la table - le jeton voyage directement jusqu'à sa
+    // carte : une seule valeur, donc pas de fusion nécessaire, elle EST déjà sa propre moyenne
+    // personnelle (première tentative).
+    const newAvg = personalAvg(NEW_STUDENT);
+    setDetail('Nouvel étudiant : 1 tentative → voyage jusqu\'à la carte.');
+    srcSessionOne.classList.add('active-db', 'pulse-once');
+    trackSessionOne.classList.add('flowing');
+    const c = cardEls9[0];
+    c.classList.add('enter');
+    // Vitesse du trajet SessionData -> case du nouvel étudiant (calcul différentiel).
+    await flyChip(srcSessionOne, c, fmt(newAvg), true, 550);
+    trackSessionOne.classList.remove('flowing');
+    c.classList.remove('pending');
+    c.textContent = fmt(newAvg);
+    c.classList.add('from-db', 'flash-event');
+    valTouched.textContent = '1';
+    await sleep(600);
+    c.classList.remove('flash-event');
+    srcSessionOne.classList.remove('active-db', 'pulse-once');
+
+    const total = (baseSum + flatSum([NEW_STUDENT])) / (baseCount + NEW_STUDENT.length);
+    pulseValue(valSum, total.toFixed(2));
+    setDetail('Terminé : 1 seule tentative relue, moyenne recalculée sur le total (18 déjà en base + 1 nouvelle).');
+    stopDuration(t0);
+
+    running = false; setButtons(false);
+  }
+
+  btnFull.addEventListener('click', playFullRecompute);
+  btnIncr.addEventListener('click', playIncremental);
+  btnReset.addEventListener('click', () => { if (!running) resetStage(); });
+
+  resetStage();
+})();
+</script>

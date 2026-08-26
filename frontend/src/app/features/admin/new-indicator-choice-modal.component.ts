@@ -12,13 +12,15 @@ import { NzTagModule } from 'ng-zorro-antd/tag';
 import { NzDividerModule } from 'ng-zorro-antd/divider';
 import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
 import { NzModalRef, NZ_MODAL_DATA } from 'ng-zorro-antd/modal';
+import { NzMessageService } from 'ng-zorro-antd/message';
+import * as yaml from 'js-yaml';
 import { IndicatorService } from '../../core/services/indicator.service';
 import { IndicatorDefinition } from '../../core/models/indicator.model';
 import { IndicatorReuseCardComponent } from '../../shared/ui/indicator-reuse-card/indicator-reuse-card.component';
 import { ReuseIndicatorResult } from './reuse-indicator-modal.component';
 import {
   PipelineStep, ImportedIndicatorMeta, PlatonTableSchema, ImportErrorDisplay,
-  parseIndicatorImport, toImportErrorDisplay, replaceValueInText,
+  parseIndicatorImport, toImportErrorDisplay, replaceValueInText, looksLikeJson,
 } from './pipeline-import.util';
 
 export type NewIndicatorChoiceResult =
@@ -143,6 +145,10 @@ type ChoiceView = 'menu' | 'reuse' | 'reuse-preview' | 'import';
               <label nz-radio-button nzValue="yaml">YAML</label>
               <label nz-radio-button nzValue="json">JSON</label>
             </nz-radio-group>
+            <button nz-button nzSize="small" (click)="formatImportText()"
+              nz-tooltip="Réindente le texte collé, strictement dans le langage du mode actif (ne convertit jamais JSON ↔ YAML).">
+              <span nz-icon nzType="align-left"></span> Formater
+            </button>
             <label class="choice-file-btn">
               <span nz-icon nzType="upload"></span> Charger un fichier
               <input type="file" style="display:none" accept=".yaml,.yml,.json" (change)="onFileUpload($event)">
@@ -258,6 +264,7 @@ type ChoiceView = 'menu' | 'reuse' | 'reuse-preview' | 'import';
 export class NewIndicatorChoiceModalComponent implements OnInit {
   private readonly modalRef = inject(NzModalRef);
   private readonly indicatorSvc = inject(IndicatorService);
+  private readonly messageSvc = inject(NzMessageService);
   private readonly modalData = inject(NZ_MODAL_DATA) as { indicators: IndicatorDefinition[] };
 
   view: ChoiceView = 'menu';
@@ -355,6 +362,31 @@ export class NewIndicatorChoiceModalComponent implements OnInit {
       this.importError = null;
     } catch (e: any) {
       this.importError = toImportErrorDisplay(e);
+    }
+  }
+
+  /** Réindente le texte collé, strictement dans le langage du mode actif - ne convertit jamais
+   *  d'un format à l'autre (même contrôle strict que parseIndicatorImport, voir looksLikeJson).
+   *  N'écrase le texte que si le parsing réussit - laisse le texte fautif intact sinon. */
+  formatImportText(): void {
+    if (this.importMode === 'json') {
+      try {
+        this.importText = JSON.stringify(JSON.parse(this.importText), null, 2);
+        this.importError = null;
+      } catch {
+        this.messageSvc.error('Impossible de formater : le texte n\'est pas du JSON valide.');
+      }
+      return;
+    }
+    if (looksLikeJson(this.importText)) {
+      this.messageSvc.error('Ce texte est du JSON, pas du YAML - passez en mode JSON pour le formater tel quel.');
+      return;
+    }
+    try {
+      this.importText = yaml.dump(yaml.load(this.importText), { lineWidth: -1 });
+      this.importError = null;
+    } catch {
+      this.messageSvc.error('Impossible de formater : le texte contient une erreur de syntaxe YAML.');
     }
   }
 }

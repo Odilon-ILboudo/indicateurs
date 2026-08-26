@@ -1,5 +1,6 @@
 // web/src/app/shared/components/indicator-selector/indicator-selector.component.ts
-import { Component, OnInit, Output, EventEmitter, inject, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, OnInit, Output, EventEmitter, inject, ChangeDetectorRef } from '@angular/core';
+import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
@@ -15,9 +16,11 @@ import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzSpinModule } from 'ng-zorro-antd/spin';
 import { NzDividerModule } from 'ng-zorro-antd/divider';
 import { NzEmptyModule } from 'ng-zorro-antd/empty';
+import { NzPaginationModule } from 'ng-zorro-antd/pagination';
 import { IndicatorService } from '../../core/services/indicator.service';
 import { DashboardSettingsService } from '../../core/services/dashboard-settings.service';
 import { RoleService } from '../../core/services/role.service';
+import { IndicatorListStateService } from '../../core/services/indicator-list-state.service';
 
 const REQUIRED_EVENT_LABELS: Record<string, string> = {
   'exercise.answered': 'Réponse à un exercice',
@@ -155,12 +158,9 @@ const CTX_LABELS: Record<string, string> = {
           <div class="info-row">
             <span class="info-label">Mise à jour</span>
             <span class="info-value update-row">
-              <!---<mat-icon class="update-icon" [class.realtime]="ind.requiredEvents?.length">
-                {{ ind.requiredEvents?.length ? 'bolt' : 'schedule' }}
-              </mat-icon>-->
               {{ ind.requiredEvents?.length
                   ? 'Temps réel à chaque événement'
-                  : 'Cron quotidien uniquement (... AM)' }}
+                  : 'Recalcul périodique (pas de déclencheur)' }}
             </span>
           </div>
 
@@ -373,15 +373,6 @@ const CTX_LABELS: Record<string, string> = {
       align-items: center;
       gap: 5px;
     }
-    .update-icon {
-      font-size: 15px;
-      line-height: 1;
-      color: #8c8c8c;
-    }
-    .update-icon.realtime {
-      color: #fa8c16;
-    }
-
     /* ── Contexte ── */
     .ctx-block {
       margin-bottom: 4px;
@@ -587,6 +578,7 @@ export class IndicatorViewModalComponent {
     CommonModule, FormsModule, MatIconModule, MatTooltipModule,
     NzTableModule, NzSwitchModule, NzSelectModule, NzInputModule,
     NzModalModule, NzTagModule, NzSpinModule, NzRadioModule, NzEmptyModule,
+    NzPaginationModule,
   ],
   templateUrl: './indicator-selector.component.html',
   styleUrls: ['./indicator-selector.component.scss']
@@ -598,11 +590,22 @@ export class IndicatorSelectorComponent implements OnInit {
   private readonly modalService = inject(NzModalService);
   private readonly messageService = inject(NzMessageService);
   private cdr = inject(ChangeDetectorRef);
+  private readonly router = inject(Router);
+  private readonly listState = inject(IndicatorListStateService);
 
   @Output() indicatorsChanged = new EventEmitter<void>();
 
+  /** Non-null : la vue courante est la page dédiée d'une famille - la liste est alors
+   *  restreinte à cette seule famille, affichée à plat (jamais repliée). */
+  @Input() familyNameFilter: string | null = null;
+
   allIndicators: IndicatorDefinition[] = [];
   displayRows: IndicatorDisplayRow[] = [];
+  /** Cartes de l'onglet Familles (une par famille) - affichées en grille de 3, paginées à 5
+   *  lignes (15/page) via `pagedFamilyCards`. */
+  familyCards: { familyName: string; members: IndicatorDefinition[] }[] = [];
+  familyPageIndex = 1;
+  readonly familyPageSize = 15;
   expandedFamilies = new Set<string>();
   isLoading = true;
 
@@ -615,6 +618,12 @@ export class IndicatorSelectorComponent implements OnInit {
   searchKeyword = '';
 
   ngOnInit(): void {
+    if (!this.familyNameFilter) {
+      this.filters.scope = this.listState.selector.scope;
+      this.filters.sortBy = this.listState.selector.sortBy;
+      this.filters.grouping = this.listState.selector.grouping;
+      this.searchKeyword = this.listState.selector.searchKeyword;
+    }
     this.loadIndicators();
   }
 
@@ -638,6 +647,15 @@ export class IndicatorSelectorComponent implements OnInit {
   }
 
   applyFilters(): void {
+    if (!this.familyNameFilter) {
+      // Persiste l'état des filtres/onglet de la liste principale pour que "Retour à la
+      // liste" les restaure au lieu de repartir des valeurs par défaut.
+      this.listState.selector.scope = this.filters.scope;
+      this.listState.selector.sortBy = this.filters.sortBy;
+      this.listState.selector.grouping = this.filters.grouping;
+      this.listState.selector.searchKeyword = this.searchKeyword;
+    }
+
     let filtered = [...this.allIndicators]
       .filter(ind => this.roleService.canSeeIndicatorContext(ind.contextType, ind.visibilityRoles));
 
@@ -645,9 +663,14 @@ export class IndicatorSelectorComponent implements OnInit {
       filtered = filtered.filter(ind => ind.contextType === this.filters.scope);
     }
 
-    filtered = this.filters.grouping === 'families'
-      ? filtered.filter(ind => !!ind.familyName)
-      : filtered.filter(ind => !ind.familyName);
+    if (this.familyNameFilter) {
+      filtered = filtered.filter(ind => ind.familyName === this.familyNameFilter);
+      this.expandedFamilies.add(this.familyNameFilter);
+    } else {
+      filtered = this.filters.grouping === 'families'
+        ? filtered.filter(ind => !!ind.familyName)
+        : filtered.filter(ind => !ind.familyName);
+    }
 
     const kw = this.searchKeyword.trim().toLowerCase();
     if (kw) {
@@ -666,17 +689,33 @@ export class IndicatorSelectorComponent implements OnInit {
       filtered.sort((a, b) => a.name.localeCompare(b.name));
     }
 
-    this.displayRows = buildIndicatorDisplayRows(filtered, this.expandedFamilies);
+    const rows = buildIndicatorDisplayRows(filtered, this.expandedFamilies);
+    // En page de famille dédiée, la ligne d'en-tête de famille est redondante avec le titre
+    // de la page : on ne garde que les membres, à plat.
+    this.displayRows = this.familyNameFilter ? rows.filter(r => r.kind !== 'family') : rows;
+    this.familyCards = rows.filter((r): r is Extract<IndicatorDisplayRow, { kind: 'family' }> => r.kind === 'family');
+    this.familyPageIndex = 1;
   }
 
-  toggleFamily(familyName: string): void {
-    if (this.expandedFamilies.has(familyName)) {
-      this.expandedFamilies.delete(familyName);
-    } else {
-      this.expandedFamilies.add(familyName);
-    }
-    this.applyFilters();
-    this.cdr.detectChanges();
+  get pagedFamilyCards(): { familyName: string; members: IndicatorDefinition[] }[] {
+    const start = (this.familyPageIndex - 1) * this.familyPageSize;
+    return this.familyCards.slice(start, start + this.familyPageSize);
+  }
+
+  /** Clic sur une ligne de famille dans la liste principale : navigue vers sa page dédiée
+   *  plutôt que de la déplier sur place. */
+  openFamilyPage(familyName: string): void {
+    this.router.navigate(['/dashboard/indicators/selector-family', familyName]);
+  }
+
+  goBackToList(): void {
+    this.router.navigate(['/dashboard/indicators']);
+  }
+
+  /** Nombre d'indicateurs de la famille affichée (indépendant des filtres recherche/tri
+   *  appliqués sur cette page, contrairement à `displayRows`). */
+  familyMemberCount(): number {
+    return this.allIndicators.filter(ind => ind.familyName === this.familyNameFilter).length;
   }
 
   isActive(indicatorId: string): boolean {

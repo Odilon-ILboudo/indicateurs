@@ -32,7 +32,7 @@ import { EventRuleManagerComponent } from './event-rule-manager.component';
 import {
   StepType, PipelineStep, PlatonTableSchema,
   PipelineError, ImportedIndicatorMeta, ImportErrorDisplay, toImportErrorDisplay,
-  dehydrateStep, parseIndicatorImport, replaceValueInText, validatePipelineStepComplete,
+  dehydrateStep, parseIndicatorImport, replaceValueInText, validatePipelineStepComplete, looksLikeJson,
 } from './pipeline-import.util';
 import { getCurrentUserId } from '../../core/auth/current-user';
 
@@ -543,6 +543,11 @@ return out;` },
             (click)="importDocsOpen = !importDocsOpen">
             <span nz-icon nzType="info-circle"></span>
             {{ importDocsOpen ? 'Masquer la référence ' + importMode.toUpperCase() : 'Référence ' + importMode.toUpperCase() }}
+          </button>
+          <button nz-button nzSize="small" nzType="default"
+            (click)="formatImportText()"
+            nz-tooltip="Réindente automatiquement le texte collé vers le mode actif ({{ importMode.toUpperCase() }}) - accepte du JSON ou du YAML en entrée, quel que soit le mode.">
+            <span nz-icon nzType="align-left"></span> Formater
           </button>
           <label class="import-file-btn">
             <span nz-icon nzType="upload"></span> Fichier
@@ -3173,6 +3178,32 @@ pipeline:
     this.importMode = mode;
     this.importError = null;
     this.importText = this.pipelineToText(this.pipeline, mode);
+  }
+
+  /** Réindente le texte collé, strictement dans le langage du mode actif - ne convertit jamais
+   *  d'un format à l'autre (même contrôle strict que parseIndicatorImport, voir looksLikeJson).
+   *  N'écrase le texte que si le parsing réussit - laisse le texte fautif intact sinon, pour ne
+   *  rien perdre. */
+  formatImportText(): void {
+    if (this.importMode === 'json') {
+      try {
+        this.importText = JSON.stringify(JSON.parse(this.importText), null, 2);
+        this.importError = null;
+      } catch {
+        this.messageSvc.error('Impossible de formater : le texte n\'est pas du JSON valide.');
+      }
+      return;
+    }
+    if (looksLikeJson(this.importText)) {
+      this.messageSvc.error('Ce texte est du JSON, pas du YAML - passez en mode JSON pour le formater tel quel.');
+      return;
+    }
+    try {
+      this.importText = yaml.dump(yaml.load(this.importText), { lineWidth: -1 });
+      this.importError = null;
+    } catch {
+      this.messageSvc.error('Impossible de formater : le texte contient une erreur de syntaxe YAML.');
+    }
   }
 
   /** Sérialise l'indicateur courant (nom, description, événements, seuils, visualisations et

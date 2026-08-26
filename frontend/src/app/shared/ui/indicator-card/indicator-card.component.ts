@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, inject, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, inject, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
@@ -117,7 +117,12 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
     this.socketService.connect();
   }
 
-  ngOnChanges(): void {
+  ngOnChanges(changes: SimpleChanges): void {
+    // Ne recharge que si `indicator`/`context` ont vraiment changé de référence - un binding
+    // comme [queryParams]="someMethod()" (nouvel objet à chaque cycle de détection) ne doit
+    // jamais déclencher un rechargement, sinon isLoading reste bloqué à true en boucle dès que
+    // la détection de changements tourne souvent (ex. survol de la carte).
+    if (!changes['indicator'] && !changes['context']) return;
     if (this.indicator && this.context) {
       this.initActiveViz();
       this.loadUserColorPreference();
@@ -288,9 +293,9 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
     if (this.isChartVisualization()) return '···';
     const val = this.value.value;
     if (Math.abs(val) >= 1000) {
-      return (val / 1000).toFixed(1) + 'k';
+      return (val / 1000) + 'k';
     }
-    return val.toFixed(1);
+    return String(val);
   }
 
   getTrendIcon(trend: string): string {

@@ -35,6 +35,10 @@ export default [
         loadChildren: () => import('./groups/groups.routes'),
       },
       {
+        path: 'my-stats',
+        loadChildren: () => import('./my-stats/my-stats.routes'),
+      },
+      {
         path: 'settings',
         loadChildren: () => import('./settings/settings.routes'),
       },

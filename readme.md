@@ -111,30 +111,29 @@ main.ts                - bootstrap NestJS, prefix /api, CORS, ValidationPipe glo
 app.module.ts          - module racine, importe tous les modules ci-dessous
 modules/
   core/
-    config/configuration.ts     - lecture des variables d'env (ports, BDD, Redis, cron)
+    config/configuration.ts     - lecture des variables d'env (ports, BDD, cron)
     database/                   - connexions TypeORM (PLATON_DATA_SOURCE + connexion 'indicators')
     auth/auth.guard.ts          - vérifie le token Authorization: Bearer (voir section 12)
     guards/admin.guard.ts       - restreint une route au rôle 'admin' (lit request.user.id posé par AuthGuard)
     platon/platon.service.ts    - toutes les requêtes SQL brutes vers la BDD PLaTon
   features/
     indicators/                 - cœur du projet : entités, moteur DSL, CRUD, snapshots
-      entities/                 - 7 entités TypeORM (voir section 5)
-      calculators/              - legacy hardcodé, ne plus utiliser
+      entities/                 - 6 entités TypeORM de ce module (voir section 5 pour les 10 au total)
       interpreter/formula-interpreter.service.ts - moteur DSL (voir section 6)
       indicators.controller.ts  - toutes les routes /api/indicators*
       indicators.service.ts     - logique métier (computeView, recalculate, snapshots…)
     event-types/                - types d'événements PLaTon gérés en BDD (CRUD, seed au démarrage)
     event-rules/                 - déclencheurs dynamiques : règle → trigger PostgreSQL généré (section 6bis)
+    indicator-pins/             - indicateurs figés par un enseignant sur un cours/activité (voir section 5)
     user-preferences/           - préférences d'affichage par utilisateur
     ingestion/                  - consumers RabbitMQ, WebSocket gateway, service d'ingestion
       ingestion-consumer.service.ts - 2 consumers routing key '#' (learner + aggregate)
       indicators.gateway.ts     - WebSocket /indicators, émet indicator.updated
       ingestion.service.ts      - logique de calcul incrémental / recalcul total
     ingestion-relay/            - cron */2 * * * * * : lit platon_outbox_events → publie RabbitMQ
-    aggregation/                - cron quotidien/hebdo (agrégations)
+    aggregation/                - recalcul périodique des indicateurs actifs sans déclencheur (fréquence configurable via TRIGGERLESS_RECALC_CRON, voir section 6)
     courses/                    - proxy lecture PLaTon : cours, sections, activités, groupes, résultats
     resources/                  - proxy lecture PLaTon : ressources, arbre de cercles
-    groups/                     - groupes de TP d'un enseignant
     users/                      - accès utilisateurs PLaTon (lecture)
 ```
 
@@ -266,8 +265,10 @@ rôle applicatif `platon` qui n'est pas propriétaire de ces tables) :
 
 ### 4.2 Base `indicators` (lecture/écriture)
 
-Gérée par TypeORM, `synchronize: true` en développement (les tables/colonnes sont
-créées/migrées automatiquement au démarrage). 5 entités, détaillées section 5.
+Gérée par TypeORM, `synchronize: false` en toute circonstance (dev compris) -
+le schéma n'évolue que par de vraies migrations TypeORM, jamais par
+auto-sync, pour ne jamais laisser le schéma dériver sans migration
+correspondante. 10 entités, détaillées section 5.
 
 ---
 
@@ -473,13 +474,15 @@ pipeline:
 ### `computeView` (`indicators.service.ts`) - calcul + cache
 
 `POST /indicators/:id/compute-view` appelle `computeView(indicatorId, contextType,
-contextId, activityId?, vizId?, forceRefresh?)` :
+contextId, activityId?, vizId?, forceRefresh?, courseId?)` :
 
 - **Résolution de la formule** : `indicator.formula` - toutes les visualisations partagent la même formule (**1 indicateur = 1 formule**).
-- **Résolution `activityId`** : fourni par l'appelant, pas de fallback (aucune valeur par défaut, pour aucun contextType).
-- **Clé de cache** :
-  - `learner` → `contextId = userId`
-  - `course`/`group`/`activity` → `contextId = ${contextId}:${activityId}:${viz.id}`
+- **Résolution `activityId`/`courseId`** : fournis par l'appelant, pas de fallback (aucune valeur par défaut, pour aucun contextType). `courseId` n'est pertinent que pour un indicateur `group` course-aware ou un indicateur personnel (`learner`/`teacher`/`admin`) dont la formule est course-aware (voir `isCourseAware()`) - ignoré sinon.
+- **Clé de cache** (`resolveCacheContextId()`, partagée avec `computeViewIncremental()`) : jamais de `vizId` (1 formule = 1 valeur, partagée par toutes les visualisations).
+  - `course` → toujours `${contextId}:${activityId}` (un cours est structurellement scopé par activité).
+  - `group` → `${contextId}:${activityId}` ou `${contextId}:${courseId}` selon que le groupe est scopé à une activité ou à tout le cours (jamais les deux, jamais aucun).
+  - `learner`/`teacher`/`admin` → `contextId` seul (valeur globale), sauf si la formule est activity-aware (`${contextId}:${activityId}`) ou course-aware (`${contextId}:${courseId}`).
+  - `activity` → `contextId` seul.
   - Si une `IndicatorValue` existe déjà pour cette clé et que `forceRefresh` est
     faux → retournée directement (pas de recalcul).
 - **Résolution des noms d'utilisateurs** : si le résultat est un tableau avec un
@@ -525,9 +528,22 @@ debounce n'est implémentée pour l'instant.
 
 `POST /indicators/:id/recalculate` ne recalcule **que** les utilisateurs ayant
 activé l'indicateur (requête sur `user_indicator_preferences`, pas
-`getAllUserIds()`), pour la première vue `learner`. Si le résultat est un objet
-structuré, il est stocké dans `metadata.structuredValue` (et `value = 0`), pas
-directement dans la colonne `value` (type `float`).
+`getAllUserIds()`). Il délègue systématiquement à `computeView(forceRefresh=true)`
+plutôt que de dupliquer la logique de calcul :
+
+- Indicateur personnel (`learner`/`teacher`/`admin`) **non scopé** : une seule
+  valeur globale par utilisateur.
+- Indicateur personnel **scopé** (formule activity-aware ou course-aware) :
+  une valeur par activité/cours où l'utilisateur a une trace réelle dans
+  `SessionData` (jamais une seule valeur "dernière activité vue" - chaque
+  scope concerné est recalculé séparément, avec la même clé de cache que
+  celle lue par `computeView()`).
+
+C'est ce mécanisme qui alimente aussi le recalcul périodique des indicateurs
+sans déclencheur (`AggregationService.recalculateTriggerlessIndicators()`,
+fréquence configurable via `TRIGGERLESS_RECALC_CRON`, défaut : toutes les
+minutes) - un seul chemin de calcul pour les deux déclencheurs (bouton admin
+ou minuteur).
 
 ### Import / export YAML / JSON dans le builder
 
@@ -677,9 +693,14 @@ famille ; les indicateurs sans famille restent à leur place. Réutilisé dans
 | `learner` | `student` |
 | `teacher` | `teacher` |
 | `admin` | `admin` |
-| `course` | tous |
-| `activity` | tous |
+| `course` | `student`, `teacher`, `admin`, `demo` |
+| `activity` | `student`, `teacher`, `admin`, `demo` |
 | `group` | `teacher`, `admin` |
+
+`UserRole` inclut aussi `'demo'` (compte de démonstration) - non listé pour
+`learner`/`teacher`/`admin`/`group`, il suit par défaut la règle la plus
+restrictive (celle de `student`), faute de spécification dédiée pour ces
+contextes.
 
 ### Comment changer de rôle pour tester
 
@@ -710,22 +731,23 @@ plus le rôle `admin` (`AdminGuard`) - `event-rules` exige `AdminGuard` sur
 ```
 GET  /indicators                       - indicateurs actifs
 GET  /indicators/all                   - tous (admin)
+GET  /indicators/search?q=&excludeId=  - recherche par nom/description (détection de doublons)
 GET  /indicators/schema                - tables/colonnes PLaTon disponibles (filtrées, voir 12)
-GET  /indicators/teacher/:teacherId/context  - cours + groupes d'un enseignant
+GET  /indicators/schema/full           - schéma complet (explorateur de schéma de l'admin)
+GET  /indicators/courses/search?q=&offset=  - recherche de cours (tous, pas seulement les siens) pour le panneau "Tester cette formule"
 GET  /indicators/course/:courseId/activities - activités d'un cours
 GET  /indicators/course/:courseId/students   - étudiants d'un cours
 GET  /indicators/pins?contextType=&contextId=  - indicateurs figés sur un cours/une activité
+GET  /indicators/pins/counts           - nombre de pins par indicateur, tous cours/activités confondus (label admin)
 GET  /indicators/:id
-GET  /indicators/:id/context-configs   - alias de compat : { contextType, visualizations, formula }
 GET  /indicators/:id/values?contextType=&contextId=&period=&limit=
 GET  /indicators/:id/usage
 GET  /indicators/:id/logs?limit=
 
 POST /indicators                       - créer (admin)
-POST /indicators/dashboard             - valeurs batch pour le tableau de bord
 POST /indicators/preview               - { formula, context } → { result } (exécute le DSL - voir 12)
 POST /indicators/preview-steps         - idem mais pas-à-pas (debug)
-POST /indicators/:id/compute-view      - { contextType, contextId, vizId?, activityId? }
+POST /indicators/:id/compute-view      - { contextType, contextId, vizId?, activityId?, courseId? }
 POST /indicators/:id/recalculate       - (admin)
 POST /indicators/:id/pins              - { contextType, contextId, thresholdsOverride? } - figer (admin ou enseignant*)
 DELETE /indicators/:id/pins?contextType=&contextId=  - défiger (admin ou enseignant*)
@@ -740,21 +762,28 @@ PATCH  /indicators/:id/snapshots/:snapshotId
 DELETE /indicators/:id/snapshots/:snapshotId
 
 POST   /indicators/:id/notify          - notification liée à l'indicateur (admin)
+GET    /indicators/notifications/all   - toutes les notifications (onglet utilisateur à venir)
+
+POST   /indicators/:id/feedback        - soumet (ou met à jour) un retour d'expérience
+GET    /indicators/:id/feedback        - liste les retours d'expérience d'un indicateur (admin)
 DELETE /indicators/:id/feedback/:feedbackId - (admin)
 ```
 
 > (admin) = protégé par `AuthGuard` + `AdminGuard` (rôle `admin` requis, voir
-> section 12). Les autres routes d'`indicators` restent ouvertes.
+> section 12). Les autres routes d'`indicators` restent ouvertes - y compris
+> plusieurs qui exécutent une formule DSL (`preview`, `preview-steps`,
+> `compute-view`, `snapshots`) : limite de sécurité connue, voir `docs/js.md` §3.
 >
 > (admin ou enseignant*) : pas d'`AdminGuard` sur ces deux routes - seul
 > `AuthGuard` s'applique, le contrôle fin (admin **ou** enseignant avec droit
 > d'écriture sur le cours concerné) est fait dans
 > `IndicatorPinsService#assertCanManagePins`.
 
-> Important : dans le contrôleur, les routes littérales (`schema`, `all`,
-> `teacher/:id/context`, `course/:id/activities`, `course/:id/students`,
-> `preview`, `preview-steps`, `dashboard`) sont déclarées **avant** `:id`
-> pour éviter les conflits de routing Express.
+> Important : dans le contrôleur, les routes littérales (`all`, `search`,
+> `schema`, `schema/full`, `courses/search`, `course/:id/activities`,
+> `course/:id/students`, `pins`, `pins/counts`, `preview`, `preview-steps`,
+> `notifications/all`) sont déclarées **avant** `:id` pour éviter les
+> conflits de routing Express.
 
 ### Préférences utilisateur (`/api/preferences`, `user-preferences.controller.ts`)
 
@@ -840,12 +869,16 @@ GET    /event-rules/:id
 POST   /event-rules
 PATCH  /event-rules/:id
 DELETE /event-rules/:id                    - désactivation simple (isActive = false), ne touche pas au trigger
+POST   /event-rules/:id/reactivate         - réactive une règle désactivée (isActive = true)
 
 GET    /event-rules/:id/preview-sql        - aperçu du DDL d'installation, sans effet
 POST   /event-rules/:id/install            - exécute réellement le DDL
 
 GET    /event-rules/:id/preview-uninstall-sql  - aperçu du DDL de retrait, sans effet
 POST   /event-rules/:id/uninstall          - exécute le retrait (ou la réduction) puis désactive la règle
+
+GET    /event-rules/:id/preview-hard-delete-sql  - aperçu du DDL de suppression définitive, sans effet
+POST   /event-rules/:id/hard-delete        - retire le trigger puis supprime la règle en base (irréversible)
 ```
 
 ### Autres modules
@@ -864,13 +897,16 @@ POST /api/ingest/batch  - injection directe batch (HTTP, legacy)
 ### Routing
 
 ```
-/                       → redirect /dashboard
+/                                      → redirect /dashboard
 /dashboard
-  /overview             - grille des indicateurs actifs (+ sélecteur de contexte enseignant)
-  /indicators           - onglet "Indicateurs" (préférences + admin)
-  /indicator/:id        - détail d'un indicateur
-  /courses/...          - pages Cours (copiées/adaptées de PLaTon, voir 3.3)
-  /resources/...        - pages Ressources (idem)
+  /overview                           - grille des indicateurs actifs
+  /indicators                         - onglet "Indicateurs" (sélecteur + admin)
+  /indicators/family/:name            - page dédiée d'une famille (vue admin)
+  /indicators/selector-family/:name   - page dédiée d'une famille (vue sélecteur)
+  /indicator/:id                      - détail d'un indicateur
+  /courses/...                        - pages Cours (copiées/adaptées de PLaTon, voir 3.3)
+    .../my-stats                      - onglet "Mes statistiques" du cours (indicateurs personnels + par groupe)
+  /resources/...                      - pages Ressources (idem)
 ```
 
 ### Sidebar
@@ -881,28 +917,48 @@ d'onglet "Admin" dédié dans la navigation principale - les composants admin
 "Indicateurs" pour les rôles habilités (`canManageIndicators` /
 `canCreateIndicators`).
 
-### `DashboardContext` et persistance du contexte enseignant
+### `DashboardContext` et navigation par page cours/activité
 
 ```typescript
 interface DashboardContext {
   scope: IndicatorScope;   // 'learner' | 'course' | 'group' | ...
   scopeId: string;         // userId | courseId | groupId
   userId: string;
-  activityId?: string;     // pour course/group, choisi par l'enseignant
+  activityId?: string;
+  courseId?: string;
   groupId?: string;
   academicYear?: string;
   semester?: string;
 }
 ```
 
-`TeacherContextSelectorComponent` (Cours → Activité → "Voir par" : cours entier
-ou groupe de TP) sauvegarde l'état dans `DashboardSettingsService`
-(`TeacherSelectionState`, avec noms lisibles pour affichage). La sélection
-cours+activité met à jour le contexte du tableau de bord ; les cartes et la
-page détail calculent les valeurs `course`/`group`/`activity` au moment de
-l'affichage via `computeView()`. `IndicatorDetailComponent` lit ce contexte
-sauvegardé pour afficher une bannière lecture seule "Cours > Activité > Scope"
-avec lien "Modifier le filtre".
+Pas de sélecteur de contexte séparé : chaque page cours/activité calcule et
+affiche directement les indicateurs qui la concernent, à partir de
+`CoursePresenter`/`ActivityPresenter` (`contextChange`, alimenté par la route
+Angular courante) - naviguer vers un cours ou une activité *est* le
+changement de contexte. La page **cours** (`dashboard.page.ts`) affiche les
+indicateurs `course` ; son onglet dédié **"Mes statistiques"**
+(`my-stats.page.ts`) affiche les indicateurs personnels (`learner`/`teacher`/
+`admin`) restreints à ce cours ainsi que les indicateurs `group` scopés au
+cours entier. La page **activité** (`activity.page.ts`) affiche ses trois
+sections directement sur la même page (pas d'onglet séparé) : "Mes
+statistiques" (personnels, restreints à cette activité), "Indicateurs de
+l'activité" (`activity`), "Indicateurs par groupe" (`group`, scopés à
+l'activité).
+
+### Familles d'indicateurs - pages dédiées
+
+Dans l'admin (`admin-indicator-manager.component.ts`) comme dans le sélecteur
+utilisateur (`indicator-selector.component.ts`), l'onglet "Familles" affiche
+une grille de cartes (une par `familyName`, paginée) plutôt qu'une ligne de
+tableau repliable. Cliquer une carte navigue vers une page dédiée
+(`/dashboard/indicators/family/:name` ou `/dashboard/indicators/selector-family/:name`)
+qui réutilise exactement le même composant avec un `@Input() familyNameFilter`
+- seuls les membres de cette famille sont affichés, à plat. Un bouton "Retour
+à la liste" ramène à la liste principale. `IndicatorListStateService` mémorise
+l'onglet/la recherche/les filtres de la liste principale (admin et sélecteur,
+indépendamment) pour que ce retour restaure l'état plutôt que de repartir des
+valeurs par défaut.
 
 ### `IndicatorCardComponent`
 
@@ -911,18 +967,26 @@ avec lien "Modifier le filtre".
 - Visualisation active : fixée par la préférence sauvegardée ou
   `visibleVisualizations[0]`. **Pas de chips de sélection sur la carte** -
   le changement de viz se fait uniquement via le modal d'édition (icône crayon).
-- `activity` : navigue avec `queryParams = { from: 'activity', activityId,
-  courseId, ... }` ; un clic sur un snapshot "groupe" navigue avec `from:
-  'group-snapshot'`.
+- Navigation vers `IndicatorDetailComponent` : `queryParams.from` détermine le
+  contexte affiché - `activity`/`course` (indicateur `activity`/`course`
+  standard), `group-snapshot` (clic sur un snapshot de groupe), ou
+  `activity-personal`/`course-personal` (carte personnelle learner/teacher/
+  admin cliquée depuis une section "Mes statistiques" - `contextType` est
+  alors passé explicitement en query param, car il dépend de l'indicateur
+  cliqué plutôt que d'être fixe).
 
 ### Page activité (`/dashboard/courses/:id/activities/:activityId`)
 
-Deux sections d'indicateurs :
-1. **"Indicateurs"** - `contextType: 'activity'`, cards statiques
-2. **"Par groupe"** - `GroupSnapshotsPanelComponent` (`contextType: 'group'`),
-   un bloc par indicateur avec une carte par `IndicatorSnapshot` ; ajout via
-   dropdown filtré (groupes déjà ajoutés masqués) → `POST .../snapshots` (409 si
-   doublon, géré côté UI) ; édition de titre inline, suppression avec
+Trois sections d'indicateurs, toutes sur la même page (pas d'onglet séparé,
+contrairement à la page cours) :
+1. **"Mes statistiques"** - indicateurs personnels (`learner`/`teacher`/
+   `admin`) dont la formule est activity-aware, restreints à cette activité
+   (voir `isActivityAware()`).
+2. **"Indicateurs de l'activité"** - `contextType: 'activity'`, cards statiques.
+3. **"Indicateurs par groupe"** - `GroupSnapshotsPanelComponent` (`contextType:
+   'group'`), un bloc par indicateur avec une carte par `IndicatorSnapshot` ;
+   ajout via dropdown filtré (groupes déjà ajoutés masqués) → `POST .../snapshots`
+   (409 si doublon, géré côté UI) ; édition de titre inline, suppression avec
    popconfirm.
 
 ### `IndicatorDetailComponent` - filtres de période

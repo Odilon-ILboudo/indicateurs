@@ -1,5 +1,17 @@
 <div class="indicator-selector">
 
+  <!-- En-tête : page de famille dédiée -->
+  <div *ngIf="familyNameFilter" style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px">
+    <button nz-button nzSize="small" (click)="goBackToList()" style="align-self:flex-start">
+      Retour à la liste
+    </button>
+    <h2 style="margin:0;display:flex;align-items:center;gap:8px">
+      <mat-icon style="color:#722ed1">folder_special</mat-icon>
+      {{ familyNameFilter }}
+      <nz-tag nzColor="purple">{{ familyMemberCount() }} indicateur{{ familyMemberCount() > 1 ? 's' : '' }}</nz-tag>
+    </h2>
+  </div>
+
   <!-- Recherche par mots-clés -->
   <div class="search-bar">
     <nz-input-group [nzPrefix]="searchIcon">
@@ -21,6 +33,7 @@
 
   <div class="toolbar">
     <nz-radio-group
+      *ngIf="!familyNameFilter"
       [(ngModel)]="filters.grouping"
       (ngModelChange)="applyFilters()"
       nzButtonStyle="solid">
@@ -61,19 +74,49 @@
     <p>Chargement des indicateurs...</p>
   </div>
 
+  <!-- Grille de cartes des familles : onglet Familles, hors page dédiée -->
+  <ng-container *ngIf="!isLoading && !familyNameFilter && filters.grouping === 'families'">
+    <nz-empty
+      *ngIf="familyCards.length === 0"
+      nzNotFoundContent="Aucune famille ne correspond aux filtres sélectionnés."
+      style="margin: 48px 0">
+    </nz-empty>
+    <div class="family-card-grid" *ngIf="familyCards.length > 0">
+      <div class="family-card" *ngFor="let fam of pagedFamilyCards" (click)="openFamilyPage(fam.familyName)">
+        <div class="family-card-header">
+          <mat-icon class="family-icon">folder_special</mat-icon>
+          <strong>{{ fam.familyName }}</strong>
+        </div>
+        <div class="family-card-footer">
+          <nz-tag nzColor="purple">{{ fam.members.length }} indicateur{{ fam.members.length > 1 ? 's' : '' }}</nz-tag>
+          <mat-icon class="family-chevron">arrow_forward</mat-icon>
+        </div>
+      </div>
+    </div>
+    <nz-pagination
+      *ngIf="familyCards.length > 0"
+      style="margin-top:16px;text-align:center;display:block"
+      [nzPageIndex]="familyPageIndex"
+      (nzPageIndexChange)="familyPageIndex = $event"
+      [nzPageSize]="familyPageSize"
+      [nzTotal]="familyCards.length">
+    </nz-pagination>
+  </ng-container>
+
   <!-- État vide -->
   <nz-empty
-    *ngIf="!isLoading && displayRows.length === 0"
+    *ngIf="!isLoading && (familyNameFilter || filters.grouping === 'standalone') && displayRows.length === 0"
     [nzNotFoundContent]="allIndicators.length === 0 ? 'Aucun indicateur disponible pour le moment.' : 'Aucun indicateur ne correspond aux filtres sélectionnés.'"
     style="margin: 48px 0">
   </nz-empty>
 
   <!-- Tableau des indicateurs -->
   <nz-table
-    *ngIf="!isLoading && displayRows.length > 0"
+    *ngIf="!isLoading && (familyNameFilter || filters.grouping === 'standalone') && displayRows.length > 0"
     #indicatorTable
     [nzData]="displayRows"
     [nzLoading]="false"
+    [nzPageSize]="20"
     nzBordered>
     <thead>
       <tr>
@@ -86,16 +129,6 @@
     </thead>
     <tbody>
       <ng-container *ngFor="let row of indicatorTable.data" [ngSwitch]="row.kind">
-
-        <!-- Ligne d'en-tête de famille, repliable -->
-        <tr *ngSwitchCase="'family'" class="family-row" (click)="toggleFamily(row.familyName)">
-          <td colspan="5">
-            <mat-icon class="family-chevron">{{ row.expanded ? 'expand_more' : 'chevron_right' }}</mat-icon>
-            <mat-icon class="family-icon">folder_special</mat-icon>
-            <strong>{{ row.familyName }}</strong>
-            <nz-tag nzColor="purple">{{ row.members.length }} indicateur{{ row.members.length > 1 ? 's' : '' }}</nz-tag>
-          </td>
-        </tr>
 
         <!-- Indicateur autonome ou membre d'une famille dépliée : même rendu qu'un indicateur unique -->
         <ng-container *ngSwitchCase="'standalone'" [ngTemplateOutlet]="indicatorRow" [ngTemplateOutletContext]="{ $implicit: row.indicator, isMember: false }" />
