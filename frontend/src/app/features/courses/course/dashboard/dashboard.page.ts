@@ -22,7 +22,6 @@ import {
 } from '@platon/feature/course/browser'
 import { Activity, CourseSection } from '@platon/feature/course/common'
 import { CourseSectionActionsComponent } from './section-actions/section-actions.component'
-import { CourseManagementTutorialService } from '@platon/feature/tuto/browser'
 
 import {
   SearchBar,
@@ -134,14 +133,11 @@ export class CourseDashboardPage implements OnInit, OnDestroy {
     onSearch: this.search.bind(this),
   }
 
-  constructor(private readonly courseManagementTutorialService: CourseManagementTutorialService) {}
-
   ngOnInit(): void {
     this.subscriptions.push(
       this.presenter.contextChange.subscribe(async (context) => {
         this.context = context
         await this.refresh()
-        this.checkForCourseTutorial()
 
         if (context.course) {
           const courseId = context.course.id
@@ -220,22 +216,6 @@ export class CourseDashboardPage implements OnInit, OnDestroy {
     modalRef.afterClose.subscribe((result) => {
       if (result) this.loadCourseIndicators(courseId)
     })
-  }
-
-  private checkForCourseTutorial(): void {
-    const urlParams = new URLSearchParams(window.location.search)
-    const startTutorial = urlParams.get('tutorial') === 'course-details'
-
-    if (startTutorial && this.context.course) {
-      setTimeout(() => {
-        this.startCourseDetailsTutorial()
-      }, 1000)
-    }
-  }
-
-  protected startCourseDetailsTutorial(): void {
-    if (!this.context.course) return
-    this.courseManagementTutorialService.startCourseDetailsTutorial(this.context.course)
   }
 
   protected async addSection(after?: CourseSection): Promise<void> {

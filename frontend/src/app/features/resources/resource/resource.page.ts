@@ -24,7 +24,6 @@ import { UiLayoutTabDirective, UiLayoutTabsComponent, UiModalIFrameComponent } f
 import { NzTooltipModule } from 'ng-zorro-antd/tooltip'
 import { ResourcePresenter } from './resource.presenter'
 import { NzPopconfirmModule } from 'ng-zorro-antd/popconfirm'
-import { ResourcePageTutorialService, ResourcesTutorialService } from '@platon/feature/tuto/browser'
 
 @Component({
   standalone: true,
@@ -68,10 +67,8 @@ export class ResourcePage implements OnInit, OnDestroy {
   private readonly changeDetectorRef = inject(ChangeDetectorRef)
   private readonly router = inject(Router)
   protected readonly location = inject(Location)
-  private readonly resourcePageTutorialService = inject(ResourcePageTutorialService)
 
   private readonly activatedRoute = inject(ActivatedRoute)
-  private readonly resourcesTutorialService = inject(ResourcesTutorialService)
 
   protected context = this.presenter.defaultContext()
 
@@ -107,7 +104,6 @@ export class ResourcePage implements OnInit, OnDestroy {
         }
       })
     )
-    this.checkForTutorialContinuation()
   }
 
   ngOnDestroy(): void {
@@ -187,34 +183,6 @@ export class ResourcePage implements OnInit, OnDestroy {
 
   protected referencesNumber(): number {
     return this.context.resource?.statistic?.exercise?.references?.total || 0
-  }
-
-  private checkForTutorialContinuation(): void {
-    this.activatedRoute.queryParams.subscribe((params) => {
-      const fromTutorial = params['fromTutorial']
-      const isFromTutorialService = this.resourcesTutorialService.getIsFromTutorial()
-
-      if (fromTutorial === 'true' || isFromTutorialService) {
-        setTimeout(() => {
-          this.startResourcePageTutorial()
-        }, 1000)
-
-        this.cleanTutorialParams()
-        this.resourcesTutorialService.resetTutorialFlag()
-      }
-    })
-  }
-
-  startResourcePageTutorial(): void {
-    if (this.context.resource) {
-      this.resourcePageTutorialService.startResourcePageTutorial(this.context.resource, false, false, false)
-    }
-  }
-
-  private cleanTutorialParams(): void {
-    const url = new URL(window.location.href)
-    url.searchParams.delete('fromTutorial')
-    window.history.replaceState(null, '', url.toString())
   }
 
   protected async updateCertification(certified: boolean): Promise<void> {

@@ -56,7 +56,6 @@ import {
   ResourceTypes,
 } from '@platon/feature/resource/common'
 
-import { ResourcesTutorialService } from '@platon/feature/tuto/browser'
 
 const PAGINATION_LIMIT = 15
 const EXPANDS: ResourceExpandableFields[] = ['metadata', 'statistic']
@@ -119,7 +118,6 @@ export default class ResourcesPage implements OnInit, OnDestroy {
   private readonly activatedRoute = inject(ActivatedRoute)
   private readonly resourceService = inject(ResourceService)
   private readonly changeDetectorRef = inject(ChangeDetectorRef)
-  private readonly resourcesTutorialService = inject(ResourcesTutorialService)
 
   protected readonly searchbar: SearchBar<string> = {
     placeholder: 'Essayez un nom, un topic, un niveau...',
@@ -295,7 +293,6 @@ export default class ResourcesPage implements OnInit, OnDestroy {
           if (e.q && e.q.length > 0) {
             this.hasSearched = true
           }
-          this.checkForResourcesTutorial()
         } catch (error) {
           console.error('[ResourcesPage] Erreur lors de la recherche :', error)
         } finally {
@@ -395,44 +392,4 @@ export default class ResourcesPage implements OnInit, OnDestroy {
     this.changeDetectorRef.markForCheck()
   }
 
-  startResourcesTutorial(): void {
-    if (!this.user) return
-
-    this.resourcesTutorialService.startResourcesTutorial(
-      this.user,
-      this.items,
-      () => this.hasSearched,
-      (query: string) => {
-        this.searchbar.value = query
-        this.search(this.filters, query)
-      }
-    )
-  }
-
-  private checkForResourcesTutorial(): void {
-    this.subscriptions.push(
-      this.activatedRoute.queryParams.subscribe((params: any) => {
-        if (params['tutorial'] === 'workspace' && this.user) {
-          this.resetTutorialParam()
-
-          setTimeout(() => {
-            this.startResourcesTutorial()
-          }, 500)
-        }
-      })
-    )
-  }
-
-  /**
-   * Réinitialise le paramètre tutorial dans l'URL
-   */
-  private resetTutorialParam(): void {
-    this.router
-      .navigate([], {
-        relativeTo: this.activatedRoute,
-        queryParams: { tutorial: null },
-        queryParamsHandling: 'merge',
-      })
-      .catch(console.error)
-  }
 }

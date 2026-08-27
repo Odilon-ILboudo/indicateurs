@@ -1,7 +1,7 @@
 // src/modules/features/indicators/indicators.service.ts
 import { Injectable, NotFoundException, BadRequestException, ConflictException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { IndicatorDefinition, ContextType, FormulaDefinition } from './entities/indicator-definition.entity';
 import { IndicatorValue, buildValueMetadata } from './entities/indicator-value.entity';
@@ -14,6 +14,8 @@ import { FormulaInterpreterService, CandidateRowsMap, GroupCandidateRowsMap } fr
 import { PlatonService } from '../../core/platon/platon.service';
 import { resolveFormula, isActivityAware, isCourseAware } from './formula-resolution.util';
 import { CreateIndicatorDto, UpdateIndicatorDto } from './dto/indicator.dto';
+import { IndicatorEventRule } from '../event-rules/indicator-event-rule.entity';
+import { IndicatorEventType } from '../event-types/event-type.entity';
 
 export interface DeltaEvent {
   sessionId?: string;
@@ -39,6 +41,10 @@ export class IndicatorsService {
     private feedbackModel: Repository<IndicatorFeedback>,
     @InjectRepository(IndicatorNotification, 'indicators')
     private notificationModel: Repository<IndicatorNotification>,
+    @InjectRepository(IndicatorEventRule, 'indicators')
+    private eventRuleModel: Repository<IndicatorEventRule>,
+    @InjectRepository(IndicatorEventType, 'indicators')
+    private eventTypeModel: Repository<IndicatorEventType>,
     private readonly formulaInterpreter: FormulaInterpreterService,
     private readonly platonService: PlatonService,
     private readonly eventEmitter: EventEmitter2,
@@ -121,10 +127,50 @@ export class IndicatorsService {
     return this.getValues(indicator.id, contextType, contextId, 'day', limit);
   }
 
+  /**
+   * Un indicateur actif dont un événement requis n'a aucun déclencheur installé ne sera
+   * jamais recalculé en temps réel (silencieusement) - on refuse l'enregistrement plutôt que
+   * de laisser un admin croire que l'indicateur est fonctionnel.
+   */
+  private async assertRequiredEventsHaveInstalledTriggers(requiredEvents: string[] | null | undefined): Promise<void> {
+    if (!requiredEvents || requiredEvents.length === 0) return;
+
+    const uniqueNames = [...new Set(requiredEvents)];
+    const eventTypes = await this.eventTypeModel.find({ where: { name: In(uniqueNames) } });
+    const eventTypesByName = new Map(eventTypes.map(et => [et.name, et]));
+
+    const problems: string[] = [];
+    for (const name of uniqueNames) {
+      const eventType = eventTypesByName.get(name);
+      if (!eventType || !eventType.isActive) {
+        problems.push(`"${name}" (aucun type d'événement actif portant ce nom)`);
+        continue;
+      }
+      const installedRule = await this.eventRuleModel.findOne({
+        where: { eventTypeId: eventType.id, isActive: true, triggerInstalled: true },
+      });
+      if (!installedRule) {
+        problems.push(`"${name}" (aucun déclencheur installé et actif)`);
+      }
+    }
+
+    if (problems.length > 0) {
+      throw new BadRequestException(
+        `Impossible d'activer cet indicateur : les événements suivants ne recalculeront jamais sa valeur car ils n'ont aucun déclencheur réellement installé - ${problems.join(', ')}. ` +
+        `Installez le déclencheur correspondant dans l'écran "Événements & déclencheurs" avant d'activer l'indicateur, ou retirez ces événements de sa liste.`,
+      );
+    }
+  }
+
   async create(definition: CreateIndicatorDto): Promise<IndicatorDefinition> {
     const existing = await this.indicatorModel.findOne({ where: { name: definition.name } });
     if (existing) {
       throw new ConflictException(`Un indicateur nommé "${definition.name}" existe déjà.`);
+    }
+
+    const isActive = definition.isActive ?? false;
+    if (isActive) {
+      await this.assertRequiredEventsHaveInstalledTriggers(definition.requiredEvents);
     }
 
     const indicator = this.indicatorModel.create({
@@ -135,7 +181,7 @@ export class IndicatorsService {
       requiredEvents: definition.requiredEvents || [],
       visualizations: definition.visualizations ?? [],
       formula: definition.formula ?? null,
-      isActive: definition.isActive ?? false,
+      isActive,
       isComplete: definition.isComplete ?? false,
       isFamilyPlaceholder: definition.isFamilyPlaceholder ?? false,
       interpretationHint: definition.interpretationHint ?? null,
@@ -152,11 +198,17 @@ export class IndicatorsService {
     const indicator = await this.findById(id);
 
     Object.assign(indicator, data);
+    if (indicator.isActive) {
+      await this.assertRequiredEventsHaveInstalledTriggers(indicator.requiredEvents);
+    }
     return this.indicatorModel.save(indicator);
   }
 
   async toggleStatus(id: string, isActive: boolean): Promise<IndicatorDefinition> {
     const indicator = await this.findById(id);
+    if (isActive) {
+      await this.assertRequiredEventsHaveInstalledTriggers(indicator.requiredEvents);
+    }
     indicator.isActive = isActive;
     return this.indicatorModel.save(indicator);
   }

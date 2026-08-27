@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common'
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core'
 import { ActivatedRoute, Router, RouterModule } from '@angular/router'
 import Fuse from 'fuse.js'
-import { Subscription, firstValueFrom, of, shareReplay } from 'rxjs'
+import { Subscription, firstValueFrom, of } from 'rxjs'
 
 import { MatCardModule } from '@angular/material/card'
 import { MatIconModule } from '@angular/material/icon'
@@ -30,7 +30,6 @@ import {
   CourseService,
 } from '@platon/feature/course/browser'
 import { Course, CourseFilters, CourseOrderings } from '@platon/feature/course/common'
-import { CourseManagementTutorialService } from '@platon/feature/tuto/browser'
 import { RoleService } from '../../core/services/role.service'
 
 @Component({
@@ -87,11 +86,6 @@ export class CoursesPage implements OnInit, OnDestroy {
   private user?: User
   protected canCreateCourse = false
 
-  protected completion = of([]).pipe(
-    // TODO implements server function
-    shareReplay(1)
-  )
-
   protected searching = true
   protected filters: CourseFilters = {}
   protected items: Course[] = []
@@ -102,7 +96,6 @@ export class CoursesPage implements OnInit, OnDestroy {
     private readonly router: Router,
     private readonly authService: AuthService,
     private readonly courseService: CourseService,
-    private readonly courseManagementTutorialService: CourseManagementTutorialService,
     private readonly activatedRoute: ActivatedRoute,
     private readonly changeDetectorRef: ChangeDetectorRef,
     private readonly roleService: RoleService,
@@ -153,7 +146,6 @@ export class CoursesPage implements OnInit, OnDestroy {
           )
           this.items = response.resources
           this.totalMatches = response.total
-          this.checkForCourseTutorial()
         } catch (error) {
           console.error('[CoursesPage] Erreur lors du chargement des cours :', error)
         } finally {
@@ -205,40 +197,6 @@ export class CoursesPage implements OnInit, OnDestroy {
       .catch(console.error)
   }
 
-  private checkForCourseTutorial(): void {
-    this.subscriptions.push(
-      this.activatedRoute.queryParams.subscribe((params: any) => {
-        if (params['tutorial'] === 'course-management' && this.user) {
-          this.resetTutorialParam()
-
-          setTimeout(() => {
-            this.startCourseManagementTutorial()
-          }, 500)
-        }
-      })
-    )
-  }
-
-  /**
-   * Réinitialise le paramètre tutorial dans l'URL
-   */
-  private resetTutorialParam(): void {
-    this.router
-      .navigate([], {
-        relativeTo: this.activatedRoute,
-        queryParams: { tutorial: null },
-        queryParamsHandling: 'merge',
-      })
-      .catch(console.error)
-  }
-
-  /**
-   * Démarre le tutoriel de gestion de cours
-   */
-  startCourseManagementTutorial(): void {
-    if (!this.user) return
-    this.courseManagementTutorialService.startCourseManagementTutorial(this.user, this.items)
-  }
 }
 
 interface QueryParams {
