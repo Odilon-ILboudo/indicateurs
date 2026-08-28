@@ -62,6 +62,10 @@ $light-bg-darker-30: #b3b3b3;
 $light-bg-lighter-5: #fafafa;
 $dark-bg-alpha-4: rgba(41, 45, 51, 0.04);
 $dark-bg-alpha-12: rgba(41, 45, 51, 0.12);
+// Bulle de tooltip Material : toujours sombre et opaque, quel que soit le thème de l'app (les
+// tooltips doivent rester lisibles sur n'importe quel fond) - valeur par défaut de la spec
+// Material (~ rgba(97, 97, 97, 0.9)).
+$tooltip-bg: rgba(97, 97, 97, 0.92);
 
 $mat-light-theme-background: (
   background: $light-background,
@@ -78,7 +82,7 @@ $mat-light-theme-background: (
   disabled-button-toggle: $light-bg-darker-10,
   unselected-chip: $light-bg-darker-10,
   disabled-list-option: $light-bg-darker-10,
-  tooltip: $dark-bg-alpha-4,
+  tooltip: $tooltip-bg,
 );
 
 // FOREGROUND DARK
@@ -135,7 +139,7 @@ $mat-dark-theme-background: (
   disabled-button-toggle: $dark-bg-lighter-10,
   unselected-chip: $dark-bg-lighter-20,
   disabled-list-option: $dark-bg-lighter-10,
-  tooltip: $dark-bg-lighter-30,
+  tooltip: $tooltip-bg,
 );
 
 // PALETTES

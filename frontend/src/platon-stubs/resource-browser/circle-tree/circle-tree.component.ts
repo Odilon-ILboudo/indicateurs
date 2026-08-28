@@ -1,19 +1,12 @@
 // Ported from platon/libs/feature/resource/browser/src/lib/components/circle-tree
+import { SelectionModel } from '@angular/cdk/collections'
+import { FlatTreeControl } from '@angular/cdk/tree'
 import { CommonModule } from '@angular/common'
-import {
-  AfterViewInit,
-  ChangeDetectionStrategy,
-  Component,
-  EventEmitter,
-  Input,
-  OnInit,
-  Output,
-  ViewChild,
-  booleanAttribute,
-} from '@angular/core'
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnInit, Output, booleanAttribute } from '@angular/core'
 import { RouterModule } from '@angular/router'
 import { NzIconModule } from 'ng-zorro-antd/icon'
-import { NzTreeViewComponent, NzTreeViewModule } from 'ng-zorro-antd/tree-view'
+import { NzTreeModule } from 'ng-zorro-antd/tree'
+import { NzTreeFlatDataSource, NzTreeFlattener, NzTreeViewModule } from 'ng-zorro-antd/tree-view'
 
 import { CircleTree } from '../../resource-common'
 
@@ -23,11 +16,9 @@ import { CircleTree } from '../../resource-common'
   templateUrl: './circle-tree.component.html',
   styleUrls: ['./circle-tree.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, RouterModule, NzIconModule, NzTreeViewModule],
+  imports: [CommonModule, RouterModule, NzIconModule, NzTreeModule, NzTreeViewModule],
 })
-export class CircleTreeComponent implements OnInit, AfterViewInit {
-  @ViewChild(NzTreeViewComponent) protected treeView?: NzTreeViewComponent<FlatNode>
-
+export class CircleTreeComponent implements OnInit {
   @Input() tree!: CircleTree
 
   /**
@@ -59,85 +50,92 @@ export class CircleTreeComponent implements OnInit, AfterViewInit {
    */
   @Output() selectionChange = new EventEmitter<string[]>()
 
-  protected dataNodes: FlatNode[] = []
-  protected checklistSelection = new Set<string>()
+  protected flatNodeMap = new Map<FlatNode, CircleTree>()
+  protected nestedNodeMap = new Map<CircleTree, FlatNode>()
+  protected checklistSelection = new SelectionModel<FlatNode>(true)
   protected disabled = false
+
+  protected treeControl = new FlatTreeControl<FlatNode>(
+    (node) => node.level,
+    (node) => node.expandable
+  )
 
   protected get selectable(): boolean {
     return this.selectionChange.observed
   }
 
-  protected nzLevelAccessor = (node: FlatNode): number => node.level
+  protected treeFlattener = new NzTreeFlattener(
+    this.transformer.bind(this),
+    (node) => node.level,
+    (node) => node.expandable,
+    (node) => {
+      const children = this.visibleNodeIds
+        ? node.children?.filter((c) => this.visibleNodeIds?.includes(c.id))
+        : node.children
+      return children
+    }
+  )
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  protected dataSource = new NzTreeFlatDataSource(this.treeControl as any, this.treeFlattener)
 
   ngOnInit(): void {
-    this.dataNodes = this.flatten(this.tree, 0)
-  }
-
-  ngAfterViewInit(): void {
-    if (!this.treeView) {
-      return
-    }
-
-    const expansionModel = this.treeView._getExpansionModel()
+    this.dataSource.setData([this.tree])
     if (this.selectable) {
-      this.dataNodes.forEach((node) => expansionModel.select(node))
+      this.treeControl.expandAll()
     } else {
-      const firstNode = this.dataNodes[0]
+      const firstNode = this.treeControl.dataNodes[0]
       if (firstNode) {
-        expansionModel.select(firstNode)
+        this.treeControl.expand(firstNode)
       }
     }
 
-    this.checklistSelection = new Set(
-      this.dataNodes.filter((node) => this.selection.includes(node.id) && !node.disabled).map((node) => node.id)
+    this.checklistSelection.select(
+      ...this.treeControl.dataNodes.filter((node) => this.selection.includes(node.id) && !node.disabled)
     )
-    this.selectionChange.emit([...this.checklistSelection])
+    this.selectionChange.emit(this.checklistSelection.selected.map((n) => n.id))
   }
 
-  protected hasChild = (_: number, node: FlatNode): boolean => node.expandable
+  protected hasChild = (_: number, node: FlatNode) => node.expandable
 
-  protected trackBy = (_: number, node: FlatNode): string => `${node.id}-${node.name}`
+  protected trackBy = (_: number, node: FlatNode) => `${node.id}-${node.name}`
 
-  protected isSelected(node: FlatNode): boolean {
-    return this.checklistSelection.has(node.id)
+  protected transformer(node: CircleTree, level: number): FlatNode {
+    const existingNode = this.nestedNodeMap.get(node)
+    const flatNode =
+      existingNode && existingNode.id === node.id
+        ? existingNode
+        : {
+            id: node.id,
+            name: node.name,
+            level: level,
+            disabled:
+              this.disableFromPermissions && (!node.permissions?.read || (this.selectable && !node.permissions?.write)),
+            expandable: !!node.children && node.children.length > 0,
+          }
+    flatNode.name = node.name
+    this.flatNodeMap.set(flatNode, node)
+    this.nestedNodeMap.set(node, flatNode)
+    return flatNode
   }
 
   protected selectionToggle(node: FlatNode): void {
-    if (this.checklistSelection.has(node.id)) {
-      this.checklistSelection.delete(node.id)
+    if (this.checklistSelection.isSelected(node)) {
+      this.checklistSelection.deselect(node)
     } else {
       if (!this.multiple) {
         this.checklistSelection.clear()
       }
-      this.checklistSelection.add(node.id)
+      this.checklistSelection.select(node)
     }
-    this.selectionChange.emit([...this.checklistSelection])
-  }
-
-  private flatten(node: CircleTree, level: number): FlatNode[] {
-    const children = this.visibleNodeIds
-      ? node.children?.filter((child) => this.visibleNodeIds?.includes(child.id))
-      : node.children
-
-    const flatNode: FlatNode = {
-      id: node.id,
-      name: node.name,
-      level,
-      expandable: !!children && children.length > 0,
-      disabled:
-        this.disableFromPermissions && (!node.permissions?.read || (this.selectable && !node.permissions?.write)),
-    }
-
-    const result: FlatNode[] = [flatNode]
-    children?.forEach((child) => result.push(...this.flatten(child, level + 1)))
-    return result
+    this.selectionChange.emit(this.checklistSelection.selected.map((n) => n.id))
   }
 }
 
 interface FlatNode {
   id: string
   name: string
-  level: number
   disabled: boolean
   expandable: boolean
+  level: number
 }

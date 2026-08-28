@@ -6,6 +6,7 @@ import { OverviewPage } from './pages/overview/overview.page';
 import { IndicatorsPage } from './pages/indicators/indicators.page';
 import { FamilyIndicatorsPage } from './pages/indicators/family-indicators.page';
 import { SelectorFamilyIndicatorsPage } from './pages/indicators/selector-family-indicators.page';
+import { EmbedTestPage } from './pages/embed-test/embed-test.page';
 
 export default [
   {
@@ -29,6 +30,12 @@ export default [
         path: 'indicator/:id',
         component: IndicatorDetailComponent,
         data: { title: 'Détail indicateur' }
+      },
+      {
+        // Diagnostic uniquement, jamais lié dans la navigation - voir embed-test.page.ts.
+        path: 'embed-test',
+        component: EmbedTestPage,
+        data: { title: 'Diagnostic - Web Component embarqué' },
       },
       {
         path: 'courses',

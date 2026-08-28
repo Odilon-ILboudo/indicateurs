@@ -28,7 +28,7 @@ import {
   UiSearchBarComponent,
   UiViewModeComponent,
 } from '@platon/shared/ui'
-import { NzTooltipModule } from 'ng-zorro-antd/tooltip'
+import { NzToolTipModule } from 'ng-zorro-antd/tooltip'
 import { NzModalService } from 'ng-zorro-antd/modal'
 import { CoursePresenter } from '../course.presenter'
 
@@ -38,6 +38,9 @@ import { DashboardSettingsService } from '../../../../core/services/dashboard-se
 import { DashboardContext, IndicatorDefinition, IndicatorPin } from '../../../../core/models/indicator.model'
 import { IndicatorCardComponent } from '../../../../shared/ui/indicator-card/indicator-card.component'
 import { PinIndicatorModalComponent } from '../../../pin-indicator-modal/pin-indicator-modal.component'
+import { GroupSnapshotsPanelComponent } from '../activity/group-snapshots-panel.component'
+import { isCourseAware } from '../../../../shared/utils/indicator-formula.util'
+import { getCurrentUserId } from '../../../../core/auth/current-user'
 
 @Component({
   standalone: true,
@@ -53,7 +56,7 @@ import { PinIndicatorModalComponent } from '../../../pin-indicator-modal/pin-ind
     NzGridModule,
     NzEmptyModule,
     NzButtonModule,
-    NzTooltipModule,
+    NzToolTipModule,
     NzCollapseModule,
     NzSegmentedModule,
     NzSpinModule,
@@ -68,6 +71,7 @@ import { PinIndicatorModalComponent } from '../../../pin-indicator-modal/pin-ind
     UiSearchBarComponent,
 
     IndicatorCardComponent,
+    GroupSnapshotsPanelComponent,
   ],
 })
 export class CourseDashboardPage implements OnInit, OnDestroy {
@@ -86,6 +90,17 @@ export class CourseDashboardPage implements OnInit, OnDestroy {
   protected indicatorsLoading = true
   protected courseContext: DashboardContext | null = null
   protected indicatorQueryParams: Record<string, string> = {}
+
+  // Indicateurs personnels (learner/teacher/admin) course-aware + groupe course-aware -
+  // repris ici depuis my-stats.page.ts, supprimé (plus d'onglet dédié, voir Ouvert/décision) ;
+  // fusionnés dans la même liste que courseIndicators côté template, pas de section séparée.
+  protected learnerIndicators: IndicatorDefinition[] = []
+  protected teacherIndicators: IndicatorDefinition[] = []
+  protected adminIndicators: IndicatorDefinition[] = []
+  protected groupIndicators: IndicatorDefinition[] = []
+  protected learnerContext: DashboardContext | null = null
+  protected teacherContext: DashboardContext | null = null
+  protected adminContext: DashboardContext | null = null
 
   // Indicateurs figés (pins enseignant) sur ce cours - indépendant des
   // préférences perso, cf. IndicatorPinsService côté backend.
@@ -189,6 +204,17 @@ export class CourseDashboardPage implements OnInit, OnDestroy {
           }
           this.courseIndicators = Array.from(byId.values())
 
+          const visible = indicators.filter(ind =>
+            this.roleService.canSeeIndicatorContext(ind.contextType, ind.visibilityRoles) &&
+            settings.activeIndicators.includes(ind.id))
+          this.learnerIndicators = visible.filter(ind => ind.contextType === 'learner' && isCourseAware(ind.formula))
+          this.teacherIndicators = visible.filter(ind => ind.contextType === 'teacher' && isCourseAware(ind.formula))
+          this.adminIndicators = visible.filter(ind => ind.contextType === 'admin' && isCourseAware(ind.formula))
+          this.groupIndicators = visible.filter(ind => ind.contextType === 'group' && isCourseAware(ind.formula))
+          this.learnerContext = { scope: 'learner', scopeId: getCurrentUserId(), userId: getCurrentUserId(), courseId }
+          this.teacherContext = { scope: 'teacher', scopeId: getCurrentUserId(), userId: getCurrentUserId(), courseId }
+          this.adminContext = { scope: 'admin', scopeId: getCurrentUserId(), userId: getCurrentUserId(), courseId }
+
           this.indicatorsLoading = false
           this.changeDetectorRef.markForCheck()
         },
@@ -198,6 +224,13 @@ export class CourseDashboardPage implements OnInit, OnDestroy {
         },
       }),
     )
+  }
+
+  /** Distinct de `indicatorQueryParams` (`from: 'course'`) : le contextType d'une carte
+   *  personnelle dépend de l'indicateur cliqué, indicator-detail.component.ts a donc besoin de
+   *  le recevoir explicitement (branche `course-personal`). */
+  protected personalIndicatorQueryParams(contextType: string): Record<string, string> {
+    return { ...this.indicatorQueryParams, from: 'course-personal', contextType }
   }
 
   protected onPinToggle(indicator: IndicatorDefinition): void {

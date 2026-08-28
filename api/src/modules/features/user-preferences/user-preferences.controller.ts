@@ -3,6 +3,7 @@ import { Controller, Get, Post, Patch, Delete, Body, Param, Req, UseGuards } fro
 import { Request } from 'express';
 import { UserPreferencesService } from './user-preferences.service';
 import { AuthGuard, AuthenticatedUser } from '../../core/auth/auth.guard';
+import { IndicatorVisibilityGuard } from '../../core/guards/indicator-visibility.guard';
 
 interface AuthenticatedRequest extends Request {
   user?: AuthenticatedUser;
@@ -27,6 +28,7 @@ export class UserPreferencesController {
   }
 
   @Post(':indicatorId')
+  @UseGuards(IndicatorVisibilityGuard)
   async createPreference(
     @Req() request: AuthenticatedRequest,
     @Param('indicatorId') indicatorId: string,
@@ -36,6 +38,7 @@ export class UserPreferencesController {
   }
 
   @Patch(':indicatorId')
+  @UseGuards(IndicatorVisibilityGuard)
   async updatePreference(
     @Req() request: AuthenticatedRequest,
     @Param('indicatorId') indicatorId: string,

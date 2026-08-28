@@ -3,7 +3,7 @@
   [class.clickable]="clickable"
   [class.loading]="isLoading"
   [style.border-left]="getThresholdColor() ? '4px solid ' + getThresholdColor() : 'none'"
-  [routerLink]="clickable ? ['/dashboard/indicator', indicator.id] : null"
+  [routerLink]="clickable ? [routeBasePath + '/indicator', indicator.id] : null"
   [queryParams]="clickable && queryParams ? queryParams : null"
   [matTooltip]="clickable && isChartVisualization() ? 'Cliquez pour voir le graphique complet' : (clickable ? 'Cliquez pour plus de détails' : '')"
   [matTooltipDisabled]="suppressCardTooltip"

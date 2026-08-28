@@ -21,6 +21,7 @@ import { IndicatorService } from '../../core/services/indicator.service';
 import { DashboardSettingsService } from '../../core/services/dashboard-settings.service';
 import { RoleService } from '../../core/services/role.service';
 import { IndicatorListStateService } from '../../core/services/indicator-list-state.service';
+import { ROUTE_BASE_PATH } from '../../core/tokens/route-base-path.token';
 
 const REQUIRED_EVENT_LABELS: Record<string, string> = {
   'exercise.answered': 'Réponse à un exercice',
@@ -592,6 +593,7 @@ export class IndicatorSelectorComponent implements OnInit {
   private cdr = inject(ChangeDetectorRef);
   private readonly router = inject(Router);
   private readonly listState = inject(IndicatorListStateService);
+  private readonly routeBasePath = inject(ROUTE_BASE_PATH, { optional: true }) ?? '/dashboard';
 
   @Output() indicatorsChanged = new EventEmitter<void>();
 
@@ -705,11 +707,11 @@ export class IndicatorSelectorComponent implements OnInit {
   /** Clic sur une ligne de famille dans la liste principale : navigue vers sa page dédiée
    *  plutôt que de la déplier sur place. */
   openFamilyPage(familyName: string): void {
-    this.router.navigate(['/dashboard/indicators/selector-family', familyName]);
+    this.router.navigate([`${this.routeBasePath}/indicators/selector-family`, familyName]);
   }
 
   goBackToList(): void {
-    this.router.navigate(['/dashboard/indicators']);
+    this.router.navigate([`${this.routeBasePath}/indicators`]);
   }
 
   /** Nombre d'indicateurs de la famille affichée (indépendant des filtres recherche/tri

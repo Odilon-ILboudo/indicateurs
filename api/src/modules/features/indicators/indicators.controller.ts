@@ -9,6 +9,7 @@ import { FormulaInterpreterService } from './interpreter/formula-interpreter.ser
 import { IndicatorPinsService } from '../indicator-pins/indicator-pins.service';
 import { IndicatorPinContextType } from '../indicator-pins/indicator-pin.entity';
 import { AdminGuard } from '../../core/guards/admin.guard';
+import { IndicatorVisibilityGuard } from '../../core/guards/indicator-visibility.guard';
 import { AuthGuard, AuthenticatedUser } from '../../core/auth/auth.guard';
 import { CreateIndicatorDto, UpdateIndicatorDto, UpdateIndicatorStatusDto } from './dto/indicator.dto';
 
@@ -105,6 +106,7 @@ export class IndicatorsController {
   }
 
   @Get(':id/values')
+  @UseGuards(AuthGuard, IndicatorVisibilityGuard)
   async getIndicatorValues(
     @Param('id') id: string,
     @Query('contextType') contextType: string,
@@ -148,6 +150,7 @@ export class IndicatorsController {
    * isCourseAware()) - ignoré pour tous les autres contextType.
    */
   @Post(':id/compute-view')
+  @UseGuards(AuthGuard, IndicatorVisibilityGuard)
   async computeView(
     @Param('id') id: string,
     @Body() body: { contextType: string; contextId: string; activityId?: string; vizId?: string; courseId?: string },
@@ -215,6 +218,7 @@ export class IndicatorsController {
 
   /** Liste les snapshots d'un indicateur pour une activité ou un cours donné (l'un ou l'autre). */
   @Get(':id/snapshots')
+  @UseGuards(AuthGuard, IndicatorVisibilityGuard)
   async getSnapshots(
     @Param('id') id: string,
     @Query('activityId') activityId?: string,
@@ -226,6 +230,7 @@ export class IndicatorsController {
 
   /** Crée un snapshot (groupe + activité OU groupe + cours). Retourne 409 si déjà existant. */
   @Post(':id/snapshots')
+  @UseGuards(AuthGuard, IndicatorVisibilityGuard)
   async createSnapshot(
     @Param('id') id: string,
     @Body() body: { contextType: string; contextId: string; activityId?: string; courseId?: string; title: string },

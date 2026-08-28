@@ -7,7 +7,7 @@ import { NzButtonModule } from 'ng-zorro-antd/button'
 import { NzDropDownModule } from 'ng-zorro-antd/dropdown'
 import { NzIconModule } from 'ng-zorro-antd/icon'
 import { NzSelectModule } from 'ng-zorro-antd/select'
-import { NzTooltipModule } from 'ng-zorro-antd/tooltip'
+import { NzToolTipModule } from 'ng-zorro-antd/tooltip'
 
 import { ResourceVersionComponent, ResourceVersioningComponent } from '@platon/feature/resource/browser'
 import { FileVersion, FileVersions, Resource } from '@platon/feature/resource/common'
@@ -26,7 +26,7 @@ import { FileVersion, FileVersions, Resource } from '@platon/feature/resource/co
     NzDropDownModule,
     NzSelectModule,
     NzButtonModule,
-    NzTooltipModule,
+    NzToolTipModule,
     ResourceVersionComponent,
     ResourceVersioningComponent,
   ],

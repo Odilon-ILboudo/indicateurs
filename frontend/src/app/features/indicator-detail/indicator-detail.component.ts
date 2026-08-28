@@ -1,7 +1,8 @@
 import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterModule } from '@angular/router';
+import { ActivatedRoute, NavigationEnd, Params, Router, RouterModule } from '@angular/router';
+import { filter, startWith } from 'rxjs/operators';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -25,6 +26,8 @@ import { NzRateModule } from 'ng-zorro-antd/rate';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { getCurrentUserId } from '../../core/auth/current-user';
+import { ROUTE_BASE_PATH } from '../../core/tokens/route-base-path.token';
+import { EMBEDDED_MODE } from '../../core/tokens/embedded-mode.token';
 
 @Component({
   selector: 'ui-indicator-detail',
@@ -48,11 +51,19 @@ import { getCurrentUserId } from '../../core/auth/current-user';
 })
 export class IndicatorDetailComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly indicatorService = inject(IndicatorService);
   private readonly roleService = inject(RoleService);
   private readonly messageService = inject(NzMessageService);
   private readonly modalService = inject(NzModalService);
   private readonly cdr = inject(ChangeDetectorRef);
+  protected readonly routeBasePath = inject(ROUTE_BASE_PATH, { optional: true }) ?? '/dashboard';
+  // Les bannières de contexte (cours/activité) renvoient vers les indicateurs de ce contexte -
+  // routerLink standalone vers /courses/..., ou navigation interne vers /context en mode
+  // embarqué (context-indicators.page.ts), jamais un lien externe vers une page PLaTon native
+  // (essayé puis retiré : ça supposait une page de destination qui n'existe pas forcément côté
+  // hôte, et "retour" a plus de sens comme "retour à la liste des indicateurs de ce contexte").
+  protected readonly embedded = inject(EMBEDDED_MODE, { optional: true }) ?? false;
 
   readonly contextIcon = contextIcon;
 
@@ -135,14 +146,69 @@ export class IndicatorDetailComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    const id = this.route.snapshot.paramMap.get('id');
+    // Une navigation interne entre deux /indicator/:id (même config de route) réutilise la même
+    // instance de composant - un ngOnInit qui ne lit route.snapshot qu'au premier passage
+    // resterait bloqué sur les données du premier indicateur affiché. On réagit donc à chaque
+    // navigation terminée plutôt qu'une seule fois (startWith couvre le tout premier chargement,
+    // qui a déjà eu lieu au moment où ce composant est créé).
+    //
+    // Piège trouvé en testant : combineLatest([route.paramMap, route.queryParams]) semblait
+    // équivalent mais ne l'est pas - ce sont deux flux distincts qui n'émettent pas forcément de
+    // façon atomique pour une même navigation, donc combineLatest pouvait produire une
+    // combinaison transitoire incohérente (nouvel id + anciens query params, ou l'inverse),
+    // déclenchant un appel de calcul avec un contexte qui ne correspond à aucun indicateur réel
+    // (constaté : indicateur "activité" appelé avec un contexte "groupe" → 500 côté API). En
+    // relisant route.snapshot au moment de l'événement plutôt qu'en combinant deux flux, on est
+    // toujours sûr que params et queryParams proviennent de la même navigation.
+    this.router.events.pipe(
+      filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+      startWith(null),
+    ).subscribe(() => {
+      this.loadFromRoute(this.route.snapshot.paramMap.get('id'), this.route.snapshot.queryParams);
+    });
+  }
+
+  private loadFromRoute(id: string | null, q: Params): void {
+    // Réinitialise tout l'état dépendant de la route - nécessaire car l'instance peut être
+    // réutilisée d'une navigation à l'autre (voir commentaire ngOnInit).
+    this.isLoading = true;
+    this.indicator = null;
+    this.results = {};
+    this.loading = {};
+    this.chartOptions = {};
+    this.historyPeriodDays = {};
+    this.historyCustomRange = {};
+    this.activeVizId = null;
+
+    this.activeContextType = 'learner';
+    this.activeContextId = getCurrentUserId();
+    this.activeActivityId = undefined;
+    this.activeCourseId = undefined;
+
+    this.courseContextCourseName = '';
+    this.courseContextCourseId = '';
+    this.hasCourseContext = false;
+
+    this.activityCourseName = '';
+    this.activityName = '';
+    this.activityCourseId = '';
+    this.activityId = '';
+    this.hasActivityContext = false;
+
+    this.groupSnapshotCourseName = '';
+    this.groupSnapshotActivityName = '';
+    this.groupSnapshotGroupName = '';
+    this.groupSnapshotCourseId = '';
+    this.groupSnapshotActivityId = '';
+    this.hasGroupSnapshotContext = false;
+    this.groupSnapshotIsCourseScoped = false;
+
     if (!id) {
       this.isLoading = false;
       this.messageService.error('Indicateur non spécifié');
+      this.cdr.markForCheck();
       return;
     }
-
-    const q = this.route.snapshot.queryParams;
 
     if (q['from'] === 'group-snapshot' && q['groupId'] && (q['activityId'] || q['courseId'])) {
       this.activeContextType = 'group';

@@ -10,7 +10,7 @@ import { NzModalModule, NzModalService, NzModalRef, NZ_MODAL_DATA } from 'ng-zor
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzSwitchModule } from 'ng-zorro-antd/switch';
 import { NzTagModule } from 'ng-zorro-antd/tag';
-import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
+import { NzToolTipModule } from 'ng-zorro-antd/tooltip';
 import { NzPopconfirmModule } from 'ng-zorro-antd/popconfirm';
 import { NzBadgeModule } from 'ng-zorro-antd/badge';
 import { NzDividerModule } from 'ng-zorro-antd/divider';
@@ -92,7 +92,7 @@ export interface FamilyStartResult {
 @Component({
   selector: 'ui-family-start-modal',
   standalone: true,
-  imports: [CommonModule, FormsModule, NzFormModule, NzInputModule, NzSelectModule, NzButtonModule, MatIconModule, NzTooltipModule],
+  imports: [CommonModule, FormsModule, NzFormModule, NzInputModule, NzSelectModule, NzButtonModule, MatIconModule, NzToolTipModule],
   template: `
     <div class="family-start">
       <p style="color:#888;font-size:13px;margin-top:0">
@@ -188,7 +188,7 @@ export class IndicatorFamilyStartModalComponent {
   imports: [
     CommonModule, FormsModule, MatIconModule,
     NzTableModule, NzButtonModule, NzModalModule,
-    NzSwitchModule, NzTagModule, NzTooltipModule,
+    NzSwitchModule, NzTagModule, NzToolTipModule,
     NzPopconfirmModule, NzBadgeModule, NzDividerModule,
     NzEmptyModule, NzSpinModule, NzTabsModule, NzRateModule,
     NzSelectModule, NzInputModule, NzPaginationModule,
@@ -241,10 +241,10 @@ export class IndicatorFamilyStartModalComponent {
       </div>
 
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-        <nz-tabs *ngIf="!familyNameFilter" style="flex:1;min-width:220px" [nzSelectedIndex]="groupingFilter === 'standalone' ? 0 : 1" (nzSelectedIndexChange)="onTabChange($event)">
+        <nz-tabset *ngIf="!familyNameFilter" style="flex:1;min-width:220px" [nzSelectedIndex]="groupingFilter === 'standalone' ? 0 : 1" (nzSelectedIndexChange)="onTabChange($event)">
           <nz-tab nzTitle="Indicateurs uniques"></nz-tab>
           <nz-tab nzTitle="Familles"></nz-tab>
-        </nz-tabs>
+        </nz-tabset>
         <input nz-input placeholder="Rechercher par nom..." style="width:220px"
           [(ngModel)]="searchText" (ngModelChange)="applyGroupingFilter()" />
         <nz-select [(ngModel)]="contextTypeFilterValue" (ngModelChange)="applyGroupingFilter()" style="width:160px">

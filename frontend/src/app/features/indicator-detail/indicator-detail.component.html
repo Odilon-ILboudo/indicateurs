@@ -1,7 +1,7 @@
 <div class="indicator-detail">
 
   <nz-breadcrumb>
-    <nz-breadcrumb-item><a routerLink="/dashboard/overview">Tableau de bord</a></nz-breadcrumb-item>
+    <nz-breadcrumb-item><a [routerLink]="routeBasePath + '/overview'">Tableau de bord</a></nz-breadcrumb-item>
     <nz-breadcrumb-item>{{ indicator?.name || 'Chargement...' }}</nz-breadcrumb-item>
   </nz-breadcrumb>
 
@@ -73,13 +73,25 @@
         <mat-icon class="ctx-sep">chevron_right</mat-icon>
         <span class="ctx-chip scope"><mat-icon>groups</mat-icon>{{ groupSnapshotGroupName }}</span>
       </div>
-      <a *ngIf="!groupSnapshotIsCourseScoped"
-        [routerLink]="['/dashboard/courses', groupSnapshotCourseId, 'activities', groupSnapshotActivityId]"
+      <a *ngIf="!groupSnapshotIsCourseScoped && !embedded"
+        [routerLink]="[routeBasePath + '/courses', groupSnapshotCourseId, 'activities', groupSnapshotActivityId]"
         class="ctx-back-link">
         <mat-icon>arrow_back</mat-icon> Retour à l'activité
       </a>
-      <a *ngIf="groupSnapshotIsCourseScoped"
-        [routerLink]="['/dashboard/courses', groupSnapshotCourseId]"
+      <a *ngIf="groupSnapshotIsCourseScoped && !embedded"
+        [routerLink]="[routeBasePath + '/courses', groupSnapshotCourseId]"
+        class="ctx-back-link">
+        <mat-icon>arrow_back</mat-icon> Retour au cours
+      </a>
+      <a *ngIf="!groupSnapshotIsCourseScoped && embedded"
+        [routerLink]="routeBasePath + '/context'"
+        [queryParams]="{ contextType: 'activity', activityId: groupSnapshotActivityId, courseId: groupSnapshotCourseId, activityName: groupSnapshotActivityName, courseName: groupSnapshotCourseName }"
+        class="ctx-back-link">
+        <mat-icon>arrow_back</mat-icon> Retour à l'activité
+      </a>
+      <a *ngIf="groupSnapshotIsCourseScoped && embedded"
+        [routerLink]="routeBasePath + '/context'"
+        [queryParams]="{ contextType: 'course', courseId: groupSnapshotCourseId, courseName: groupSnapshotCourseName }"
         class="ctx-back-link">
         <mat-icon>arrow_back</mat-icon> Retour au cours
       </a>
@@ -94,7 +106,13 @@
         <mat-icon class="ctx-sep">chevron_right</mat-icon>
         <span class="ctx-chip"><mat-icon>widgets</mat-icon>{{ activityName }}</span>
       </div>
-      <a [routerLink]="['/dashboard/courses', activityCourseId, 'activities', activityId]"
+      <a *ngIf="!embedded" [routerLink]="[routeBasePath + '/courses', activityCourseId, 'activities', activityId]"
+        class="ctx-back-link">
+        <mat-icon>arrow_back</mat-icon> Retour à l'activité
+      </a>
+      <a *ngIf="embedded"
+        [routerLink]="routeBasePath + '/context'"
+        [queryParams]="{ contextType: 'activity', activityId: activityId, courseId: activityCourseId, activityName: activityName, courseName: activityCourseName }"
         class="ctx-back-link">
         <mat-icon>arrow_back</mat-icon> Retour à l'activité
       </a>
@@ -105,7 +123,13 @@
       <div class="ctx-chips">
         <span class="ctx-chip"><mat-icon>local_library</mat-icon>{{ courseContextCourseName }}</span>
       </div>
-      <a [routerLink]="['/dashboard/courses', courseContextCourseId]" class="ctx-back-link">
+      <a *ngIf="!embedded" [routerLink]="[routeBasePath + '/courses', courseContextCourseId]" class="ctx-back-link">
+        <mat-icon>arrow_back</mat-icon> Retour au cours
+      </a>
+      <a *ngIf="embedded"
+        [routerLink]="routeBasePath + '/context'"
+        [queryParams]="{ contextType: 'course', courseId: courseContextCourseId, courseName: courseContextCourseName }"
+        class="ctx-back-link">
         <mat-icon>arrow_back</mat-icon> Retour au cours
       </a>
     </div>
@@ -118,7 +142,7 @@
     </nz-empty>
 
     <!-- Onglets par visualisation - calcul à la demande, persistance BDD -->
-    <nz-tabs
+    <nz-tabset
       *ngIf="visualizations.length > 0"
       [nzSelectedIndex]="activeVizIndex"
       (nzSelectedIndexChange)="onVizTabChange($event)">
@@ -225,14 +249,14 @@
 
         </ng-container>
       </nz-tab>
-    </nz-tabs>
+    </nz-tabset>
 
   </ng-container>
 
   <div class="empty-state" *ngIf="!isLoading && !indicator">
     <mat-icon>error_outline</mat-icon>
     <h3>Indicateur non trouvé</h3>
-    <button mat-raised-button routerLink="/dashboard/overview">Retour au tableau de bord</button>
+    <button mat-raised-button [routerLink]="routeBasePath + '/overview'">Retour au tableau de bord</button>
   </div>
 
 </div>

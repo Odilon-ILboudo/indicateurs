@@ -1,0 +1,74 @@
+<div class="context-header">
+  <mat-icon>{{ contextKind === 'activity' ? 'widgets' : 'school' }}</mat-icon>
+  <div>
+    <h2>{{ contextKind === 'activity' ? activityName : courseName }}</h2>
+    <p *ngIf="contextKind === 'activity'">{{ courseName }}</p>
+  </div>
+</div>
+
+<ng-container *ngIf="loading">
+  <nz-spin nzSimple></nz-spin>
+</ng-container>
+
+<ng-container *ngIf="!loading">
+
+  <!-- Indicateurs (personnels + globaux du contexte fusionnés - plus de séparation visuelle
+       entre "Mes statistiques" et "Indicateurs du cours/de l'activité", sur demande explicite) -->
+  <nz-divider [nzText]="indicatorsTitle" nzOrientation="left"></nz-divider>
+  <ng-template #indicatorsTitle>
+    <span class="section-divider-btn" (click)="collapsedGlobal = !collapsedGlobal">
+      <mat-icon class="section-chevron" [class.collapsed]="collapsedGlobal">expand_more</mat-icon>
+      Indicateurs
+    </span>
+  </ng-template>
+
+  <ng-container *ngIf="!collapsedGlobal">
+    <ng-container *ngIf="learnerIndicators.length > 0 || teacherIndicators.length > 0 || adminIndicators.length > 0 || scopedIndicators.length > 0; else noIndicators">
+      <nz-row [nzGutter]="[16, 16]">
+        <nz-col *ngFor="let ind of learnerIndicators" nzXs="24" nzSm="12" nzMd="12" nzLg="8" nzXl="8">
+          <ui-indicator-card [indicator]="ind" [context]="learnerContext" [clickable]="true"
+            [queryParams]="personalQueryParams('learner')" [showPinButton]="false" />
+        </nz-col>
+        <nz-col *ngFor="let ind of teacherIndicators" nzXs="24" nzSm="12" nzMd="12" nzLg="8" nzXl="8">
+          <ui-indicator-card [indicator]="ind" [context]="teacherContext" [clickable]="true"
+            [queryParams]="personalQueryParams('teacher')" [showPinButton]="false" />
+        </nz-col>
+        <nz-col *ngFor="let ind of adminIndicators" nzXs="24" nzSm="12" nzMd="12" nzLg="8" nzXl="8">
+          <ui-indicator-card [indicator]="ind" [context]="adminContext" [clickable]="true"
+            [queryParams]="personalQueryParams('admin')" [showPinButton]="false" />
+        </nz-col>
+        <nz-col *ngFor="let ind of scopedIndicators" nzXs="24" nzSm="12" nzMd="12" nzLg="8" nzXl="8">
+          <ui-indicator-card [indicator]="ind" [context]="scopedContext" [clickable]="true"
+            [queryParams]="queryParams" [showPinButton]="false" />
+        </nz-col>
+      </nz-row>
+    </ng-container>
+    <ng-template #noIndicators>
+      <nz-empty
+        [nzNotFoundContent]="contextKind === 'activity' ? 'Aucun indicateur d\'activité activé.' : 'Aucun indicateur de cours activé.'"
+        style="margin: 16px 0 24px">
+      </nz-empty>
+    </ng-template>
+  </ng-container>
+
+  <!-- Indicateurs par groupe -->
+  <ng-container *ngIf="groupIndicators.length > 0">
+    <nz-divider [nzText]="groupTitle" nzOrientation="left"></nz-divider>
+    <ng-template #groupTitle>
+      <span class="section-divider-btn" (click)="collapsedGroup = !collapsedGroup">
+        <mat-icon class="section-chevron" [class.collapsed]="collapsedGroup">expand_more</mat-icon>
+        Indicateurs par groupe
+      </span>
+    </ng-template>
+
+    <app-group-snapshots-panel
+      *ngIf="!collapsedGroup"
+      [groupIndicators]="groupIndicators"
+      [activityId]="contextKind === 'activity' ? activityId : undefined"
+      [courseId]="courseId"
+      [activityName]="activityName"
+      [courseName]="courseName"
+    />
+  </ng-container>
+
+</ng-container>

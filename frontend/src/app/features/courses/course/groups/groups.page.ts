@@ -9,7 +9,7 @@ import { Subscription } from 'rxjs'
 import { NzTypographyModule } from 'ng-zorro-antd/typography'
 import { CourseGroupDetail, CourseMember } from '@platon/feature/course/common'
 import { CourseMemberSearchModalComponent } from '@platon/feature/course/browser'
-import { NzTooltipModule } from 'ng-zorro-antd/tooltip'
+import { NzToolTipModule } from 'ng-zorro-antd/tooltip'
 import { CommonModule } from '@angular/common'
 import { NzPopconfirmModule } from 'ng-zorro-antd/popconfirm'
 import { NzEmptyComponent } from 'ng-zorro-antd/empty'
@@ -26,7 +26,7 @@ import { NzEmptyComponent } from 'ng-zorro-antd/empty'
     NzIconModule,
     NzCollapseModule,
     NzButtonModule,
-    NzTooltipModule,
+    NzToolTipModule,
     NzEmptyComponent,
     CourseMemberSearchModalComponent,
     CourseMemberTableComponent,

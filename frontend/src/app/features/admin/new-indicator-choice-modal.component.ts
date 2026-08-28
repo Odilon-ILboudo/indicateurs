@@ -10,7 +10,7 @@ import { NzSwitchModule } from 'ng-zorro-antd/switch';
 import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzTagModule } from 'ng-zorro-antd/tag';
 import { NzDividerModule } from 'ng-zorro-antd/divider';
-import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
+import { NzToolTipModule } from 'ng-zorro-antd/tooltip';
 import { NzModalRef, NZ_MODAL_DATA } from 'ng-zorro-antd/modal';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import * as yaml from 'js-yaml';
@@ -44,7 +44,7 @@ type ChoiceView = 'menu' | 'reuse' | 'reuse-preview' | 'import';
   standalone: true,
   imports: [
     CommonModule, FormsModule, MatIconModule, NzButtonModule, NzInputModule, NzRadioModule,
-    NzSwitchModule, NzSelectModule, NzTagModule, NzDividerModule, NzTooltipModule,
+    NzSwitchModule, NzSelectModule, NzTagModule, NzDividerModule, NzToolTipModule,
     IndicatorReuseCardComponent,
   ],
   template: `

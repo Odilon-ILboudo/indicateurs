@@ -130,7 +130,7 @@
         </ng-container>
 
         <ng-container *ngIf="!indicatorsLoading">
-          <ng-container *ngIf="courseIndicators.length > 0 && courseContext; else noCourseIndicators">
+          <ng-container *ngIf="courseIndicators.length > 0 || learnerIndicators.length > 0 || teacherIndicators.length > 0 || adminIndicators.length > 0; else noCourseIndicators">
             <nz-row [nzGutter]="[24, 24]">
               <nz-col *ngFor="let ind of courseIndicators" nzSpan="24">
                 <ui-indicator-card
@@ -144,16 +144,39 @@
                   (pinToggle)="onPinToggle(ind)"
                 />
               </nz-col>
+              <nz-col *ngFor="let ind of learnerIndicators" nzSpan="24">
+                <ui-indicator-card [indicator]="ind" [context]="learnerContext" [clickable]="true"
+                  [queryParams]="personalIndicatorQueryParams('learner')" [showPinButton]="false" />
+              </nz-col>
+              <nz-col *ngFor="let ind of teacherIndicators" nzSpan="24">
+                <ui-indicator-card [indicator]="ind" [context]="teacherContext" [clickable]="true"
+                  [queryParams]="personalIndicatorQueryParams('teacher')" [showPinButton]="false" />
+              </nz-col>
+              <nz-col *ngFor="let ind of adminIndicators" nzSpan="24">
+                <ui-indicator-card [indicator]="ind" [context]="adminContext" [clickable]="true"
+                  [queryParams]="personalIndicatorQueryParams('admin')" [showPinButton]="false" />
+              </nz-col>
             </nz-row>
           </ng-container>
           <ng-template #noCourseIndicators>
             <nz-empty
-              nzNotFoundContent="Aucun indicateur de contexte 'cours' n'a été activé."
+              nzNotFoundContent="Aucun indicateur de cours activé."
               style="margin: 16px 0 24px">
             </nz-empty>
           </ng-template>
         </ng-container>
       </aside>
+    </nz-col>
+  </nz-row>
+
+  <nz-row *ngIf="!indicatorsLoading && groupIndicators.length > 0" [nzGutter]="[24, 24]" style="margin-top: 24px">
+    <nz-col nzSpan="24">
+      <h4 class="section-title">Indicateurs par groupe</h4>
+      <app-group-snapshots-panel
+        [groupIndicators]="groupIndicators"
+        [courseId]="course.id"
+        [courseName]="course.name"
+      />
     </nz-col>
   </nz-row>
 

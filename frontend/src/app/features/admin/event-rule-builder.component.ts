@@ -10,7 +10,7 @@ import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzRadioModule } from 'ng-zorro-antd/radio';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzDividerModule } from 'ng-zorro-antd/divider';
-import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
+import { NzToolTipModule } from 'ng-zorro-antd/tooltip';
 import { NzMessageService } from 'ng-zorro-antd/message';
 import { NzModalRef, NZ_MODAL_DATA } from 'ng-zorro-antd/modal';
 import { IndicatorService } from '../../core/services/indicator.service';
@@ -27,7 +27,7 @@ interface PlatonTable { name: string; columns: { name: string; type: string }[];
   imports: [
     CommonModule, FormsModule, MatIconModule,
     NzFormModule, NzInputModule, NzInputNumberModule, NzSelectModule, NzRadioModule,
-    NzButtonModule, NzDividerModule, NzTooltipModule,
+    NzButtonModule, NzDividerModule, NzToolTipModule,
   ],
   template: `
     <div class="rule-builder">

@@ -14,7 +14,7 @@ import { NzTagModule } from 'ng-zorro-antd/tag';
 import { NzDividerModule } from 'ng-zorro-antd/divider';
 import { NzAlertModule } from 'ng-zorro-antd/alert';
 import { NzColorPickerModule } from 'ng-zorro-antd/color-picker';
-import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
+import { NzToolTipModule } from 'ng-zorro-antd/tooltip';
 import { NzIconModule } from 'ng-zorro-antd/icon';
 import { NzSpinModule } from 'ng-zorro-antd/spin';
 import { NzSwitchModule } from 'ng-zorro-antd/switch';
@@ -211,7 +211,7 @@ return out;` },
     NzStepsModule, NzFormModule, NzInputModule, NzInputNumberModule,
     NzSelectModule, NzButtonModule, NzTagModule, NzDividerModule,
     NzAlertModule, NzColorPickerModule,
-    NzIconModule, NzTooltipModule, NzSpinModule, NzSwitchModule, NzTabsModule,
+    NzIconModule, NzToolTipModule, NzSpinModule, NzSwitchModule, NzTabsModule,
     NzModalModule, NzBadgeModule,
   ],
   template: `
@@ -1043,7 +1043,7 @@ return out;` },
      seconde modale par-dessus celle-ci) ────────────────────────────────────────────────── -->
 <ng-template #recipesModalTpl>
 
-  <nz-tabs *ngIf="!selectedRecipe" [(nzSelectedIndex)]="recipesActiveTab" nzSize="small">
+  <nz-tabset *ngIf="!selectedRecipe" [(nzSelectedIndex)]="recipesActiveTab" nzSize="small">
     <nz-tab nzTitle="Prédéfinis">
       <div class="recipes-grid">
         <div class="recipe-card" *ngFor="let r of recipes" (click)="applyRecipeAndClose(r)">
@@ -1082,7 +1082,7 @@ return out;` },
         <p class="section-hint">Aucun indicateur actif avec un pipeline pour l'instant.</p>
       </ng-template>
     </nz-tab>
-  </nz-tabs>
+  </nz-tabset>
 
   <!-- Vue détail - pas de bouton "Retour" séparé : le X de la modale sert de retour ici
        (voir openRecipesModal(), nzOnCancel), et referme réellement la modale seulement
@@ -1205,7 +1205,7 @@ return out;` },
       </div>
 
       <!-- Onglets Vue graphique / Colonnes & relations -->
-      <nz-tabs [(nzSelectedIndex)]="schemaViewTab" nzSize="small" style="margin-top:4px">
+      <nz-tabset [(nzSelectedIndex)]="schemaViewTab" nzSize="small" style="margin-top:4px">
 
         <!-- ── Onglet 1 : Colonnes & relations ─────────── -->
         <nz-tab nzTitle="Colonnes & relations">
@@ -1335,7 +1335,7 @@ return out;` },
           </ng-template>
         </nz-tab>
 
-      </nz-tabs>
+      </nz-tabset>
 
     </div>
 

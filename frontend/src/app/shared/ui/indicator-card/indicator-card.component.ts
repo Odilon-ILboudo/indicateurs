@@ -18,6 +18,7 @@ import { IndicatorService } from '../../../core/services/indicator.service';
 import { IndicatorSocketService } from '../../../core/services/indicator-socket.service';
 import { DashboardContext, IndicatorDefinition, IndicatorThresholds, IndicatorValue, IndicatorVisualization, contextIcon } from '../../../core/models/indicator.model';
 import { getCurrentUserId } from '../../../core/auth/current-user';
+import { ROUTE_BASE_PATH } from '../../../core/tokens/route-base-path.token';
 import { IndicatorConfigModalComponent } from './indicator-config-modal.component';
 import { ModalDataService } from './modal-data.service';
 
@@ -38,6 +39,7 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
   private readonly modal = inject(NzModalService);
   private readonly message = inject(NzMessageService);
   private readonly modalData = inject(ModalDataService);
+  protected readonly routeBasePath = inject(ROUTE_BASE_PATH, { optional: true }) ?? '/dashboard';
 
   private socketSub?: Subscription;
 

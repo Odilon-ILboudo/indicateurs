@@ -30,7 +30,7 @@ import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators'
 import { HttpErrorResponse } from '@angular/common/http'
 import { NzSkeletonModule } from 'ng-zorro-antd/skeleton'
 import { NzIconModule } from 'ng-zorro-antd/icon'
-import { NzTooltipModule } from 'ng-zorro-antd/tooltip'
+import { NzToolTipModule } from 'ng-zorro-antd/tooltip'
 import { NzInputNumberModule } from 'ng-zorro-antd/input-number'
 import { MatIconModule } from '@angular/material/icon'
 import { MatChipsModule } from '@angular/material/chips'
@@ -330,7 +330,7 @@ export const positiveRedColor = (value: number) => {
     }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, MatIconModule, NzIconModule, NzTooltipModule, NzInputNumberModule],
+  imports: [CommonModule, FormsModule, MatIconModule, NzIconModule, NzToolTipModule, NzInputNumberModule],
 })
 export class UiStatisticCardComponent implements OnChanges {
   protected isEditing = false

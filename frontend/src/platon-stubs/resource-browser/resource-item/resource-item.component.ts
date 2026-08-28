@@ -14,7 +14,7 @@ import {
 import { MatIconModule } from '@angular/material/icon'
 import { NzBadgeModule } from 'ng-zorro-antd/badge'
 import { NzIconModule } from 'ng-zorro-antd/icon'
-import { NzTooltipModule } from 'ng-zorro-antd/tooltip'
+import { NzToolTipModule } from 'ng-zorro-antd/tooltip'
 
 import { ListItemTag, NgeUiListModule } from '../nge-ui-list/list'
 import { ExerciseResourceMeta, Resource } from '../../resource-common'
@@ -53,7 +53,7 @@ type Tag = {
     NzIconModule,
     NzBadgeModule,
     NzButtonModule,
-    NzTooltipModule,
+    NzToolTipModule,
     NzPopoverModule,
     NzSpinModule,
 

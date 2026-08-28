@@ -5,7 +5,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { NzTableModule } from 'ng-zorro-antd/table';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzTagModule } from 'ng-zorro-antd/tag';
-import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
+import { NzToolTipModule } from 'ng-zorro-antd/tooltip';
 import { NzPopconfirmModule } from 'ng-zorro-antd/popconfirm';
 import { NzEmptyModule } from 'ng-zorro-antd/empty';
 import { NzSpinModule } from 'ng-zorro-antd/spin';
@@ -23,7 +23,7 @@ import { EventRuleInstallModalComponent } from './event-rule-install-modal.compo
   standalone: true,
   imports: [
     CommonModule, MatIconModule, NzTableModule, NzButtonModule, NzTagModule,
-    NzTooltipModule, NzPopconfirmModule, NzEmptyModule, NzSpinModule, NzDividerModule, NzModalModule,
+    NzToolTipModule, NzPopconfirmModule, NzEmptyModule, NzSpinModule, NzDividerModule, NzModalModule,
   ],
   template: `
     <div class="rule-manager">

@@ -16,7 +16,7 @@ import { NzBadgeModule } from 'ng-zorro-antd/badge'
 import { NzGridModule } from 'ng-zorro-antd/grid'
 import { NzSegmentedModule } from 'ng-zorro-antd/segmented'
 import { NzDropDownModule } from 'ng-zorro-antd/dropdown'
-import { NzTooltipModule } from 'ng-zorro-antd/tooltip'
+import { NzToolTipModule } from 'ng-zorro-antd/tooltip'
 import { NzDatePickerModule } from 'ng-zorro-antd/date-picker'
 import { NzDrawerModule } from 'ng-zorro-antd/drawer'
 import { NzFormModule } from 'ng-zorro-antd/form'
@@ -303,7 +303,7 @@ export class CourseService {
     .spacer { flex: 1; }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, RouterModule, MatIconModule, NzBadgeModule, NzProgressModule, NzIconModule, NzTooltipModule],
+  imports: [CommonModule, RouterModule, MatIconModule, NzBadgeModule, NzProgressModule, NzIconModule, NzToolTipModule],
 })
 export class CourseItemComponent implements OnChanges {
   @Input() item!: Course
@@ -693,7 +693,7 @@ export class CsvDownloadButtonComponent {
     CommonModule, RouterModule,
     MatIconModule, MatCardModule,
     NzButtonModule, NzIconModule, NzProgressModule, NzBadgeModule,
-    NzDropDownModule, NzTooltipModule, NzDrawerModule,
+    NzDropDownModule, NzToolTipModule, NzDrawerModule,
     CourseActivitySettingsComponent,
   ],
 })

@@ -21,7 +21,7 @@ import { CircleTreeComponent, ResourcePipesModule, ResourceSharingComponent } fr
 import { ExerciseResourceMeta, ResourceStatus, ResourceTypes } from '@platon/feature/resource/common'
 import { UiLayoutTabDirective, UiLayoutTabsComponent, UiModalIFrameComponent } from '@platon/shared/ui'
 
-import { NzTooltipModule } from 'ng-zorro-antd/tooltip'
+import { NzToolTipModule } from 'ng-zorro-antd/tooltip'
 import { ResourcePresenter } from './resource.presenter'
 import { NzPopconfirmModule } from 'ng-zorro-antd/popconfirm'
 
@@ -44,7 +44,7 @@ import { NzPopconfirmModule } from 'ng-zorro-antd/popconfirm'
     NzSelectModule,
     NzButtonModule,
     NzPopoverModule,
-    NzTooltipModule,
+    NzToolTipModule,
     NzBreadCrumbModule,
     NzTypographyModule,
     NzPageHeaderModule,

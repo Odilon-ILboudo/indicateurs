@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common'
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core'
 
 import { NzAvatarModule } from 'ng-zorro-antd/avatar'
-import { NzTooltipModule } from 'ng-zorro-antd/tooltip'
+import { NzToolTipModule } from 'ng-zorro-antd/tooltip'
 import { NzBadgeModule } from 'ng-zorro-antd/badge'
 
 import { UserGroup } from '../../core-common'
@@ -14,7 +14,7 @@ import { UserGroup } from '../../core-common'
   templateUrl: './user-group-avatar.component.html',
   styleUrls: ['./user-group-avatar.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, NzBadgeModule, NzAvatarModule, NzTooltipModule],
+  imports: [CommonModule, NzBadgeModule, NzAvatarModule, NzToolTipModule],
 })
 export class UserGroupAvatarComponent {
   @Input() size = 32

@@ -155,7 +155,14 @@ export class CourseActivityPage implements OnInit, OnDestroy {
           const visible = indicators.filter(ind =>
             this.roleService.canSeeIndicatorContext(ind.contextType, ind.visibilityRoles) &&
             settings.activeIndicators.includes(ind.id))
-          this.groupIndicators = visible.filter(ind => ind.contextType === 'group')
+          // Comme pour learner/teacher/admin ci-dessous : seuls les indicateurs group
+          // activity-aware ont leur sens ici (voir group-snapshots-panel.component.ts, qui
+          // reçoit toujours [activityId] depuis cette page). Les indicateurs group/learner/
+          // teacher/admin course-aware n'ont plus de page dédiée dans l'app standalone depuis
+          // la suppression de l'onglet "Mes statistiques" (my-stats.page.ts) - seul l'embarqué
+          // (context-indicators.page.ts, contextType=course) les affiche désormais.
+          this.groupIndicators = visible.filter(ind =>
+            ind.contextType === 'group' && isActivityAware(ind.formula))
           this.learnerIndicators = visible.filter(ind =>
             ind.contextType === 'learner' && isActivityAware(ind.formula))
           this.learnerContext = {

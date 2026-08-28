@@ -6,7 +6,7 @@ import { MatCardModule } from '@angular/material/card'
 
 import { NzButtonModule } from 'ng-zorro-antd/button'
 import { NzIconModule } from 'ng-zorro-antd/icon'
-import { NzTooltipModule } from 'ng-zorro-antd/tooltip'
+import { NzToolTipModule } from 'ng-zorro-antd/tooltip'
 
 import { UserSearchModalComponent } from '@platon/core/browser'
 import { User, UserGroup } from '@platon/core/common'
@@ -37,7 +37,7 @@ import { NzSelectModule } from 'ng-zorro-antd/select'
 
     NzIconModule,
     NzButtonModule,
-    NzTooltipModule,
+    NzToolTipModule,
     NzSelectModule,
 
     CoursePipesModule,

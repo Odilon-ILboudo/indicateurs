@@ -13,7 +13,7 @@
   <!-- Interface selon le rôle -->
   <div *ngIf="!loading">
     <!-- Onglets pour admin -->
-    <nz-tabs *ngIf="roleService.canCreateIndicators()" [(nzSelectedIndex)]="activeTab">
+    <nz-tabset *ngIf="roleService.canCreateIndicators()" [(nzSelectedIndex)]="activeTab">
       <nz-tab nzTitle="Liste des indicateurs">
         <div class="indicator-selector-wrapper">
           <ui-indicator-selector (indicatorsChanged)="onIndicatorsChanged()"></ui-indicator-selector>
@@ -22,7 +22,7 @@
       <nz-tab nzTitle="Administration">
         <ui-admin-indicator-manager></ui-admin-indicator-manager>
       </nz-tab>
-    </nz-tabs>
+    </nz-tabset>
     
     <!-- Pour teacher et student, seulement la sélection -->
     <div *ngIf="!roleService.isAdmin()" class="indicator-selector-wrapper">

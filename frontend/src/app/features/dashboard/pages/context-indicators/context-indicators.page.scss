@@ -1,17 +1,16 @@
 :host {
   display: block;
-  padding: 8px 0;
+  padding: 16px;
 }
 
-nz-empty {
-  margin: 2rem 0;
-}
+.context-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
 
-h4.section-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--brand-background-sidebar, #3C2964);
-  margin-bottom: 16px;
+  h2 { margin: 0; font-size: 1.3rem; font-weight: 700; }
+  p { margin: 0; color: #6c6478; font-size: 0.9rem; }
 }
 
 .section-divider-btn {
@@ -21,7 +20,7 @@ h4.section-title {
   cursor: pointer;
   font-size: 14px;
   font-weight: 700;
-  color: var(--brand-background-sidebar, #3C2964);
+  color: #3c2964;
   user-select: none;
 
   &:hover { color: #722ed1; }

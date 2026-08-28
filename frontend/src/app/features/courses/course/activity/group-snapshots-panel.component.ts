@@ -17,7 +17,7 @@ import { NzPopconfirmModule } from 'ng-zorro-antd/popconfirm';
 import { NzEmptyModule } from 'ng-zorro-antd/empty';
 import { NzSpinModule } from 'ng-zorro-antd/spin';
 import { NzTagModule } from 'ng-zorro-antd/tag';
-import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
+import { NzToolTipModule } from 'ng-zorro-antd/tooltip';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzDividerModule } from 'ng-zorro-antd/divider';
 import { NzProgressModule } from 'ng-zorro-antd/progress';
@@ -65,7 +65,7 @@ interface IndicatorPanel {
     NzEmptyModule,
     NzSpinModule,
     NzTagModule,
-    NzTooltipModule,
+    NzToolTipModule,
     NzInputModule,
     NzDividerModule,
     NzModalModule,

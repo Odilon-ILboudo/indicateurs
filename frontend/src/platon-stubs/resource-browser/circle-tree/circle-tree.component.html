@@ -1,8 +1,8 @@
-<nz-tree-view [nzDataSource]="dataNodes" [nzLevelAccessor]="nzLevelAccessor" [nzTrackBy]="trackBy">
+<nz-tree-view [nzTreeControl]="$any(treeControl)" [nzDataSource]="dataSource" [trackBy]="trackBy">
   <nz-tree-node *nzTreeNodeDef="let node" nzTreeNodeIndentLine>
     <nz-tree-node-checkbox
       *ngIf="selectable"
-      [nzChecked]="isSelected(node)"
+      [nzChecked]="checklistSelection.isSelected(node)"
       [nzDisabled]="disabled || node.disabled"
       (nzClick)="selectionToggle(node)"
     >
@@ -20,7 +20,7 @@
     </nz-tree-node-toggle>
     <nz-tree-node-checkbox
       *ngIf="selectable"
-      [nzChecked]="isSelected(node)"
+      [nzChecked]="checklistSelection.isSelected(node)"
       [nzDisabled]="disabled || node.disabled"
       (nzClick)="selectionToggle(node)"
     >
