@@ -78,10 +78,7 @@ export class CourseActivityPage implements OnInit, OnDestroy {
   // Indicateurs par contexte
   protected activityIndicators: IndicatorDefinition[] = []
   protected groupIndicators: IndicatorDefinition[] = []
-  // Indicateurs personnels (learner/teacher/admin) dont la formule filtre par activity_id :
-  // n'affichent jamais une valeur "globale" (voir isActivityAware()), seulement celle de
-  // cette activité. Mutuellement exclusifs en pratique (un même utilisateur n'a jamais deux
-  // de ces rôles à la fois), affichés dans la même section "Mes statistiques" du template.
+  // Indicateurs personnels activity-aware (learner/teacher/admin)
   protected learnerIndicators: IndicatorDefinition[] = []
   protected teacherIndicators: IndicatorDefinition[] = []
   protected adminIndicators: IndicatorDefinition[] = []
@@ -155,12 +152,7 @@ export class CourseActivityPage implements OnInit, OnDestroy {
           const visible = indicators.filter(ind =>
             this.roleService.canSeeIndicatorContext(ind.contextType, ind.visibilityRoles) &&
             settings.activeIndicators.includes(ind.id))
-          // Comme pour learner/teacher/admin ci-dessous : seuls les indicateurs group
-          // activity-aware ont leur sens ici (voir group-snapshots-panel.component.ts, qui
-          // reçoit toujours [activityId] depuis cette page). Les indicateurs group/learner/
-          // teacher/admin course-aware n'ont plus de page dédiée dans l'app standalone depuis
-          // la suppression de l'onglet "Mes statistiques" (my-stats.page.ts) - seul l'embarqué
-          // (context-indicators.page.ts, contextType=course) les affiche désormais.
+          // Seuls les indicateurs group activity-aware ont leur sens ici
           this.groupIndicators = visible.filter(ind =>
             ind.contextType === 'group' && isActivityAware(ind.formula))
           this.learnerIndicators = visible.filter(ind =>
@@ -188,12 +180,7 @@ export class CourseActivityPage implements OnInit, OnDestroy {
             activityId,
           }
 
-          // Union : indicateurs activés perso par l'utilisateur (il faut d'abord
-          // l'activer soi-même, comme n'importe quel indicateur, pour le voir ici)
-          // + indicateurs déjà figés par un enseignant sur cette activité précise
-          // (jamais l'inverse - les deux sources restent indépendantes, cf.
-          // IndicatorPinsService côté backend). Le bouton "Figer" n'apparaît donc
-          // que sur un indicateur déjà visible, pas sur tout le catalogue.
+          // Union des indicateurs activés perso et de ceux déjà figés par un enseignant
           const byId = new Map<string, IndicatorDefinition>()
           for (const ind of visible.filter(ind => ind.contextType === 'activity')) byId.set(ind.id, ind)
           for (const ind of indicators) {
@@ -212,12 +199,8 @@ export class CourseActivityPage implements OnInit, OnDestroy {
     )
   }
 
-  /**
-   * queryParams distincts de `indicatorQueryParams` pour les cartes personnelles (learner/
-   * teacher/admin) : contrairement aux indicateurs `activity`, leur contextType n'est pas fixe
-   * (dépend de l'indicateur cliqué), indicator-detail.component.ts a donc besoin de le recevoir
-   * explicitement plutôt que de le déduire de `from` (voir la branche `activity-personal`).
-   */
+  /** contextType passé explicitement : contrairement aux indicateurs `activity`, celui d'une
+   *  carte personnelle dépend de l'indicateur cliqué, pas fixe. */
   protected personalIndicatorQueryParams(contextType: string): Record<string, string> {
     return { ...this.indicatorQueryParams, from: 'activity-personal', contextType }
   }

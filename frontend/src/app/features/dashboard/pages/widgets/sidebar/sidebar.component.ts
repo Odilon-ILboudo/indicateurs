@@ -1,4 +1,3 @@
-// frontend/src/app/widgets/sidebar/sidebar.component.ts
 import { CommonModule } from '@angular/common';
 import { ChangeDetectorRef, Component, inject, OnInit } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';

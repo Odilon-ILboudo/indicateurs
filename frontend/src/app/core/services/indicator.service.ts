@@ -1,4 +1,3 @@
-// frontend/src/app/core/services/indicator.service.ts
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, BehaviorSubject, map, of, tap } from 'rxjs';

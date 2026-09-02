@@ -1,4 +1,3 @@
-// src/config/configuration.ts
 export default () => ({
   port: parseInt(process.env.PORT || '3001', 10),
 
@@ -14,11 +13,8 @@ export default () => ({
     logging: false,
   },
 
-  // Identifiants Postgres à privilèges élevés sur PLaTon (superuser, ou propriétaire des
-  // tables concernées), utilisés UNIQUEMENT pour exécuter le DDL d'installation d'un trigger
-  // généré depuis l'admin (event-rules) - jamais pour autre chose, jamais de modification
-  // d'ownership. Optionnel : si absent, l'installation tente la connexion applicative
-  // habituelle (échoue avec le message d'erreur habituel si les droits manquent).
+  // Identifiants Postgres à privilèges élevés sur PLaTon, utilisés uniquement pour le DDL
+  // d'installation d'un trigger (event-rules). Optionnel : sinon, connexion applicative habituelle.
   platonDatabaseAdmin: {
     username: process.env.PLATON_DB_ADMIN_USERNAME || null,
     password: process.env.PLATON_DB_ADMIN_PASSWORD || null,

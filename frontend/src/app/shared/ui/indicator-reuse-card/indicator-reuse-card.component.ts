@@ -1,15 +1,11 @@
-// frontend/src/app/shared/ui/indicator-reuse-card/indicator-reuse-card.component.ts
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { NzTagModule } from 'ng-zorro-antd/tag';
 import { IndicatorDefinition, contextIcon } from '../../../core/models/indicator.model';
 
-/** Carte statique d'aperçu d'un indicateur (nom + description + étapes du pipeline en chips),
- *  utilisée dans la galerie de réutilisation du wizard de création. Contrairement à
- *  `IndicatorCardComponent` (dashboard), elle n'affiche aucune valeur calculée et ne dépend
- *  d'aucun contexte d'exécution - juste la structure de l'indicateur source. Style calqué sur
- *  `.compare-card` (modale de comparaison par groupe) pour rester cohérent visuellement. */
+/** Carte statique d'aperçu (nom + description + pipeline en chips), utilisée dans la galerie
+ *  de réutilisation - contrairement à IndicatorCardComponent, aucune valeur calculée. */
 @Component({
   selector: 'ui-indicator-reuse-card',
   standalone: true,

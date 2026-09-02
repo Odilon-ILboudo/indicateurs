@@ -58,11 +58,8 @@ export class IndicatorDetailComponent implements OnInit {
   private readonly modalService = inject(NzModalService);
   private readonly cdr = inject(ChangeDetectorRef);
   protected readonly routeBasePath = inject(ROUTE_BASE_PATH, { optional: true }) ?? '/dashboard';
-  // Les bannières de contexte (cours/activité) renvoient vers les indicateurs de ce contexte -
-  // routerLink standalone vers /courses/..., ou navigation interne vers /context en mode
-  // embarqué (context-indicators.page.ts), jamais un lien externe vers une page PLaTon native
-  // (essayé puis retiré : ça supposait une page de destination qui n'existe pas forcément côté
-  // hôte, et "retour" a plus de sens comme "retour à la liste des indicateurs de ce contexte").
+  // Les bannières de contexte renvoient vers /courses/... en standalone, ou en interne vers
+  // /context en mode embarqué - jamais un lien externe vers une page PLaTon native.
   protected readonly embedded = inject(EMBEDDED_MODE, { optional: true }) ?? false;
 
   readonly contextIcon = contextIcon;
@@ -146,20 +143,10 @@ export class IndicatorDetailComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    // Une navigation interne entre deux /indicator/:id (même config de route) réutilise la même
-    // instance de composant - un ngOnInit qui ne lit route.snapshot qu'au premier passage
-    // resterait bloqué sur les données du premier indicateur affiché. On réagit donc à chaque
-    // navigation terminée plutôt qu'une seule fois (startWith couvre le tout premier chargement,
-    // qui a déjà eu lieu au moment où ce composant est créé).
-    //
-    // Piège trouvé en testant : combineLatest([route.paramMap, route.queryParams]) semblait
-    // équivalent mais ne l'est pas - ce sont deux flux distincts qui n'émettent pas forcément de
-    // façon atomique pour une même navigation, donc combineLatest pouvait produire une
-    // combinaison transitoire incohérente (nouvel id + anciens query params, ou l'inverse),
-    // déclenchant un appel de calcul avec un contexte qui ne correspond à aucun indicateur réel
-    // (constaté : indicateur "activité" appelé avec un contexte "groupe" → 500 côté API). En
-    // relisant route.snapshot au moment de l'événement plutôt qu'en combinant deux flux, on est
-    // toujours sûr que params et queryParams proviennent de la même navigation.
+    // Une navigation entre deux /indicator/:id réutilise la même instance de composant : on
+    // réagit à chaque NavigationEnd plutôt qu'une seule fois dans ngOnInit. On relit
+    // route.snapshot plutôt que combiner paramMap/queryParams (deux flux qui peuvent émettre de
+    // façon non atomique et produire une combinaison transitoire incohérente).
     this.router.events.pipe(
       filter((e): e is NavigationEnd => e instanceof NavigationEnd),
       startWith(null),
@@ -237,10 +224,8 @@ export class IndicatorDetailComponent implements OnInit {
       this.courseContextCourseId = q['courseId'];
       this.hasCourseContext = true;
     } else if (q['from'] === 'activity-personal' && q['contextType'] && q['activityId']) {
-      // Carte personnelle (learner/teacher/admin) activity-aware, cliquée depuis "Mes
-      // statistiques" sur une page d'activité. contextType vient explicitement des query
-      // params (pas déduit de `from`, contrairement aux branches ci-dessus) : contrairement à
-      // `activity`/`course`, ce n'est jamais fixe, ça dépend de l'indicateur cliqué.
+      // Carte personnelle activity-aware : contextType dépend de l'indicateur cliqué, donc
+      // fourni explicitement en query param plutôt que déduit de `from`.
       this.activeContextType = q['contextType'];
       this.activeContextId = getCurrentUserId();
       this.activeActivityId = q['activityId'];
@@ -250,8 +235,7 @@ export class IndicatorDetailComponent implements OnInit {
       this.activityCourseName = q['courseName'] ?? 'Cours';
       this.hasActivityContext = true;
     } else if (q['from'] === 'course-personal' && q['contextType'] && q['courseId']) {
-      // Même principe que ci-dessus, mais pour une carte personnelle course-aware,
-      // cliquée depuis "Mes statistiques" sur une page de cours.
+      // Même principe, pour une carte personnelle course-aware.
       this.activeContextType = q['contextType'];
       this.activeContextId = getCurrentUserId();
       this.activeCourseId = q['courseId'];

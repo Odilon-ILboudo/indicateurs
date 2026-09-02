@@ -679,6 +679,10 @@ Même limite et même pipeline que le cas 21, seul `contextType` change :
 `visibilityRoles` (sur l'indicateur, pas importable en JSON) surcharge cette
 règle par défaut - à utiliser pour les cas 15, 16, 19, 20 (nominatifs).
 
+Appliquée aussi côté backend (`IndicatorVisibilityGuard`, voir `readme.md`
+§"Visibilité par rôle") - pas seulement en affichage, un appel API direct
+avec le bon rôle réel (table `Users`) est requis.
+
 ---
 
 ## Référence - Outils admin

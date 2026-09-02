@@ -1,4 +1,3 @@
-// src/modules/features/courses/dto/course-member.dto.ts
 import { IsIn, IsNotEmpty, IsString } from 'class-validator';
 
 const VALID_ROLES = ['student', 'teacher'];

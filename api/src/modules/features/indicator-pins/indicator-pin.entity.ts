@@ -2,12 +2,8 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Unique, Index
 
 export type IndicatorPinContextType = 'course' | 'activity';
 
-/** Un enseignant fige un indicateur existant sur un cours/une activité précis :
- *  tous les membres l'ont alors actif et non désactivable, avec des seuils
- *  propres à ce contexte. Totalement indépendant de `UserIndicatorPreference` -
- *  aucune écriture croisée entre les deux, pour ne jamais faire fuiter un
- *  indicateur épinglé sur les autres cours/activités d'un membre, ni laisser
- *  une désactivation personnelle effacer un indicateur figé par l'enseignant. */
+/** Un enseignant fige un indicateur sur un cours/une activité précis : tous les membres l'ont
+ *  alors actif et non désactivable. Totalement indépendant de UserIndicatorPreference. */
 @Entity('indicator_pins')
 @Unique(['indicatorId', 'contextType', 'contextId'])
 @Index(['contextType', 'contextId'])

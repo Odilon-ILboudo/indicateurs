@@ -8,21 +8,13 @@ function usesContextField(formula: IndicatorFormula | null | undefined, field: s
   );
 }
 
-/**
- * Un indicateur `learner`/`teacher`/`admin` est "activity-aware" si sa formule filtre
- * explicitement par `activity_id` (fetch ou join). Dans ce cas, sa valeur dépend de
- * l'activité consultée et ne doit être affichée que sur la page de cette activité
- * précise, jamais comme valeur "globale" dans le tableau de bord général.
- */
+/** "activity-aware" : la formule filtre par activity_id, sa valeur ne doit s'afficher que sur
+ *  la page de cette activité précise, jamais comme valeur globale. */
 export function isActivityAware(formula: IndicatorFormula | null | undefined): boolean {
   return usesContextField(formula, 'activity_id');
 }
 
-/**
- * Un indicateur `learner`/`teacher`/`admin`/`group` est "course-aware" si sa formule filtre
- * par `course_id` plutôt que par `activity_id` : sa valeur agrège alors tout le cours
- * (toutes ses activités), au lieu d'une seule activité précise.
- */
+/** "course-aware" : la formule filtre par course_id, sa valeur agrège tout le cours. */
 export function isCourseAware(formula: IndicatorFormula | null | undefined): boolean {
   return usesContextField(formula, 'course_id');
 }

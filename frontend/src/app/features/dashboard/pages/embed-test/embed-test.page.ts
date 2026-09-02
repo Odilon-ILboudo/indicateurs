@@ -1,14 +1,9 @@
 import { AfterViewInit, Component, CUSTOM_ELEMENTS_SCHEMA, ElementRef, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-// Page de diagnostic, non liée dans la navigation (accessible seulement via l'URL directe
-// /dashboard/embed-test) : monte le Web Component <indicateurs-app> (build indicateurs-embed)
-// à l'intérieur même de cette app Angular standalone, pour vérifier la coexistence des deux
-// apps Angular sur une seule page dans un contexte réaliste - une vraie app qui tourne, avec
-// son propre routeur/zone.js, pas une page HTML statique comme test-host.html. C'est le
-// scénario le plus proche de ce que sera réellement PLaTon. Voir docs/integration-indicateurs.md.
-//
-// Avant de tester : construire indicateurs-embed (`ng build indicateurs-embed`) et copier son
+// Page de diagnostic, non liée dans la navigation (URL directe /dashboard/embed-test) : monte
+// <indicateurs-app> à l'intérieur de cette app standalone, pour vérifier la coexistence de deux
+// apps Angular sur une seule page. Avant de tester : `ng build indicateurs-embed` et copier son
 // dist/indicateurs-embed/browser/* dans dist/indicateurs/browser/embed-assets/.
 @Component({
   standalone: true,
@@ -43,8 +38,7 @@ export class EmbedTestPage implements OnInit, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-    // Transmet le même utilisateur que la session standalone en cours - simule ce que
-    // PLaTon ferait avec son propre utilisateur authentifié (voir docs/integration-platon.md).
+    // Transmet le même utilisateur que la session standalone en cours
     const currentUser = localStorage.getItem('currentUser');
     if (this.embedEl?.nativeElement && currentUser) {
       this.embedEl.nativeElement.user = currentUser;

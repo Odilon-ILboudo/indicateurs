@@ -33,10 +33,6 @@ export class IndicatorEventService {
     }, 5000);
   }
 
-  /**
-   * Définir l'ID de l'utilisateur courant
-   * À appeler après la connexion depuis le composant principal
-   */
   setCurrentUserId(userId: string): void {
     this.currentUserId = userId;
   }
@@ -64,10 +60,8 @@ export class IndicatorEventService {
     
     try {
       await this.http.post(this.ingestUrl + '/batch', events).toPromise();
-      console.log(`Sent ${events.length} events to indicators service`);
     } catch (error) {
       console.error('Failed to send events:', error);
-      // Réintégrer les événements pour réessayer
       this.eventQueue.unshift(...events);
     }
   }

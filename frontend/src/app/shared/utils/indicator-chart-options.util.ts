@@ -1,10 +1,6 @@
-// frontend/src/app/shared/utils/indicator-chart-options.util.ts
-// Construction des options ECharts pour gauge/bar-chart/histogram - partagée entre la page détail
-// d'un indicateur (indicator-detail.component.ts) et la modale de comparaison par groupe
-// (group-snapshots-panel.component.ts), pour un rendu strictement identique aux deux endroits.
-// Le type line-chart n'est PAS couvert ici : il dépend d'un historique temporel
-// (result.metadata.history) qui n'existe que sur la page détail (computeView), pas sur des
-// snapshots de comparaison ponctuels - il garde son propre traitement dans indicator-detail.
+// Construction des options ECharts pour gauge/bar-chart/histogram - partagée entre la page
+// détail et la modale de comparaison par groupe. line-chart n'est pas couvert ici : il dépend
+// d'un historique temporel qui n'existe que sur la page détail.
 import type { EChartsOption } from 'echarts';
 import { IndicatorVisualization } from '../../core/models/indicator.model';
 
@@ -46,10 +42,7 @@ export function buildIndicatorChartOptions(
       axisLine: { lineStyle: { width: 18, color: [[1, '#e9e9e9']] } },
       axisTick: { show: false }, splitLine: { show: false }, axisLabel: { show: false },
       pointer: { show: true, length: '55%', width: 5, itemStyle: { color: '#595959' } },
-      // "title" est un sous-composant DISTINCT de "detail" sur une jauge ECharts : affiche par
-      // défaut le `name` du point de données (viz.label ci-dessous), superposé à la valeur -
-      // explicitement désactivé, le libellé est déjà affiché ailleurs (titre d'onglet, titre de
-      // section) donc inutile en double ici.
+      // "title" (sous-composant distinct de "detail") afficherait le name en double du libellé
       title: { show: false },
       detail: {
         valueAnimation: true,
@@ -63,10 +56,7 @@ export function buildIndicatorChartOptions(
       data: [{ value: result.value, name: viz.label }],
     }];
 
-    // Anneau extérieur fin délimitant les seuils (bon/moyen/critique) - seulement si des seuils
-    // sont configurés, sinon aucun anneau supplémentaire (même logique que la bordure de statut
-    // de la carte du tableau de bord). Mêmes bornes que getThresholdColor() côté carte :
-    // val <= good -> vert, val <= warning -> orange, sinon rouge.
+    // Anneau extérieur délimitant les seuils, seulement si configurés
     if (thresholds?.good != null || thresholds?.warning != null) {
       const goodFrac = Math.min(1, (thresholds?.good ?? max) / max);
       const warningFrac = Math.min(1, (thresholds?.warning ?? max) / max);

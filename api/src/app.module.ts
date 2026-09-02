@@ -1,4 +1,3 @@
-// src/app.module.ts
 import { Module } from '@nestjs/common';
 import { CoreModule } from './modules/core/core.module';
 import { IndicatorsModule } from './modules/features/indicators/indicators.module';

@@ -1,4 +1,3 @@
-// src/modules/core/platon/platon.service.ts
 import { Injectable, Inject, Logger, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 
@@ -6,11 +5,7 @@ import { DataSource } from 'typeorm';
 export class PlatonService {
   private readonly logger = new Logger(PlatonService.name);
 
-  /**
-   * Colonnes jamais exposées au DSL (mots de passe, jetons, identifiants tiers, contacts...),
-   * détectées par motif de nom plutôt que par une liste de tables codée en dur :
-   * s'applique automatiquement à toute table du schéma `public`.
-   */
+  /** Colonnes jamais exposées au DSL, détectées par motif de nom plutôt que par table. */
   private static readonly SENSITIVE_COLUMN_PATTERN =
     /password|passwd|secret|token|api[_-]?key|hash|salt|credential|email|phone|discord|ip_address/i;
 
@@ -40,14 +35,9 @@ export class PlatonService {
     );
   }
 
-  /**
-   * Récupère les SessionData d'un utilisateur pour une activité spécifique
-   * Version corrigée - sans exercise_id (qui n'existe pas dans la table)
-   */
   async getUserSessionDataByActivity(userId: string, activityId: string) {
-    this.logger.log(` PlatonService.getUserSessionDataByActivity - userId: ${userId}, activityId: ${activityId}`);
-    
-    //  Correction: Supprimer "exercise_id" car il n'existe pas dans la table
+    this.logger.log(`PlatonService.getUserSessionDataByActivity - userId: ${userId}, activityId: ${activityId}`);
+
     const query = `
       SELECT 
         sd."id",
@@ -235,11 +225,8 @@ export class PlatonService {
 
   // ── Groupes de TP ─────────────────────────────────────────────────────────
 
-  /**
-   * Retourne les IDs des étudiants membres d'un groupe de TP.
-   * CourseGroupsMember.group_id (varchar) est lié à CourseGroups.group_id (varchar).
-   * On filtre par CourseGroups.id (UUID) passé en paramètre.
-   */
+  /** CourseGroupsMember.group_id (varchar) est lié à CourseGroups.group_id (varchar), on
+   *  filtre par CourseGroups.id (UUID) passé en paramètre. */
   async getUserIdsByGroup(groupId: string): Promise<string[]> {
     const rows = await this.dataSource.query(
       `SELECT cgm.user_id
@@ -271,13 +258,8 @@ export class PlatonService {
     return rows;
   }
 
-  /**
-   * Équivalent de queryTable mais filtre les lignes dont user_id appartient
-   * au groupe de TP identifié par groupId (UUID de CourseGroups).
-   * Le périmètre est soit une seule activité (`activityId`), soit toutes les
-   * activités d'un cours à la fois (`courseId`) - exactement l'un des deux,
-   * jamais les deux ni aucun.
-   */
+  /** Équivalent de queryTable filtré au groupe de TP. Périmètre : activityId ou courseId,
+   *  exactement l'un des deux. */
   async queryTableForGroup(
     table: string,
     groupId: string,
@@ -329,16 +311,7 @@ export class PlatonService {
 
   // ── Contexte enseignant ───────────────────────────────────────────────────
 
-  /**
-   * Recherche des cours par nom (tous cours, pas seulement ceux possédés par l'utilisateur
-   * courant - le test de formule doit pouvoir cibler n'importe quelle ressource PLaTon).
-   * Limité à `limit` résultats pour rester rapide ; `query` vide renvoie les premiers par ordre
-   * alphabétique.
-   */
-  /**
-   * Recherche des utilisateurs (nom/prénom/username/email), pour la modale "Ajouter un
-   * membre" - même pattern que searchCourses ci-dessous.
-   */
+  /** Recherche des utilisateurs (nom/prénom/username/email), pour la modale "Ajouter un membre" */
   async searchUsers(query: string, roles?: string[], limit = 10): Promise<{
     id: string;
     username: string;
@@ -379,6 +352,7 @@ export class PlatonService {
     }));
   }
 
+  /** Recherche parmi tous les cours, pas seulement ceux de l'utilisateur courant. */
   async searchCourses(query: string, limit = 10, offset = 0): Promise<{
     id: string;
     name: string;
@@ -389,11 +363,7 @@ export class PlatonService {
     );
   }
 
-  /**
-   * Retourne les activités d'un cours.
-   * Titre : source->'variables'->>'title', sinon Resources.name (même logique que PLaTon),
-   * sinon fallback littéral.
-   */
+  /** Titre : source->'variables'->>'title', sinon Resources.name, sinon fallback littéral. */
   async getActivitiesByCourse(courseId: string): Promise<{ id: string; name: string }[]> {
     return this.dataSource.query(
       `SELECT a.id,
@@ -479,11 +449,8 @@ export class PlatonService {
     return Array.from(map.entries()).map(([name, columns]) => ({ name, columns }));
   }
 
-  /**
-   * Valide qu'une table/colonne PLaTon existe et est exposable, avant toute interpolation
-   * dans du SQL dynamique (DDL de trigger notamment). Réutilise getAvailableTables() : même
-   * source de vérité (information_schema) et même exclusion des colonnes sensibles.
-   */
+  /** Valide qu'une table/colonne existe et est exposable, avant interpolation dans du SQL
+   *  dynamique (DDL de trigger notamment). */
   async assertValidTableColumn(table: string, column?: string | null): Promise<void> {
     const tables = await this.getAvailableTables();
     const t = tables.find(x => x.name === table);
@@ -493,12 +460,8 @@ export class PlatonService {
     }
   }
 
-  /**
-   * Liste des colonnes de `table` autorisées dans le DSL : toutes les colonnes réelles de la
-   * table, à l'exception de celles correspondant à `SENSITIVE_COLUMN_PATTERN` (mots de passe,
-   * jetons, e-mails...). Détection dynamique via information_schema, pas de liste par table
-   * codée en dur. Résultat mis en cache par nom de table.
-   */
+  /** Colonnes de `table` autorisées dans le DSL, hors SENSITIVE_COLUMN_PATTERN. Mis en cache
+   *  par nom de table. */
   private async getSafeColumns(table: string): Promise<string[]> {
     const cached = this.safeColumnsCache.get(table);
     if (cached) return cached;

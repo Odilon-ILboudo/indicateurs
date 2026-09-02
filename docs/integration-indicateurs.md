@@ -190,8 +190,10 @@ createApplication(embedConfig)
         "polyfills": ["zone.js"], // voir ci-dessous, pas [] comme prévu au départ
         "styles": [
           "src/app/shared/styles/app.scss", // normalize + police d'icônes + variables (§6)
-          { "input": "src/app/shared/styles/material/light.scss", "bundleName": "styles.material.light", "inject": false },
-          { "input": "src/app/shared/styles/ng-zorro/light.less", "bundleName": "styles.ng-zorro.light", "inject": false }
+          "src/app/shared/styles/ng-zorro/light.less",
+          "src/app/shared/styles/material/light.scss"
+          // pas de bundleName/inject:false : Angular concatène les trois dans un seul
+          // styles.css, dans cet ordre - voir §6
         ]
       },
       "configurations": {
@@ -210,16 +212,40 @@ Angular 18). Le test précédent avait déjà montré que le double chargement d
 `zone.js` (une fois par PLaTon, une fois par l'élément) ne pose aucun
 problème - inutile de se battre pour l'exclure, on le garde simplement.
 
-## 6. Le CSS n'est pas injecté par le JS - trois fichiers, pas deux
+## 5bis. `environment.embed.prod.ts` - un `apiUrl` distinct de l'app standalone
 
-`styles.material.light.css` et `styles.ng-zorro.light.css` restent
-nécessaires (Material réellement utilisé - `mat-icon` - dans 6 des 8 écrans).
-**Un troisième fichier est requis, trouvé seulement en testant** :
-`app.scss` (normalize, police d'icônes Material, variables CSS) compile en
-un `styles.css` séparé (~110 kB) - sans lui, les icônes Material s'affichent
-en texte brut (`info` au lieu du glyphe) au lieu du glyphe attendu. PLaTon
-doit donc charger **trois** `<link rel="stylesheet">`, pas deux - mise à
-jour correspondante faite dans `integration-platon.md`.
+L'app standalone (`environment.prod.ts`, `apiUrl: '/api'`) et le widget embarqué
+ne peuvent pas partager le même fichier d'environnement en production : le
+widget est servi par le domaine d'Indicateurs (voir `integration-platon.md`,
+"Décisions actées") mais **exécuté dans une page PLaTon** - un chemin relatif
+`/api` s'y résoudrait contre le domaine de PLaTon, pas celui d'Indicateurs.
+
+`environment.embed.prod.ts` (nouveau fichier, `fileReplacements` propre au
+projet `indicateurs-embed` dans `angular.json`) utilise donc une adresse
+complète : `https://<domaine-indicateurs-a-remplacer>/api`. **Placeholder à
+remplacer par le vrai domaine de production d'Indicateurs avant tout
+déploiement réel du widget** - inconnu à ce jour. Vérifié par build réel :
+`apiUrl:"/api"` dans le build standalone, `apiUrl:"https://<domaine-indicateurs-a-remplacer>/api"`
+dans le build embarqué.
+
+## 6. Le CSS n'est pas injecté par le JS - un seul fichier, fusionné
+
+`styles.material.light.css` (Material réellement utilisé - `mat-icon` -
+dans 6 des 8 écrans) et `styles.ng-zorro.light.css` restent nécessaires,
+ainsi qu'un **troisième bloc requis, trouvé seulement en testant** :
+`app.scss` (normalize, police d'icônes Material, variables CSS) - sans lui,
+les icônes Material s'affichent en texte brut (`info` au lieu du glyphe).
+
+Ces trois blocs étaient d'abord produits comme trois fichiers CSS séparés
+(3 `<link>` à poser côté PLaTon). **Fusionnés en un seul `styles.css`**
+depuis (sur demande explicite) : les trois entrées `styles` de la
+configuration `production`/`development` d'`indicateurs-embed` dans
+`angular.json` n'ont plus de `bundleName`/`inject: false` propre - Angular
+les concatène alors automatiquement dans un seul bundle, **dans l'ordre où
+elles sont listées** (`app.scss` puis `ng-zorro/light.less` puis
+`material/light.scss` - cet ordre est celui déjà testé avec les 3 fichiers
+séparés, à ne pas changer sans revalider le rendu). Mise à jour
+correspondante faite dans `integration-platon.md`.
 
 ## 7. Jeton expiré (401) en mode embarqué
 
@@ -289,12 +315,12 @@ pour naviguer dans le widget (uniquement dans PLaTon lui-même). PLaTon
 garde entièrement la main sur l'URL visible - jugé préférable à risquer un
 conflit avec son propre routeur.
 
-## 12. Harnais de test en conditions réelles PLaTon - `platon-embed-harness/`
+## 12. Simulateur de test en conditions réelles PLaTon - `platon-simulateur/`
 
 PLaTon réel (Nx, API NestJS, ~20 libs `@platon/feature/*`) démarré en local
 pour valider §11 - fonctionnel, mais trop lourd pour tourner durablement sur
 toutes les machines de dev. Remplacé par un projet Angular CLI séparé et
-léger, `full_platon/platon-embed-harness/`, qui reproduit uniquement ce qui
+léger, `full_platon/platon-simulateur/`, qui reproduit uniquement ce qui
 compte pour ce test précis :
 
 - Mêmes versions exactes que PLaTon (`Angular 18.2.2`, `ng-zorro-antd
@@ -311,19 +337,21 @@ compte pour ce test précis :
   (§11) doit rester inoffensive).
 - Une page hôte (`indicateurs-page.component.ts`) qui reproduit exactement
   le contrat documenté dans `integration-platon.md` §3-4/7 (attribut
-  `access-token`, propriété `user`, attributs `context-*`, 3 feuilles de
-  style, script `main.js`).
-- La vraie sidebar de PLaTon (`sidebar.component.ts` du harnais) - même
+  `access-token`, propriété `user`, attributs `context-*`, la feuille de
+  style unique, script `main.js`).
+- La vraie sidebar de PLaTon (`sidebar.component.ts` du simulateur) - même
   structure, mêmes couleurs (`--brand-background-sidebar: #3C2964`), même
   logo, copiés depuis `platon/apps/web/src/app/widgets/sidebar/` (déjà
   repris à l'identique dans l'app standalone d'Indicateurs, donc juste
   reporté ici). But explicite : que l'équipe PLaTon puisse ouvrir ce
-  harnais et voir immédiatement, visuellement, où et comment l'intégration
+  simulateur et voir immédiatement, visuellement, où et comment l'intégration
   se branche, pour la reproduire dans leur vrai code plutôt que de partir
   de la seule documentation écrite.
-- Deux pages natives factices (`activity.component.ts`, `course.component.ts`)
-  avec un bouton "Voir les indicateurs" (§14) - le morceau de code que
-  PLaTon doit ajouter à ses vraies pages cours/activité.
+- Avait initialement deux pages natives factices (`activity.component.ts`,
+  `course.component.ts`) avec un bouton "Voir les indicateurs" (§14) - le
+  morceau de code que PLaTon doit ajouter à ses vraies pages cours/activité.
+  **Retirées depuis** (voir §14ter) : la page d'accueil du simulateur lie
+  désormais directement vers les indicateurs, sans page intermédiaire.
 
 Ce qui n'est PAS reproduit, volontairement (hors périmètre de ce test) :
 l'API NestJS de PLaTon (jeton/utilisateur de test statiques à la place),
@@ -335,7 +363,7 @@ une page hôte factice et l'onglet Indicateurs, rendu correct, aucune
 collision CSS visible, aucune erreur console, URL hôte préservée à l'aller
 comme au retour.
 
-Ce harnais a aussi servi à trouver le manque de `<nav>` interne (§1) : en
+Ce simulateur a aussi servi à trouver le manque de `<nav>` interne (§1) : en
 cliquant réellement de "Tableau de bord" vers "Indicateurs" puis en ouvrant
 une famille, la page de sélection/activation complète s'affiche - filtres,
 recherche, interrupteurs d'activation par indicateur, cohérents avec les
@@ -354,14 +382,14 @@ prérequis - juste une bonne pratique déjà largement suivie (71 % du code).
 `lastName`, `email`, `role`, `active`, `createdAt`, `updatedAt`) sont les
 deux seuls attributs requis. `initial-view` (§14bis) et `context-*` (§14)
 sont optionnels - voir `integration-platon.md` pour l'exemple complet côté
-PLaTon, mis à jour avec les trois fichiers CSS et le contrat d'évènement.
+PLaTon, mis à jour avec le fichier CSS unique (§6) et le contrat
+d'évènement.
 
 ## Ce que produit le build
 
 `ng build indicateurs-embed` produit `main.js` + un chunk lazy par route +
-`polyfills.js` + `styles.css`/`styles.material.light.css`/
-`styles.ng-zorro.light.css` + `fonts/`/`icons/` - **plusieurs fichiers, pas
-un seul**, tout le dossier `dist/indicateurs-embed/browser/` doit être
+`polyfills.js` + `styles.css` (fusion des trois blocs, §6) + `fonts/`/
+`icons/` - tout le dossier `dist/indicateurs-embed/browser/` doit être
 hébergé et servi ensemble.
 
 ## 8. `family-indicators.page.ts` exclu des routes - c'est une page d'admin déguisée
@@ -451,9 +479,9 @@ fin.
 Testé aussi, dans un vrai PLaTon en local (`docker-compose.dev.yml` + `yarn
 serve:api`/`serve:web`) : navigation réelle jusqu'à l'onglet Indicateurs,
 coexistence confirmée. Trop lourd pour tourner durablement sur toutes les
-machines de dev - remplacé depuis par un harnais léger dédié : voir §12.
+machines de dev - remplacé depuis par un simulateur léger dédié : voir §12.
 
-Testé via ce harnais - `platon-embed-harness/` (projet Angular CLI séparé,
+Testé via ce simulateur - `platon-simulateur/` (projet Angular CLI séparé,
 **pas** l'app standalone d'Indicateurs) reproduisant les conditions réelles
 de PLaTon sans son poids (pas d'Nx, pas d'API NestJS, pas des 20+ libs
 `@platon/feature/*`) : mêmes versions exactes (Angular 18.2.2, ng-zorro-antd
@@ -482,10 +510,10 @@ PLaTon, servant à construire un `<a href>` externe vers ses vraies pages
 `/courses/:id` / `/activities/:courseId/:activityId` - chemins confirmés en
 lisant `platon/apps/web/src/app/pages/`, lecture seule).
 
-**Retiré depuis**, trouvé en testant dans le harnais (§12) après la
+**Retiré depuis**, trouvé en testant dans le simulateur (§12) après la
 suppression de ses pages natives factices (§14ter) : "Retour au cours"
 menait alors vers une page qui n'existait plus (`NG04002`, écran blanc côté
-harnais - le même problème se poserait pour toute intégration PLaTon dont
+simulateur - le même problème se poserait pour toute intégration PLaTon dont
 la page de destination ne serait pas encore prête). Remplacé par une
 navigation **interne** vers `/context` (§14) avec le même contexte - "Retour
 au cours" ramène à la liste des indicateurs de ce cours, à l'intérieur du
@@ -523,44 +551,49 @@ Résolu en deux parties :
   `router.navigate()` avant l'aurait été risqué, le routeur pas encore
   démarré).
 
-Testé dans le harnais (§12), avec de vraies pages "PLaTon" factices
-(cours/activité) et un bouton "Voir les indicateurs" : parcours complet
-depuis une page native jusqu'à la bonne vue d'indicateurs, pour un
-contexte activité et un contexte cours (avec panneau de groupe et
-comparaison fonctionnels), sans erreur console.
+Testé dans le simulateur (§12), à l'époque avec de vraies pages "PLaTon"
+factices (cours/activité) et un bouton "Voir les indicateurs" (ces pages ont
+depuis été retirées du simulateur, voir §14ter - le test lui-même, lui,
+reste valable : c'est le même clic, juste depuis la page d'accueil
+directement) : parcours complet depuis une page native jusqu'à la bonne vue
+d'indicateurs, pour un contexte activité et un contexte cours (avec panneau
+de groupe et comparaison fonctionnels), sans erreur console.
 
 ## 14bis. Le bandeau de nav interne, finalement retiré - `initial-view`
 
-Après avoir ajouté la vraie sidebar de PLaTon au harnais (§12), le bandeau
+Après avoir ajouté la vraie sidebar de PLaTon au simulateur (§12), le bandeau
 interne "Tableau de bord / Indicateurs" du widget (§1) est devenu visiblement
 redondant - deux navigations superposées pour la même chose. Décision :
 supprimé, remplacé par un nouvel attribut `initial-view` (`'overview'` par
-défaut, ou `'indicators'`) et **trois liens de sidebar PLaTon distincts**
-vers ce même composant, chacun avec sa propre destination :
+défaut, ou `'indicators'`) et **deux liens de sidebar PLaTon distincts**
+vers ce même composant (`integration-platon.md` §1), plus le lien "Voir les
+indicateurs" déjà existant sur les pages natives cours/activité (§14),
+chacun avec sa propre destination :
 
-| Lien sidebar     | Attribut                    | Page du widget            |
-|-------------------|------------------------------|----------------------------|
-| Tableau de bord   | (aucun, `initial-view` absent) | `/overview` (cartes perso) |
-| Indicateurs       | `initial-view="indicators"`   | `/indicators` (activation) |
-| *(cours natifs)*  | `context-type="activity"` ou `"course"` (§14) | `/context` |
+| Point d'entrée         | Attribut                    | Page du widget            |
+|-------------------------|------------------------------|----------------------------|
+| Sidebar - Tableau de bord | (aucun, `initial-view` absent) | `/overview` (cartes perso) |
+| Sidebar - Indicateurs   | `initial-view="indicators"`   | `/indicators` (activation) |
+| Pages cours/activité    | `context-type="activity"` ou `"course"` (§14) | `/context` |
 
 `context-type` prend le pas sur `initial-view` si les deux sont fournis
-(cas du lien "Voir les indicateurs"). Testé dans le harnais : les trois
-destinations, cliquées depuis la sidebar, atteignent la bonne page sans
-bandeau superflu, avec le bon lien sidebar surligné à chaque fois
-(`routerLinkActiveOptions: { queryParams: 'exact' }` côté harnais, pour ne
+(cas du lien "Voir les indicateurs"). Testé dans le simulateur : les trois
+points d'entrée, cliqués depuis leur origine respective (sidebar ou page
+cours/activité), atteignent la bonne page sans bandeau superflu, avec le
+bon lien sidebar surligné à chaque fois
+(`routerLinkActiveOptions: { queryParams: 'exact' }` côté simulateur, pour ne
 pas confondre `/indicateurs` et `/indicateurs?view=indicators`).
 
-## 14ter. Pages natives factices retirées du harnais - clic direct
+## 14ter. Pages natives factices retirées du simulateur - clic direct
 
 `activity.component.ts`/`course.component.ts` (les pages PLaTon factices
 avec le bouton "Voir les indicateurs", introduites en §14) ont été
-supprimées du harnais, sur demande explicite : la page d'accueil
+supprimées du simulateur, sur demande explicite : la page d'accueil
 (`home.component.ts`) lie désormais directement vers `/indicateurs` avec
 les query params `contextType`/`activityId`/`courseId`/noms, sans page
 intermédiaire. Le contrat "bouton sur la vraie page PLaTon" (§7 côté
 `integration-platon.md`) reste inchangé et documenté - ce retrait ne
-concerne que la démonstration dans ce harnais, pas ce que PLaTon doit
+concerne que la démonstration dans ce simulateur, pas ce que PLaTon doit
 faire réellement.
 
 C'est ce retrait qui a révélé le bug du §13 (lien "Retour au cours" mort,
@@ -569,17 +602,22 @@ correction du §13 (navigation interne vers `/context`) rend d'ailleurs ce
 genre de retrait sans risque à l'avenir : le "retour" ne dépend plus de
 l'existence d'une page hôte précise.
 
+## Décisions actées
+
+- Emplacement d'hébergement du dossier de sortie : sous-chemin du domaine
+  PLaTon lui-même (voir `integration-platon.md`, "Décisions actées"), même
+  origine que le reste de PLaTon, aucune configuration CORS supplémentaire
+  requise. Retenu comme choix par défaut ; à reconsidérer si l'équipe PLaTon
+  propose une autre méthode d'hébergement.
+
 ## Ouvert / à trancher
 
-- Emplacement d'hébergement du dossier de sortie et configuration CORS
-  associée - recommandation par défaut proposée dans `integration-platon.md`
-  (sous-chemin du domaine PLaTon lui-même), reste à valider avec leur équipe.
 - `outputHashing: "none"` choisi pour un nom de fichier stable
   (`main.js`, pas `main.a1b2c3.js`) - à reconsidérer si un vrai système de
   versionnage est mis en place entre les deux équipes.
 - Collision CSS résiduelle une fois inséré dans une vraie page PLaTon -
   fortement dérisqué depuis (§12, mêmes fichiers CSS exacts, mêmes
-  versions de libs, testé dans un vrai PLaTon local et dans un harnais aux
+  versions de libs, testé dans un vrai PLaTon local et dans un simulateur aux
   conditions réelles), mais jamais testé contre l'intégralité des libs et
   pages réelles de PLaTon (celui-ci n'en charge qu'une page à la fois) -
   accepté comme limite de fait (voir `integration-platon.md`), à la charge

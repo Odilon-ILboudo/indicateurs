@@ -129,11 +129,8 @@ export class CoursesService {
     return { resource: this.mapCourse(row, permissions) };
   }
 
-  /**
-   * Réplique la règle PLaTon (course.expander.ts / course-member.service.ts#hasWritePermission) :
-   * update = owner du cours OU rôle global admin OU membre "teacher" de ce cours.
-   * delete = owner du cours OU rôle global admin (être teacher membre ne suffit pas).
-   */
+  /** Réplique la règle PLaTon : update = owner OU admin global OU membre "teacher" du cours.
+   *  delete = owner OU admin global uniquement (teacher membre ne suffit pas). */
   private async computeCoursePermissions(
     ownerId: string,
     courseId: string,

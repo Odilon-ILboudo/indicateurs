@@ -1,4 +1,3 @@
-// src/ingestion/ingestion.service.ts
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -43,12 +42,7 @@ export class IngestionService implements OnModuleInit {
     this.logger.log(`IngestionService initialized with ${this.indicatorCache.size} indicators`);
   }
 
-  /**
-   * Point d'entrée HTTP/legacy (hors RabbitMQ) - traite un événement pour tous les indicateurs
-   * concernés, quel que soit leur contextType. Délègue à ingestForContext()/processAggregateIndicator(),
-   * exactement comme le font les deux consumers RabbitMQ (onLearnerEvent/onAggregateEvent) :
-   * une seule implémentation du routage, pas de logique dupliquée entre les deux entrées.
-   */
+  /** Point d'entrée HTTP/legacy (hors RabbitMQ), délègue au même routage que les consumers. */
   async ingestEvent(event: RawEvent): Promise<void> {
     const startTime = Date.now();
 
@@ -171,16 +165,9 @@ export class IngestionService implements OnModuleInit {
     return this.findAffectedIndicators(event);
   }
 
-  /**
-   * Traite un événement uniquement pour les indicateurs du contextType donné.
-   * Utilisé par les consumers RabbitMQ pour paralléliser le traitement par niveau.
-   *
-   * Routage unique, basé sur l'éligibilité du pipeline (computeViewIncremental), jamais sur le
-   * périmètre (activité/cours/global) : un indicateur `learner` sans filtre, scopé à une
-   * activité, ou scopé à tout un cours suit exactement le même chemin - c'est
-   * computeViewIncremental() qui décide, via getIncrementalShape() et l'état déjà en cache,
-   * s'il peut mettre à jour la seule ligne concernée ou s'il doit tout recalculer.
-   */
+  /** Traite un événement pour les indicateurs d'un contextType donné, utilisé par les
+   *  consumers RabbitMQ. Routage basé sur l'éligibilité du pipeline (computeViewIncremental),
+   *  jamais sur le périmètre : c'est elle qui décide s'il faut recalculer entièrement ou non. */
   async ingestForContext(event: RawEvent, contextType: string): Promise<void> {
     if (!this.isValidEvent(event)) return;
 
@@ -222,12 +209,8 @@ export class IngestionService implements OnModuleInit {
     }
   }
 
-  /**
-   * Traite un indicateur non-learner : dispatch selon contextType. Le case `default` couvre tout
-   * contextType futur sans modification du consumer. Comme pour ingestForContext(), chaque
-   * branche tente le calcul différentiel via computeViewIncremental()/refresh*(deltaEvent) et ne
-   * retombe sur un recalcul complet que si le pipeline n'est pas reconnu automatiquement.
-   */
+  /** Traite un indicateur non-learner, dispatch selon contextType. Chaque branche tente le
+   *  calcul différentiel et ne retombe sur un recalcul complet que si nécessaire. */
   async processAggregateIndicator(indicator: IndicatorDefinition, event: RawEvent): Promise<void> {
     const deltaEvent: DeltaEvent = { sessionId: event.sessionId, payload: event.payload };
 

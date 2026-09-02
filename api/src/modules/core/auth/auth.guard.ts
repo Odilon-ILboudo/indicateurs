@@ -13,15 +13,10 @@ interface PlatonJwtPayload extends jwt.JwtPayload {
 }
 
 /**
- * Vérifie le token `Authorization: Bearer` envoyé par le frontend (voir auth.interceptor.ts).
- *
- * Comportement contrôlé par NODE_ENV :
- * - production : vérification cryptographique complète (signature + expiration) avec `jwtSecret`.
- *   À utiliser quand indicateurs est déployé aux côtés de SON PLaTon (même secret partagé).
- * - dev (par défaut) : les développeurs s'authentifient sur le PLaTon de PRODUCTION
- *   (https://platon.univ-eiffel.fr), dont le secret de signature est inconnu ici - on ne peut
- *   donc que décoder le payload (sans vérifier la signature) et contrôler l'expiration (`exp`).
- *   Un token expiré rejette quand même la requête (l'utilisateur est "mis à la porte").
+ * Vérifie le token `Authorization: Bearer`. Comportement contrôlé par NODE_ENV :
+ * - production : vérification cryptographique complète (signature + expiration).
+ * - dev (par défaut) : le secret de signature du PLaTon de production est inconnu ici, on ne
+ *   peut donc que décoder le payload et contrôler l'expiration.
  */
 @Injectable()
 export class AuthGuard implements CanActivate {

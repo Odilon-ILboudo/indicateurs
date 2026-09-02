@@ -1,11 +1,8 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
 // Sépare la complétude réelle du formulaire (isComplete) de la publication manuelle
-// (isActive, inchangée) - voir indicator-definition.entity.ts et
-// indicator-builder.component.ts#submit(). Défaut false : tous les indicateurs déjà
-// existants sont considérés incomplets tant qu'ils n'ont pas été ré-enregistrés via le
-// bouton final du wizard (comportement voulu : pas de rétro-complétion automatique sans
-// revalidation réelle des champs).
+// (isActive, inchangée). Défaut false : les indicateurs existants restent incomplets
+// tant qu'ils n'ont pas été ré-enregistrés via le bouton final du wizard.
 export class IndicatorIsComplete1786600000000 implements MigrationInterface {
     name = 'IndicatorIsComplete1786600000000'
 

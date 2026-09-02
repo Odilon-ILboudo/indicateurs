@@ -1,9 +1,7 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
-// L'unicité (indicatorId, contextType, contextId, activityId|courseId) est appliquée par
-// deux index uniques partiels en base (voir la migration SnapshotCourseScope), pas par un
-// simple @Unique() : activityId et courseId sont mutuellement exclusifs et l'un des deux
-// est toujours NULL, ce qu'un @Unique() composite ne gère pas correctement.
+// L'unicité est appliquée par deux index uniques partiels en base, pas par @Unique() :
+// activityId et courseId sont mutuellement exclusifs, l'un des deux est toujours NULL.
 @Entity('indicator_snapshots')
 export class IndicatorSnapshot {
   @PrimaryGeneratedColumn('uuid')

@@ -702,6 +702,18 @@ famille ; les indicateurs sans famille restent à leur place. Réutilisé dans
 restrictive (celle de `student`), faute de spécification dédiée pour ces
 contextes.
 
+**Appliquée aussi côté backend**, pas seulement en affichage : cette même
+table est dupliquée dans `api/src/modules/features/indicators/indicator-visibility.util.ts`
+(`INDICATOR_VISIBILITY`) et appliquée par `IndicatorVisibilityGuard`
+(`api/src/modules/core/guards/indicator-visibility.guard.ts`) sur
+`getIndicatorValues`/`computeView`/`getSnapshots`/`createSnapshot`
+(`indicators.controller.ts`) et `createPreference`/`updatePreference`
+(`user-preferences.controller.ts`) - le rôle vient de la table `Users` de
+`platon_db` (jamais du rôle envoyé par le client). Avant ce guard, la
+restriction n'existait qu'en affichage : un appel API direct avec le bon
+`contextId` contournait totalement `RoleService`, quel que soit le rôle
+réel de l'utilisateur.
+
 ### Comment changer de rôle pour tester
 
 L'authentification se fait par SSO réel vers PLaTon (section 12) - il n'existe
@@ -905,7 +917,6 @@ POST /api/ingest/batch  - injection directe batch (HTTP, legacy)
   /indicators/selector-family/:name   - page dédiée d'une famille (vue sélecteur)
   /indicator/:id                      - détail d'un indicateur
   /courses/...                        - pages Cours (copiées/adaptées de PLaTon, voir 3.3)
-    .../my-stats                      - onglet "Mes statistiques" du cours (indicateurs personnels + par groupe)
   /resources/...                      - pages Ressources (idem)
 ```
 
@@ -936,15 +947,14 @@ Pas de sélecteur de contexte séparé : chaque page cours/activité calcule et
 affiche directement les indicateurs qui la concernent, à partir de
 `CoursePresenter`/`ActivityPresenter` (`contextChange`, alimenté par la route
 Angular courante) - naviguer vers un cours ou une activité *est* le
-changement de contexte. La page **cours** (`dashboard.page.ts`) affiche les
-indicateurs `course` ; son onglet dédié **"Mes statistiques"**
-(`my-stats.page.ts`) affiche les indicateurs personnels (`learner`/`teacher`/
-`admin`) restreints à ce cours ainsi que les indicateurs `group` scopés au
-cours entier. La page **activité** (`activity.page.ts`) affiche ses trois
-sections directement sur la même page (pas d'onglet séparé) : "Mes
-statistiques" (personnels, restreints à cette activité), "Indicateurs de
-l'activité" (`activity`), "Indicateurs par groupe" (`group`, scopés à
-l'activité).
+changement de contexte. La page **cours** (`dashboard.page.ts`) affiche
+directement, sur la même page, les indicateurs `course`, les indicateurs
+personnels (`learner`/`teacher`/`admin`, restreints à ce cours) et les
+indicateurs `group` scopés au cours entier - plus d'onglet "Mes
+statistiques" séparé (supprimé, fusionné ici). La page **activité**
+(`activity.page.ts`) affiche de même ses indicateurs personnels (restreints
+à cette activité), "Indicateurs de l'activité" (`activity`) et "Indicateurs
+par groupe" (`group`, scopés à l'activité) directement sur la même page.
 
 ### Familles d'indicateurs - pages dédiées
 
@@ -977,8 +987,9 @@ valeurs par défaut.
 
 ### Page activité (`/dashboard/courses/:id/activities/:activityId`)
 
-Trois sections d'indicateurs, toutes sur la même page (pas d'onglet séparé,
-contrairement à la page cours) :
+Trois sections d'indicateurs, toutes sur la même page (pas d'onglet séparé -
+comme la page cours depuis la fusion de son ancien onglet "Mes
+statistiques") :
 1. **"Mes statistiques"** - indicateurs personnels (`learner`/`teacher`/
    `admin`) dont la formule est activity-aware, restreints à cette activité
    (voir `isActivityAware()`).
@@ -1065,6 +1076,19 @@ Doit toujours être posé **après** `AuthGuard` (`@UseGuards(AuthGuard, AdminGu
 lit `request.user.id`, vérifie `Users.role === 'admin'` en base PLaTon locale,
 sinon 403.
 
+### `IndicatorVisibilityGuard` (`api/src/modules/core/guards/indicator-visibility.guard.ts`)
+
+Doit toujours être posé **après** `AuthGuard`
+(`@UseGuards(AuthGuard, IndicatorVisibilityGuard)`) : lit le rôle réel de
+`request.user.id` en base PLaTon locale (jamais un rôle envoyé par le
+client) et applique la même règle que `RoleService.canSeeIndicatorContext`
+côté front (§8), mais pour de vrai - sans lui, un appel API direct (hors
+interface Angular) contournait entièrement la restriction de rôle/contexte,
+qui n'existait auparavant qu'en affichage. Posé sur
+`getIndicatorValues`/`computeView`/`getSnapshots`/`createSnapshot`
+(`indicators.controller.ts`) et `createPreference`/`updatePreference`
+(`user-preferences.controller.ts`).
+
 ### Ce que ça protège concrètement
 
 | Zone | Protection actuelle |
@@ -1072,6 +1096,7 @@ sinon 403.
 | Permissions cours/activités | calculées (owner/admin/teacher membre), voir §9 |
 | Permissions ressources | calculées en lecture (owner/admin/membre de cercle), voir §9 |
 | Mutations indicateurs/event-types | rôle `admin` réellement vérifié (`AdminGuard`) |
+| Visibilité des indicateurs par rôle/contexte | rôle réel vérifié (`IndicatorVisibilityGuard`), voir §8 |
 | Préférences utilisateur | `userId` toujours forcé à `request.user.id`, jamais accepté depuis le client |
 | Session expirée | 401 → `auth.interceptor.ts` vide le `localStorage` et redirige vers `/authentification` |
 

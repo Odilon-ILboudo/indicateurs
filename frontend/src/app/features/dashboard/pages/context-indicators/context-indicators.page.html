@@ -12,8 +12,7 @@
 
 <ng-container *ngIf="!loading">
 
-  <!-- Indicateurs (personnels + globaux du contexte fusionnés - plus de séparation visuelle
-       entre "Mes statistiques" et "Indicateurs du cours/de l'activité", sur demande explicite) -->
+  <!-- Indicateurs personnels + globaux du contexte, fusionnés dans une seule section -->
   <nz-divider [nzText]="indicatorsTitle" nzOrientation="left"></nz-divider>
   <ng-template #indicatorsTitle>
     <span class="section-divider-btn" (click)="collapsedGlobal = !collapsedGlobal">

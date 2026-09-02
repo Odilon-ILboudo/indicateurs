@@ -27,10 +27,7 @@ export class ResultService {
   }
 
   activityResults(activityId: string): Observable<ActivityResults> {
-    // We need courseId but ResultService in PLaTon only takes activityId.
-    // We store courseId in a known URL pattern: /api/v1/courses/:courseId/activities/:activityId/results
-    // Since we don't have courseId here, use a dedicated flat endpoint added below.
-    // The controller accepts any courseId (param unused), so we pass '_' as placeholder.
+    // Le contrôleur accepte n'importe quel courseId (param inutilisé), '_' en placeholder
     return this.http.get<ActivityResults>(`${API}/v1/courses/_/activities/${activityId}/results`)
   }
 

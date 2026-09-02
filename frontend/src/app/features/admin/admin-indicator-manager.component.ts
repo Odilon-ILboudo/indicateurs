@@ -1,4 +1,3 @@
-// frontend/src/app/features/admin/admin-indicator-manager.component.ts
 import { CommonModule } from '@angular/common';
 import { ChangeDetectorRef, Component, Input, OnInit, TemplateRef, ViewChild, inject } from '@angular/core';
 import { Router } from '@angular/router';

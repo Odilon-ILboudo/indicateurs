@@ -109,10 +109,8 @@ export function withAuthGuard(route: Record<string, unknown>, _roles?: string[])
 }
 
 // ---- UserSearchModalComponent ----
-// Reprend le comportement du vrai composant (@platon/core/browser) : la barre de recherche
-// <user-search-bar> pilote la sélection via [(ngModel)], "confirm" ferme en émettant CETTE
-// sélection - à ne pas remplacer par un backdrop muet sans barre de recherche (bug déjà vu ici :
-// aucun moyen d'y choisir un utilisateur, donc "closed" émettait toujours [] au clic).
+// La barre <user-search-bar> pilote la sélection via [(ngModel)] ; "confirm" émet cette
+// sélection - sans elle, "closed" émettait toujours [] au clic.
 
 @Component({
   standalone: true,

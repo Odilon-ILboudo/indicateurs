@@ -13,10 +13,8 @@ export class IngestionConsumerService {
   constructor(private readonly ingestionService: IngestionService) {}
 
   // ── Consumer 1 : indicateurs Apprenant ───────────────────────────────────
-  // Reçoit TOUS les types d'événements (routing '#') et traite uniquement les
-  // indicateurs contextType='learner'. Le filtrage fin se fait dans IngestionService
-  // via requiredEvents : si l'événement reçu ne figure pas dans requiredEvents de
-  // l'indicateur, il est ignoré - la routing key large n'entraîne pas de surcharge.
+  // Reçoit tous les événements (routing '#'), filtrage fin fait dans IngestionService
+  // via requiredEvents.
   @RabbitSubscribe({
     exchange: PLATON_EXCHANGE,
     routingKey: '#',
@@ -36,9 +34,7 @@ export class IngestionConsumerService {
   }
 
   // ── Consumer 2 : indicateurs Agrégats (tous les autres contextTypes) ─────
-  // Gère activity, course, group, teacher, admin et tout contextType futur.
-  // Séparé du consumer learner pour que les calculs lourds (agrégats multi-étudiants)
-  // ne bloquent pas la mise à jour du score individuel.
+  // Séparé du consumer learner pour que les calculs lourds ne bloquent pas le score individuel.
   @RabbitSubscribe({
     exchange: PLATON_EXCHANGE,
     routingKey: '#',

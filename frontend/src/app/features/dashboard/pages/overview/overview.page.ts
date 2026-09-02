@@ -55,14 +55,9 @@ export class OverviewPage implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadActiveIndicators();
-    // Le rôle réel se charge de façon asynchrone (SidebarComponent#loadUser, appel réseau vers
-    // le backend) et arrive TOUJOURS après la construction de cette page - se caler une seule
-    // fois sur roleService.isTeacher()/isAdmin() au constructeur figeait "learner" par défaut
-    // (juste après un rechargement complet) et n'était jamais recalculé quand le vrai rôle
-    // arrivait ensuite, d'où les indicateurs qui disparaissaient tant qu'on ne quittait/revenait
-    // pas sur la page (qui reconstruit alors le composant avec le rôle déjà chargé entre-temps).
-    // role$ réémet à chaque changement de rôle, donc ceci se corrige tout seul dès que le vrai
-    // rôle arrive, sans attendre une navigation.
+    // Le rôle réel se charge de façon asynchrone et arrive après la construction de cette page :
+    // on s'abonne à role$ plutôt que de lire le rôle une seule fois, sinon les indicateurs
+    // teacher/admin restent invisibles jusqu'à la prochaine navigation.
     this.subscriptions.push(
       this.roleService.role$.subscribe(() => {
         this.context = this.buildDefaultContext();

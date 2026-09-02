@@ -5,14 +5,9 @@ import { IndicatorDefinition } from '../../features/indicators/entities/indicato
 import { canRoleSeeIndicator } from '../../features/indicators/indicator-visibility.util';
 
 /**
- * Vérifie que le rôle RÉEL de l'utilisateur (table "Users" locale, jamais un rôle envoyé par le
- * client) est autorisé à voir/activer/calculer l'indicateur ciblé par la route - même règle que
- * `RoleService#canSeeIndicatorContext` côté front (voir indicator-visibility.util.ts), mais
- * appliquée ici pour de vrai : sans ce guard, un appel direct à l'API (hors interface Angular)
- * contournait entièrement la restriction de rôle/contexte.
- *
- * Lit l'ID de l'indicateur depuis `:id` ou `:indicatorId` selon le contrôleur. Doit toujours être
- * posé APRÈS AuthGuard : `@UseGuards(AuthGuard, IndicatorVisibilityGuard)`.
+ * Vérifie que le rôle RÉEL de l'utilisateur (table "Users" locale, jamais envoyé par le client)
+ * est autorisé à voir/activer/calculer l'indicateur ciblé par la route. Lit l'ID depuis `:id`
+ * ou `:indicatorId`. Toujours posé APRÈS AuthGuard.
  */
 @Injectable()
 export class IndicatorVisibilityGuard implements CanActivate {

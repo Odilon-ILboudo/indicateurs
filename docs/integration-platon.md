@@ -33,7 +33,7 @@ sur une même page - voir le test empirique correspondant).
 Fichier : `apps/web/src/app/widgets/sidebar/sidebar.component.ts`, dans
 `ngOnInit()`, à côté des autres liens conditionnels (`isTeacherRole`,
 `UserRoles.admin`). Deux liens plutôt qu'un seul, décision explicite validée
-sur le harnais (voir `integration-indicateurs.md` §14bis) : pas de
+sur le simulateur (voir `integration-indicateurs.md` §14bis) : pas de
 sélecteur de page à l'intérieur du widget, chaque lien mène directement à
 la bonne page via `initial-view` (§6bis) :
 
@@ -105,7 +105,9 @@ export class IndicateursPage implements OnInit, AfterViewInit {
   async ngOnInit() {
     const token = await this.authService.token(); // AuthService.token(), déjà existant
     this.accessToken = token?.accessToken;
-    await import('https://<domaine-indicateurs>/elements/indicateurs-app.js');
+    // Chemin retenu (voir "Décisions actées" en fin de doc) : servi par le serveur
+    // d'Indicateurs, pas par PLaTon - domaine à remplacer par le vrai domaine d'Indicateurs.
+    await import('https://<domaine-indicateurs>/embed/main.js');
   }
 
   ngAfterViewInit() {
@@ -124,18 +126,19 @@ export class IndicateursPage implements OnInit, AfterViewInit {
 méthode que celle déjà utilisée ailleurs dans PLaTon, rien à ajouter de ce
 côté.
 
-### 4. Trois feuilles de style, en plus du script
+### 4. Une feuille de style, en plus du script
 
 Le CSS n'est **pas** injecté par le script JS - la page hôte doit aussi
-charger trois fichiers CSS produits par le build embarqué d'Indicateurs, en
-plus de `<script>`/`import()`. Le troisième (`styles.css` - normalize, police
-d'icônes Material, variables) a été trouvé en testant, pas anticipé : sans
-lui, les icônes Material s'affichent en texte brut au lieu du glyphe.
+charger le CSS produit par le build embarqué d'Indicateurs, en plus de
+`<script>`/`import()`. Un seul fichier (`styles.css`, ~900 Ko brut / ~65 Ko
+compressé) : fusionné au build à partir de trois fichiers séparés au départ
+(normalize + police d'icônes Material + variables, thème ng-zorro, thème
+Material) - simplifié depuis pour n'avoir qu'un seul `<link>` à poser, sur
+demande explicite. Ordre de fusion figé et testé (`app.scss` puis ng-zorro
+puis Material) - à ne pas modifier sans retester le rendu.
 
 ```html
-<link rel="stylesheet" href="https://<domaine-indicateurs>/elements/styles.css">
-<link rel="stylesheet" href="https://<domaine-indicateurs>/elements/styles.ng-zorro.light.css">
-<link rel="stylesheet" href="https://<domaine-indicateurs>/elements/styles.material.light.css">
+<link rel="stylesheet" href="https://<domaine-indicateurs>/embed/styles.css">
 ```
 
 ### 5. Écouter l'expiration du jeton
@@ -218,7 +221,7 @@ leur propre section). Sans `context-type`, le widget démarre simplement
 sur le tableau de bord comme avant - aucune régression pour une
 intégration qui ne fournirait pas ces attributs.
 
-Testé dans le harnais (voir `integration-indicateurs.md` §14) : clic réel
+Testé dans le simulateur (voir `integration-indicateurs.md` §14) : clic réel
 depuis une page d'activité/cours factice jusqu'à la bonne vue d'indicateurs,
 avec panneau de groupe et bouton de comparaison fonctionnels.
 
@@ -248,7 +251,7 @@ n'importe quel lien de sidebar.
 
 ## Ce qu'Indicateurs fournit de son côté (pour information, pas à faire par PLaTon)
 
-- Le script `indicateurs-app.js` (et son CSS associé), buildé depuis un second
+- Le script `main.js` (et son CSS associé), buildé depuis un second
   point d'entrée du même dépôt Indicateurs - sans le module admin, sans les
   `platon-stubs/`, sans la sidebar/toolbar propre à l'app autonome (confirmé :
   aucun des écrans concernés - tableau de bord, sélection/activation des
@@ -278,24 +281,23 @@ n'importe quel lien de sidebar.
   ~20 libs `@platon/feature/*`) a été démarré une fois en local pour valider
   le principe (voir `integration-indicateurs.md` §12), mais est trop lourd
   pour tourner durablement sur toutes les machines de dev. Remplacé par un
-  harnais léger qui reproduit fidèlement ce qui compte pour ce test (mêmes
+  simulateur léger qui reproduit fidèlement ce qui compte pour ce test (mêmes
   versions, vrais fichiers CSS, vraie config de routeur) mais pas les ~20
   autres libs `@platon/feature/*` chargées simultanément, ni le vrai CSP, ni
   la vraie authentification CAS. **Cette dernière validation en conditions
   réelles complètes reste la responsabilité de l'équipe PLaTon**, une fois
   les 6 éléments ci-dessus implémentés de leur côté.
+- **Où héberger le script** `main.js` : servi directement par le serveur
+  d'Indicateurs (son propre domaine), pas copié/proxifié par PLaTon. PLaTon
+  charge donc le script et le CSS depuis une origine différente de la
+  sienne - nécessite que l'API Indicateurs autorise ces requêtes cross-origin
+  (CORS), voir `api/src/main.ts`, déjà permissive en prod (`origin: true`).
+  Retenu comme choix par défaut ; à reconsidérer si l'équipe PLaTon propose
+  une autre méthode d'hébergement une fois les 6 éléments ci-dessus
+  implémentés de leur côté.
 
 ## Ce qui reste à trancher ensemble (pas encore décidé)
 
-- **Où héberger le script** `indicateurs-app.js` : sur le même domaine que
-  l'API Indicateurs, ou copié/proxifié par PLaTon lui-même - impact direct sur
-  la configuration CORS (voir `api/src/main.ts`, déjà permissive en prod via
-  `origin: true`, mais qui suppose aujourd'hui un passage par un même proxy
-  Nginx). Recommandation par défaut, à valider avec l'équipe PLaTon : héberger
-  sous un sous-chemin du domaine PLaTon lui-même (ex.
-  `https://platon.univ-eiffel.fr/indicateurs-embed/`), servi statiquement par
-  le même Nginx que le reste de PLaTon - évite tout problème CORS (même
-  origine).
 - **Versionnage** : comment PLaTon sait quelle version du script charger, et
   qui est responsable de la mise à jour du chemin/URL quand Indicateurs publie
   une nouvelle version.

@@ -11,12 +11,10 @@ export class IndicatorGuard implements CanActivate {
   async canActivate(route: ActivatedRouteSnapshot): Promise<boolean> {
     const indicatorId = route.paramMap.get('id');
 
-    console.log('IndicatorGuard - indicatorId:', indicatorId); 
-    
     if (!indicatorId) {
       return true;
     }
-    
+
     try {
       const indicators = await firstValueFrom(this.indicatorService.loadIndicators());
       const indicatorExists = indicators.some(i => i.id === indicatorId);

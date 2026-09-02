@@ -1,4 +1,3 @@
-// frontend/src/app/features/admin/new-indicator-choice-modal.component.ts
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -30,15 +29,9 @@ export type NewIndicatorChoiceResult =
 
 type ChoiceView = 'menu' | 'reuse' | 'reuse-preview' | 'import';
 
-/** Première étape avant d'ouvrir le wizard de création : demande explicitement de partir de
- *  zéro, de réutiliser un indicateur existant, ou d'importer un YAML/JSON complet - au lieu de
- *  laisser ces options enfouies dans les étapes du wizard lui-même. Le wizard s'ouvre ensuite
- *  déjà pré-rempli selon le choix fait ici.
- *
- *  Règle stricte du projet : jamais de modale ouverte par-dessus une autre modale (seul le
- *  wizard peut recevoir une modale par-dessus lui). Toutes les étapes intermédiaires (galerie de
- *  réutilisation, prévisualisation avant application, import) sont donc des VUES internes de
- *  cette même modale (`view`), jamais des modales imbriquées. */
+/** Première étape avant le wizard de création : zéro, réutiliser, ou importer. Jamais de modale
+ *  ouverte par-dessus une autre (règle du projet) : les étapes intermédiaires (galerie, aperçu,
+ *  import) sont des vues internes de cette modale, pas des modales imbriquées. */
 @Component({
   selector: 'ui-new-indicator-choice-modal',
   standalone: true,

@@ -1,4 +1,3 @@
-// frontend/src/app/features/admin/event-rule-manager.component.ts
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';

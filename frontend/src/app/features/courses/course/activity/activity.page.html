@@ -18,10 +18,7 @@
     <nz-row [nzGutter]="[24, 24]" nzAlign="top">
       <nz-col nzXs="24" nzSm="24" nzMd="16" nzLg="16" nzXl="16">
 
-        <!-- ── Section Mes statistiques (learner/teacher/admin activity-aware) ──
-             Mutuellement exclusives en pratique (un utilisateur n'a jamais deux de ces rôles
-             à la fois), regroupées sous un même titre plutôt que trois sections presque
-             toujours vides. ────────────────────────────────────────────── -->
+        <!-- Mes statistiques (learner/teacher/admin activity-aware), mutuellement exclusives en pratique -->
         <ng-container *ngIf="!indicatorsLoading && (learnerIndicators.length > 0 || teacherIndicators.length > 0 || adminIndicators.length > 0)">
           <nz-divider [nzText]="learnerTitle" nzOrientation="left"></nz-divider>
           <ng-template #learnerTitle>

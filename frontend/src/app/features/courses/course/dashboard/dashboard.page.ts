@@ -91,9 +91,7 @@ export class CourseDashboardPage implements OnInit, OnDestroy {
   protected courseContext: DashboardContext | null = null
   protected indicatorQueryParams: Record<string, string> = {}
 
-  // Indicateurs personnels (learner/teacher/admin) course-aware + groupe course-aware -
-  // repris ici depuis my-stats.page.ts, supprimé (plus d'onglet dédié, voir Ouvert/décision) ;
-  // fusionnés dans la même liste que courseIndicators côté template, pas de section séparée.
+  // Indicateurs personnels (learner/teacher/admin) et groupe, course-aware
   protected learnerIndicators: IndicatorDefinition[] = []
   protected teacherIndicators: IndicatorDefinition[] = []
   protected adminIndicators: IndicatorDefinition[] = []
@@ -188,12 +186,7 @@ export class CourseDashboardPage implements OnInit, OnDestroy {
         next: ([indicators, settings, pins]) => {
           this.pinsByIndicatorId = new Map(pins.map(p => [p.indicatorId, p]))
 
-          // Union : indicateurs activés perso par l'utilisateur (il faut d'abord
-          // l'activer soi-même, comme n'importe quel indicateur, pour le voir ici)
-          // + indicateurs déjà figés par un enseignant sur ce cours précis (jamais
-          // l'inverse - les deux sources restent indépendantes, cf.
-          // IndicatorPinsService côté backend). Le bouton "Figer" n'apparaît donc
-          // que sur un indicateur déjà visible, pas sur tout le catalogue.
+          // Union des indicateurs activés perso et de ceux déjà figés par un enseignant
           const byId = new Map<string, IndicatorDefinition>()
           for (const ind of indicators) {
             if (ind.contextType !== 'course') continue
@@ -226,9 +219,7 @@ export class CourseDashboardPage implements OnInit, OnDestroy {
     )
   }
 
-  /** Distinct de `indicatorQueryParams` (`from: 'course'`) : le contextType d'une carte
-   *  personnelle dépend de l'indicateur cliqué, indicator-detail.component.ts a donc besoin de
-   *  le recevoir explicitement (branche `course-personal`). */
+  /** contextType passé explicitement : dépend de l'indicateur cliqué, pas fixe. */
   protected personalIndicatorQueryParams(contextType: string): Record<string, string> {
     return { ...this.indicatorQueryParams, from: 'course-personal', contextType }
   }

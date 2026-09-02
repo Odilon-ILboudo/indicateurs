@@ -21,18 +21,11 @@ import { getCurrentUserId } from '../../../../core/auth/current-user';
 type ContextKind = 'activity' | 'course';
 
 /**
- * Page "indicateurs de ce contexte" - montrable en mode embarqué, atteinte via query params
- * (?contextType=activity&activityId=...&courseId=...&activityName=...&courseName=... ou
- * contextType=course sans activityId) plutôt que via CoursePresenter/ActivityPresenter (qui
- * dépendent de @platon/* et n'ont pas de sens hors de l'app standalone).
- *
- * Reprend les mêmes trois sections que activity.page.ts (Mes statistiques / Indicateurs du
- * contexte / Indicateurs par groupe), fusionnées avec l'équivalent cours de dashboard.page.ts +
- * my-stats.page.ts - ces deux pages standalone séparaient ce qui est unifié ici en une seule
- * page paramétrable par contextType.
- *
- * Volontairement absent de cette première version : la gestion des pins (figer un indicateur) -
- * nécessite une vérification de permission enseignant sur le contexte, hors périmètre initial.
+ * Page "indicateurs de ce contexte" - atteinte via query params (contextType=activity/course +
+ * activityId/courseId) plutôt que via CoursePresenter/ActivityPresenter, hors de propos en
+ * mode embarqué. Indicateurs personnels, indicateurs du contexte et indicateurs par groupe,
+ * réunis en une seule page paramétrable. Pas de gestion des pins ici (nécessite une
+ * vérification de permission enseignant sur le contexte).
  */
 @Component({
   standalone: true,

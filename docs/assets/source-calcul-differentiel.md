@@ -1,4 +1,4 @@
-# Source unique pour l'animation — ne pas chercher ailleurs
+# Source unique pour l'animation : ne pas chercher ailleurs
 
 N'effectuez **aucune recherche web** sur le calcul incrémental, le batch computation,
 ou tout concept général. Tout ce qui est nécessaire pour concevoir et générer
@@ -81,7 +81,7 @@ Chaque carte part **vide** (un simple point d'interrogation) et n'affiche sa val
 qu'au moment où elle est effectivement lue - c'est ce qui distingue les deux parties,
 pas seulement la vitesse.
 
-### Partie 1 — Recalcul complet (doit paraître long et coûteux)
+### Partie 1 : Recalcul complet (doit paraître long et coûteux)
 
 - Une source visible "base de données PLaTon (SessionData)" est affichée à côté de
   la rangée de 10 cartes vides (une carte = un étudiant), avec une petite
@@ -111,7 +111,7 @@ pas seulement la vitesse.
 
 ### Transition (fondu ou balayage)
 
-### Partie 2 — Calcul différentiel (doit paraître instantané et léger)
+### Partie 2 : Calcul différentiel (doit paraître instantané et léger)
 
 - Deux sources distinctes sont visibles : "métadonnées (base indicators)" et
   "SessionData (PLaTon) · 1 ligne". Le nom de la base est explicite à chaque

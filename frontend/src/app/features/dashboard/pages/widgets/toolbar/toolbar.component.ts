@@ -1,4 +1,3 @@
-// frontend/src/app/widgets/toolbar/toolbar.component.ts
 import { CommonModule } from '@angular/common';
 import { Component, Output, EventEmitter, OnInit, inject } from '@angular/core';
 import { Router } from '@angular/router';

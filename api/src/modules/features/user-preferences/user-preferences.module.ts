@@ -1,4 +1,3 @@
-// src/modules/features/user-preferences/user-preferences.module.ts
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { IndicatorDefinition } from '../indicators/entities/indicator-definition.entity';

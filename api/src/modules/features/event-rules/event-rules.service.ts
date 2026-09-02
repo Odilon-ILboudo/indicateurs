@@ -109,9 +109,7 @@ export class EventRulesService {
   }
 
   // ── Suppression DÉFINITIVE (distincte de remove() ci-dessus, qui ne fait que désactiver) ──
-  // Si le trigger est installé, le désinstalle d'abord (même DDL que deleteAndUninstall) puis
-  // supprime réellement la ligne en base. Jamais automatique - toujours un aperçu SQL + clic
-  // explicite côté admin quand un DDL est impliqué.
+  // Désinstalle le trigger s'il est installé, puis supprime la ligne. Jamais automatique.
 
   async previewHardDeleteSql(id: string): Promise<{ sql: string }> {
     const rule = await this.findOne(id);
@@ -143,11 +141,8 @@ export class EventRulesService {
   }
 
   // ── Suppression + désinstallation du trigger (jamais automatique) ───────────
-  // Contrairement à remove() ci-dessus (désactivation simple, le trigger reste en place),
-  // cette méthode retire aussi le trigger PostgreSQL réel s'il était installé - en le
-  // supprimant complètement s'il n'est plus utilisé par aucune autre règle active sur la
-  // même table, ou en le réduisant (recalcul des colonnes surveillées) si d'autres règles
-  // actives en dépendent encore.
+  // Contrairement à remove() (désactivation simple), retire aussi le trigger PostgreSQL réel :
+  // supprimé s'il n'est plus utilisé par aucune autre règle active, sinon réduit.
 
   async previewUninstallSql(id: string): Promise<{ sql: string }> {
     const rule = await this.findOne(id);
@@ -220,10 +215,8 @@ export class EventRulesService {
   }
 
   // ── Exécution du DDL (installation ou désinstallation) ───────────────────
-  // Si PLATON_DB_ADMIN_USERNAME/PASSWORD sont configurés, le DDL s'exécute directement via
-  // cette connexion (qui a déjà les droits nécessaires - pas besoin de savoir qui possède
-  // la table, ni de changer/restaurer un ownership). Sinon, tentative avec la connexion
-  // applicative habituelle (échoue avec le message ci-dessus si les droits manquent).
+  // Avec PLATON_DB_ADMIN_USERNAME/PASSWORD configurés, le DDL passe par cette connexion.
+  // Sinon, tentative avec la connexion applicative habituelle.
   private async execDdl(sql: string): Promise<void> {
     const adminUsername = this.config.get<string>('platonDatabaseAdmin.username');
     const adminPassword = this.config.get<string>('platonDatabaseAdmin.password');
@@ -251,10 +244,7 @@ export class EventRulesService {
     if (!mapping?.userId) throw new NotFoundException('contextMapping.userId est obligatoire (RawEvent.userId est requis pour tout événement)');
   }
 
-  /** Le lien entre un indicateur et une règle se fait par le NOM de l'event type
-   *  (IndicatorDefinition.requiredEvents contient des noms, pas des ids de règle) - donc
-   *  bloque dès qu'un indicateur actif référence ce nom, même si d'autres règles actives
-   *  partagent le même eventTypeId (pas de faux négatif possible). */
+  /** Le lien indicateur/règle se fait par le nom de l'event type, pas par id de règle. */
   private async assertNoActiveIndicatorDependency(rule: IndicatorEventRule): Promise<void> {
     const eventTypeName = rule.eventType?.name;
     if (!eventTypeName) return;
@@ -316,12 +306,8 @@ export class EventRulesService {
     ].join('\n');
   }
 
-  /**
-   * DDL de retrait pour `rule` : si d'autres règles actives et déjà installées partagent
-   * le même trigger générique sur cette table, on le RECRÉE avec la liste de colonnes
-   * réduite (sans celle de `rule`) plutôt que de le supprimer - sinon on le retire
-   * complètement (plus aucune règle ne le nécessite sur cette table).
-   */
+  /** DDL de retrait : si d'autres règles partagent le trigger, on le recrée sans les colonnes
+   *  de `rule` plutôt que de le supprimer complètement. */
   private async buildUninstallDdl(rule: IndicatorEventRule): Promise<string> {
     const siblingRules = await this.repo.find({ where: { sourceTable: rule.sourceTable, isActive: true } });
     const remaining = siblingRules.filter(r => r.id !== rule.id && r.triggerInstalled);

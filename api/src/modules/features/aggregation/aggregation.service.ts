@@ -1,4 +1,3 @@
-// src/aggregation/aggregation.service.ts
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { CronExpression, SchedulerRegistry } from '@nestjs/schedule';
 import { CronJob } from 'cron';
@@ -32,10 +31,8 @@ export class AggregationService implements OnModuleInit {
     this.logger.log(`Recalcul périodique (sans déclencheur) programmé : "${expression}"`);
   }
 
-  /** Indicateurs actifs sans événement déclencheur (case "Activer des événements déclencheurs"
-   *  décochée dans le wizard) : pas de mise à jour temps réel possible, donc recalcul périodique
-   *  via recalculate() - même logique de calcul que le flux événementiel, juste déclenchée par
-   *  le temps plutôt que par un événement PLaTon. Fréquence configurable, voir onModuleInit(). */
+  /** Indicateurs actifs sans événement déclencheur : pas de mise à jour temps réel possible,
+   *  donc recalcul périodique. Fréquence configurable, voir onModuleInit(). */
   async recalculateTriggerlessIndicators() {
     if (this.isRecalculatingTriggerless) return;
     this.isRecalculatingTriggerless = true;

@@ -1,4 +1,3 @@
-// src/modules/features/indicators/interpreter/formula-interpreter.service.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -91,11 +90,9 @@ export class FormulaInterpreterService {
   }
 
   /**
-   * Exécute un pipeline DSL et retourne le résultat brut du pipeline.
-   * - Si le résultat est un number  → valeur scalaire (card / gauge / line-chart)
-   * - Si le résultat est un object  → { clé: valeur } (bar-chart par champ)
-   * - Si le résultat est un array   → [{ bucket, count }] (histogram)
-   * Enregistre un log d'exécution dans indicator_execution_logs.
+   * Exécute un pipeline DSL et retourne le résultat brut.
+   * number → valeur scalaire (card/gauge/line-chart), object → { clé: valeur } (bar-chart),
+   * array → [{ bucket, count }] (histogram). Enregistre un log dans indicator_execution_logs.
    */
   async interpret(formula: FormulaDefinition, context: FormulaContext): Promise<any> {
     if (!formula?.pipeline?.length) return 0;
@@ -226,11 +223,8 @@ export class FormulaInterpreterService {
     return typeof current === 'number' ? current : 0;
   }
 
-  /**
-   * Calcul complet pour une formule incrémentable : exécute le fetch, applique les joins et
-   * filtres de la shape, construit la map `sessionId → valeur extraite` et applique la chaîne
-   * aggregate/round/divide. Utilisé au premier événement et en fallback.
-   */
+  /** Calcul complet pour une formule incrémentable : fetch + joins/filtres, map sessionId →
+   *  valeur, puis aggregate/round/divide. Utilisé au premier événement et en fallback. */
   async computeWithRowMap(
     formula: FormulaDefinition,
     context: FormulaContext,
@@ -254,11 +248,7 @@ export class FormulaInterpreterService {
     return { result: await this.applyPostSteps(Object.values(rowValues), shape.postSteps), rowValues };
   }
 
-  /**
-   * Calcul complet pour une formule incrémentable avec groupBy : exécute le fetch, applique les
-   * joins et filtres de la shape, puis construit la map `groupKey → { sessionId → valeur extraite }`.
-   * Utilisé au premier événement et en fallback quand groupRowValues est absent en metadata.
-   */
+  /** Équivalent de computeWithRowMap avec groupBy : map groupKey → { sessionId → valeur }. */
   async computeWithGroupRowMap(
     formula: FormulaDefinition,
     context: FormulaContext,
@@ -433,10 +423,8 @@ export class FormulaInterpreterService {
     const rawTable: string = params['table'] ?? '';
     const table = FormulaInterpreterService.LEGACY_TABLE_MAP[rawTable] ?? rawTable;
 
-    // Cas group_id : déclenche une requête JOIN vers CourseGroupsMember/CourseGroups.
-    // Périmètre requis dans le contexte : soit une activité précise (activityId), soit
-    // tout un cours à la fois (courseId, agrège toutes ses activités) - l'un ou l'autre,
-    // jamais aucun.
+    // group_id déclenche une jointure vers CourseGroupsMember/CourseGroups, scopée par
+    // activityId ou courseId - l'un ou l'autre, jamais aucun.
     const wantsGroup = (contextFields as string[]).includes('group_id');
     if (wantsGroup && context.groupId) {
       const scope = context.activityId

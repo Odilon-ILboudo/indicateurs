@@ -76,10 +76,8 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
   activeVizId: string | null = null;
   userColorPreference: string | null = null;
 
-  /** `mouseenter`/`mouseleave` ne remontent PAS (contrairement à mouseover/mouseout) : un
-   *  stopPropagation() sur ces événements n'a aucun effet sur le tooltip du parent. Seul moyen
-   *  fiable d'éviter deux tooltips superposés (carte + bouton) : désactiver explicitement celui
-   *  de la carte tant que le pointeur est sur un élément qui a déjà le sien. */
+  /** mouseenter/mouseleave ne remontent pas, stopPropagation() est sans effet sur le tooltip
+   *  parent : seul moyen fiable d'éviter deux tooltips superposés (carte + bouton). */
   protected suppressCardTooltip = false;
 
   // Configuration modal
@@ -120,10 +118,8 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    // Ne recharge que si `indicator`/`context` ont vraiment changé de référence - un binding
-    // comme [queryParams]="someMethod()" (nouvel objet à chaque cycle de détection) ne doit
-    // jamais déclencher un rechargement, sinon isLoading reste bloqué à true en boucle dès que
-    // la détection de changements tourne souvent (ex. survol de la carte).
+    // Ne recharge que si indicator/context ont vraiment changé de référence, pas à chaque
+    // cycle de détection (sinon isLoading reste bloqué à true en boucle).
     if (!changes['indicator'] && !changes['context']) return;
     if (this.indicator && this.context) {
       this.initActiveViz();
@@ -201,10 +197,8 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
     this.isLoading = true;
     const scope = this.context.scope;
 
-    // learner/teacher/admin + activityId OU courseId : indicateur personnel activity-aware ou
-    // course-aware (filtré par activity_id ou course_id), calculé à la demande comme
-    // course/group/activity, jamais depuis la valeur "globale" précalculée (voir
-    // isActivityAware()/isCourseAware() et la page d'activité/de cours qui fournit ce contexte).
+    // learner/teacher/admin + activityId ou courseId : indicateur personnel activity/course-aware,
+    // calculé à la demande, jamais depuis la valeur "globale" précalculée.
     const isPersonal = scope === 'learner' || scope === 'teacher' || scope === 'admin';
     const isScopedPersonal = isPersonal && (!!this.context.activityId || !!this.context.courseId);
 

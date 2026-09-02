@@ -1,4 +1,3 @@
-// src/indicators/entities/indicator-value.entity.ts
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
 import { IndicatorDefinition } from './indicator-definition.entity';
 
@@ -46,10 +45,7 @@ export class IndicatorValue {
   updatedAt: Date;
 }
 
-/**
- * Construit les métadonnées d'une valeur en ajoutant la nouvelle valeur à
- * l'historique existant. Utilisé par `calculateTrend` pour déterminer la tendance.
- */
+/** Ajoute la nouvelle valeur à l'historique existant, utilisé par calculateTrend. */
 export function buildValueMetadata(
   previous: IndicatorValue['metadata'] | null | undefined,
   value: number,

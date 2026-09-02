@@ -1,4 +1,3 @@
-// frontend/src/app/features/admin/indicator-builder.component.ts
 import { CommonModule } from '@angular/common';
 import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, OnInit, TemplateRef, ViewChild, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -194,11 +193,6 @@ return out;` },
     ],
   },
 ];
-
-// ── Erreur de parsing structurée ─────────────────────────────────────────────
-// PipelineError, ImportedIndicatorMeta et ImportErrorDisplay viennent de
-// pipeline-import.util.ts (voir imports en tête de fichier) - partagés avec la modale de choix
-// initial qui valide l'import avant même l'ouverture de ce wizard.
 
 // ── Composant ────────────────────────────────────────────────────────────────
 
@@ -2301,10 +2295,8 @@ pipeline:
     { label: 'Session',              patterns: ['session_id'] },
   ];
 
-  /** Analyse le pipeline courant (étape Formules) pour suggérer une configuration de règle
-   *  event-rule plausible : table(s) à surveiller, colonnes probablement pertinentes, mapping
-   *  de contexte - une suggestion à vérifier/adapter, jamais une garantie (un pipeline avec
-   *  plusieurs jointures ou une étape "js" ne se réduit pas forcément à une seule table). */
+  /** Suggère une configuration de règle event-rule à partir du pipeline courant (table,
+   *  colonnes, mapping de contexte) - une suggestion à vérifier, jamais une garantie. */
   eventRuleHint(): {
     tables: string[];
     columns: string[];
@@ -2680,10 +2672,7 @@ pipeline:
     if (this.modalData?.indicator) {
       this.hydrate(this.modalData.indicator);
     } else {
-      // familyPreset pose d'abord les valeurs par défaut (nom, contexte du slot, famille) ;
-      // reuseSeed/importSeed viennent ensuite écraser nom/description/pipeline/etc. depuis
-      // l'indicateur source ou l'import choisi - mais jamais le contexte, qui reste imposé par
-      // le slot de famille en cours.
+      // reuseSeed/importSeed écrasent les valeurs ensuite, sauf le contexte, imposé par le slot
       if (this.modalData?.familyPreset) this.applyFamilyPreset(this.modalData.familyPreset);
       if (this.modalData?.reuseSeed) {
         this.composeFromReuseSource(this.modalData.reuseSeed.source, this.modalData.reuseSeed.override);
@@ -2941,11 +2930,8 @@ pipeline:
     }
   }
 
-  /** Les recettes ne s'affichent plus en permanence dans l'étape Formules (ça devenait trop
-   *  chargé visuellement) - même principe que "Explorer le schéma PLaTon" : un bouton qui ouvre
-   *  une modale dédiée. Le détail d'un pipeline (bouton œil) est une VUE interne de cette même
-   *  modale (`selectedRecipe`), jamais une seconde modale par-dessus - règle du projet : pas de
-   *  modale imbriquée, sauf sur le wizard lui-même. */
+  /** Les recettes s'ouvrent dans une modale dédiée. Le détail d'un pipeline (bouton œil) est
+   *  une vue interne de cette même modale, jamais une seconde modale par-dessus. */
   private recipesModalRef: NzModalRef | null = null;
 
   openRecipesModal(): void {
@@ -3180,10 +3166,8 @@ pipeline:
     this.importText = this.pipelineToText(this.pipeline, mode);
   }
 
-  /** Réindente le texte collé, strictement dans le langage du mode actif - ne convertit jamais
-   *  d'un format à l'autre (même contrôle strict que parseIndicatorImport, voir looksLikeJson).
-   *  N'écrase le texte que si le parsing réussit - laisse le texte fautif intact sinon, pour ne
-   *  rien perdre. */
+  /** Réindente le texte collé dans le langage du mode actif, sans jamais convertir d'un format
+   *  à l'autre. N'écrase le texte que si le parsing réussit. */
   formatImportText(): void {
     if (this.importMode === 'json') {
       try {
@@ -3364,11 +3348,7 @@ pipeline:
       return;
     }
 
-    // Complet uniquement si enregistré via le bouton final (étape 2 - le bouton "Sauvegarder
-    // le brouillon" n'existe qu'aux étapes 0-1, les deux sont mutuellement exclusifs) ET que
-    // les champs requis sont bien présents. Le pipeline est déjà garanti sans étape à moitié
-    // remplie par la boucle de validation ci-dessus - il ne reste qu'à vérifier qu'il n'est
-    // pas vide.
+    // Complet uniquement si enregistré via le bouton final (étape 2) et les champs requis présents
     const isComplete = this.step === 2
       && !!this.def.contextType
       && this.vizList.length > 0

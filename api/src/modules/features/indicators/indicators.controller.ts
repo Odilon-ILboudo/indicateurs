@@ -1,4 +1,3 @@
-// src/modules/features/indicators/indicators.controller.ts
 import {
   Controller, Get, Post, Patch, Delete, UseGuards,
   Body, Param, Query, Req, BadRequestException,

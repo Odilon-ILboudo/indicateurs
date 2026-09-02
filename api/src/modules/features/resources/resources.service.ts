@@ -140,12 +140,8 @@ export class ResourcesService {
     return { resource: this.mapResource(row, permissions) };
   }
 
-  /**
-   * Réplique la règle PLaTon (permissions.service.ts#userPermissionsOnResource) :
-   * write = owner du cercle OU (admin global ET cercle non personnel) OU membre accepté du cercle
-   *         OU owner/membre accepté d'un cercle ancêtre. member/watcher/waiting portent sur la
-   *         ressource elle-même (pas sur le cercle).
-   */
+  /** Réplique la règle PLaTon : write = owner du cercle OU (admin global ET cercle non
+   *  personnel) OU membre accepté du cercle ou d'un cercle ancêtre. */
   private async computeResourcePermissions(
     resource: { id: string; type: string; parentId: string | null; ownerId: string; personal: boolean },
     userId?: string,

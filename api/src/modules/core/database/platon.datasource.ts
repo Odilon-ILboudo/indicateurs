@@ -1,4 +1,3 @@
-// src/modules/core/database/platon.datasource.ts
 import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
 

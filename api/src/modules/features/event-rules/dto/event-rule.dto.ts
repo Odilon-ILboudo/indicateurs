@@ -1,7 +1,4 @@
-// src/modules/features/event-rules/dto/event-rule.dto.ts
-// DTOs de validation runtime pour create/update de règle événementielle - avant ces DTOs, les
-// endpoints acceptaient `@Body() body: CreateEventRuleBody` (interface TS, effacée à la
-// compilation) : le ValidationPipe global (voir main.ts) était inopérant sur ces routes.
+// DTOs de validation runtime pour create/update de règle événementielle.
 import { PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {

@@ -1,4 +1,3 @@
-// src/indicators/entities/indicator-definition.entity.ts
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
 export type ContextType = 'learner' | 'teacher' | 'admin' | 'course' | 'activity' | 'group';
@@ -40,9 +39,7 @@ export class IndicatorDefinition {
   @Column({ type: 'varchar', length: 255, nullable: true })
   familyName: string | null;
 
-  /** Indicateur à partir duquel celui-ci a été créé (capitalisation) - traçabilité
-   *  uniquement, aucun lien vivant~: modifier l'indicateur de base n'a plus aucun
-   *  effet après la création. */
+  /** Indicateur source d'une réutilisation - traçabilité seulement, aucun lien vivant. */
   @Column({ type: 'varchar', nullable: true })
   baseIndicatorId: string | null;
 
@@ -56,21 +53,15 @@ export class IndicatorDefinition {
   @Column({ default: true })
   isActive: boolean;
 
-  /** Complétude réelle du formulaire (nom, contexte, au moins une visualisation, pipeline non
-   *  vide et sans étape à moitié remplie), indépendante de `isActive`~: `isActive` reste un
-   *  interrupteur manuel de publication (toujours false à la création, à activer explicitement
-   *  depuis la gestion admin), tandis que `isComplete` reflète si l'indicateur a été enregistré
-   *  via le bouton final du wizard ("Créer l'indicateur"/"Enregistrer") avec tous les champs
-   *  requis, plutôt que via "Sauvegarder le brouillon" en cours de route. Piloté côté frontend
-   *  par `indicator-builder.component.ts#submit()`. */
+  /** Complétude réelle du formulaire, indépendante de `isActive` (interrupteur manuel de
+   *  publication, toujours false à la création). Reflète l'enregistrement via le bouton final
+   *  du wizard, plutôt que "Sauvegarder le brouillon". */
   @Column({ default: false })
   isComplete: boolean;
 
-  /** Ligne technique qui ne représente aucun indicateur réel~: sert uniquement à faire
-   *  exister une famille vide (pas de table Famille dédiée - familyName est un simple
-   *  champ partagé). Toujours isActive=false, jamais affichée aux utilisateurs finaux
-   *  (déjà exclue de GET /indicators), visible uniquement dans la gestion admin, et
-   *  supprimée automatiquement dès qu'un premier vrai indicateur rejoint la famille. */
+  /** Ligne technique qui ne représente aucun indicateur réel, sert à faire exister une famille
+   *  vide. Toujours isActive=false, jamais affichée aux utilisateurs finaux, supprimée
+   *  automatiquement dès qu'un premier vrai indicateur rejoint la famille. */
   @Column({ default: false })
   isFamilyPlaceholder: boolean;
 
@@ -91,10 +82,8 @@ export class IndicatorDefinition {
   @Column({ type: 'text', nullable: true })
   interpretationHint: string | null;
 
-  /** Restreint la visibilité de cet indicateur à des rôles précis, en override de la règle
-   *  par défaut du contextType (optionnel). Utile pour un indicateur course/activity dont le
-   *  résultat est nominatif (ex. performance détaillée par étudiant) et ne doit donc pas être
-   *  proposé aux étudiants malgré la visibilité "tous" par défaut de ces contextes. */
+  /** Restreint la visibilité à des rôles précis, en override de la règle par défaut du
+   *  contextType - utile pour un résultat nominatif (ex. performance par étudiant). */
   @Column({ type: 'jsonb', nullable: true })
   visibilityRoles: string[] | null;
 

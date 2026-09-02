@@ -1,4 +1,3 @@
-// frontend/src/app/core/services/dashboard-settings.service.ts
 import { Injectable, inject } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { IndicatorService } from './indicator.service';

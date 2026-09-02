@@ -1,7 +1,5 @@
-// frontend/src/app/features/admin/pipeline-import.util.ts
-// Parsing/validation d'un import YAML/JSON d'indicateur - extrait du wizard (indicator-builder)
-// pour être appelé aussi depuis la modale de choix initial (new-indicator-choice-modal), qui a
-// besoin de valider AVANT d'ouvrir le wizard, sans dupliquer la logique.
+// Parsing/validation d'un import YAML/JSON d'indicateur - partagé entre le wizard et la modale
+// de choix initial, qui doit valider avant d'ouvrir le wizard.
 import * as yaml from 'js-yaml';
 import { IndicatorScope, ViewVisualizationType } from '../../core/models/indicator.model';
 
@@ -123,11 +121,8 @@ export function dehydrateStep(s: any): PipelineStep {
   };
 }
 
-/** Vérifie qu'une étape du pipeline construite via le wizard visuel (forme "à plat" - table,
- *  joinTable, filterField, etc. - par opposition à la forme {type, params} de l'import YAML/JSON)
- *  a bien ses champs requis pour son type. Ne vérifie PAS qu'il y a au moins une étape : le
- *  wizard autorise l'enregistrement d'un brouillon avec un pipeline vide ou partiel. Retourne le
- *  premier message d'erreur trouvé, ou `null` si l'étape est complète. */
+/** Vérifie qu'une étape du pipeline a bien ses champs requis pour son type. Ne vérifie pas
+ *  qu'il y a au moins une étape : un brouillon peut avoir un pipeline vide ou partiel. */
 export function validatePipelineStepComplete(s: PipelineStep, stepIndex: number): string | null {
   const ctx = `Étape ${stepIndex + 1} (${STEP_TYPE_LABELS[s.type]})`;
   switch (s.type) {
@@ -357,10 +352,7 @@ function validatePipelineColumns(pipeline: PipelineStep[], platonSchema: PlatonT
           throw new PipelineError(`${ctx} : table "${s.table}" introuvable dans le schéma PLaTon.`, tableNames, 'Tables disponibles', s.table);
         const cols = colsOf(s.table!);
         for (const f of s.contextFields ?? []) {
-          // "group_id" n'est jamais une vraie colonne : c'est un mot-clé spécial (wantsGroup,
-          // voir formula-interpreter.service.ts#executeFetch) qui déclenche une jointure vers
-          // CourseGroupsMember/CourseGroups plutôt qu'un filtre direct - à ne pas valider contre
-          // le schéma réel de la table, quelle que soit la table interrogée.
+          // "group_id" est un mot-clé spécial (jointure groupe), pas une vraie colonne à valider
           if (f === 'group_id') continue;
           if (!cols.has(f))
             throw new PipelineError(`${ctx} : colonne de contexte "${f}" introuvable dans "${s.table}".`, [...cols], 'Colonnes disponibles', f);

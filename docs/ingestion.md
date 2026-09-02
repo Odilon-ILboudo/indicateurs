@@ -11,7 +11,7 @@ SessionData (PLaTon DB)
 platon_outbox_events
        │ relay NestJS (toutes les 2s)
        ▼
-RabbitMQ – exchange: platon.events (topic)
+RabbitMQ : exchange platon.events (topic)
    │  routing key = event_type (dynamique, ex: "exercise.answered")
    ├── queue indicators.learner   → onLearnerEvent   (contextType = 'learner')
    └── queue indicators.aggregate → onAggregateEvent (contextType ≠ 'learner')
@@ -23,7 +23,7 @@ indicator_values (indicators DB)
 IndicatorsGateway (WebSocket /indicators)
        │ socket.io
        ▼
-Frontend – mise à jour temps réel sans rechargement
+Frontend : mise à jour temps réel sans rechargement
 ```
 
 ---

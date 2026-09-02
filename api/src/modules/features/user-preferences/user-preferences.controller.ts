@@ -1,4 +1,3 @@
-// src/modules/features/user-preferences/user-preferences.controller.ts
 import { Controller, Get, Post, Patch, Delete, Body, Param, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { UserPreferencesService } from './user-preferences.service';

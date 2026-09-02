@@ -1,4 +1,3 @@
-// src/modules/features/indicators/entities/indicator-execution-log.entity.ts
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, Index } from 'typeorm';
 
 @Entity('indicator_execution_logs')

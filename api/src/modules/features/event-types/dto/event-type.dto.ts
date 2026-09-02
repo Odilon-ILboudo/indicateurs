@@ -1,4 +1,3 @@
-// src/modules/features/event-types/dto/event-type.dto.ts
 import { PartialType } from '@nestjs/swagger';
 import { IsString, IsNotEmpty, IsOptional, IsBoolean, MaxLength } from 'class-validator';
 

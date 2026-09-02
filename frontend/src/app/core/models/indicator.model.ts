@@ -1,9 +1,7 @@
 export type IndicatorScope = 'learner' | 'teacher' | 'admin' | 'course' | 'activity' | 'group';
 
-/** Icône Material fixe par contexte - pour qu'un coup d'œil suffise à identifier à qui
- *  s'adresse un indicateur (apprenant/enseignant/cours/activité/...), au lieu d'un choix libre
- *  par visualisation. Volontairement pas de couleur ici : la couleur reste personnalisable
- *  (préférence utilisateur + choix admin par visualisation), seule l'icône est automatique. */
+/** Icône Material fixe par contexte, pas de choix libre - identifie à qui s'adresse
+ *  l'indicateur d'un coup d'œil. Pas de couleur ici, elle reste personnalisable. */
 export const CONTEXT_ICONS: Record<IndicatorScope, string> = {
   learner:  'person',
   teacher:  'co_present',

@@ -128,14 +128,15 @@ activité, l'utilisateur navigue directement vers la page du cours ou de
 l'activité concernée :
 
 - Page cours (`courses/course/dashboard/dashboard.page.ts`, alimentée par
-  `CoursePresenter.contextChange`) : indicateurs `course` de ce cours.
-- Onglet "Mes statistiques" du cours (`courses/course/my-stats/my-stats.page.ts`) :
-  indicateurs personnels course-aware + indicateurs `group` scopés au cours entier.
+  `CoursePresenter.contextChange`) : indicateurs `course` de ce cours, plus
+  (sur la même page, depuis la fusion de l'ancien onglet "Mes statistiques")
+  indicateurs personnels course-aware et indicateurs `group` scopés au cours
+  entier.
 - Page activité (`courses/course/activity/activity.page.ts`, alimentée par
   `ActivityPresenter.contextChange`) : indicateurs personnels activity-aware +
   indicateurs `activity` + indicateurs `group` scopés à l'activité.
 
-Dans les trois cas, les cartes et la page détail calculent les valeurs à la
+Dans les deux cas, les cartes et la page détail calculent les valeurs à la
 demande via `computeView()` lorsque l'utilisateur les affiche - voir C.
 
 ---
@@ -240,11 +241,13 @@ parent (voir F pour `from: 'activity'` / `from: 'group-snapshot'`).
    - `'activity'` : contexte `activity` (transmis par `activity.page.ts`).
    - `'course'` : contexte `course` (transmis par `dashboard.page.ts` du cours).
    - `'activity-personal'` : carte personnelle (`learner`/`teacher`/`admin`
-     activity-aware) cliquée depuis "Mes statistiques" sur la page activité -
-     `contextType` vient explicitement des query params (pas déduit de `from`,
-     contrairement aux branches ci-dessus), car il dépend de l'indicateur cliqué.
-   - `'course-personal'` : même principe, depuis l'onglet "Mes statistiques"
-     du cours (`my-stats.page.ts`).
+     activity-aware) cliquée depuis la section "Mes statistiques" sur la page
+     activité - `contextType` vient explicitement des query params (pas
+     déduit de `from`, contrairement aux branches ci-dessus), car il dépend
+     de l'indicateur cliqué.
+   - `'course-personal'` : même principe, depuis les cartes personnelles de
+     la page cours (`dashboard.page.ts`, fusionnées depuis l'ancien onglet
+     "Mes statistiques").
    - Appelle `loadIndicator(id)`.
 2. `loadIndicator(id)` :
    - `indicatorService.loadIndicators()` → **`GET /api/indicators`**

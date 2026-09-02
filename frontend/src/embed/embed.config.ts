@@ -1,23 +1,8 @@
-// Fournisseurs du point d'entrée embarqué - reprend app.config.ts en retirant
-// provideZoneChangeDetection (zone.js reste dans les polyfills, mais explicitement fourni via
-// polyfills plutôt que ce provider).
-//
-// provideAnimationsAsync() EST repris, contrairement à ce que le premier jet de la doc mettait
-// en question : ng-zorro en dépend en interne (NzSelectComponent notamment, erreur NG05105
-// "Unexpected synthetic property @.disabled" sans lui) - pas optionnel.
-//
-// AuthProvider -> RemoteAuthProvider EST repris, contrairement à ce que le premier jet de la
-// doc supposait : DashboardSettingsService en dépend directement (constaté à l'implémentation,
-// erreur NullInjectorError sans lui). RemoteAuthProvider reste sûr à réutiliser tel quel en
-// mode embarqué - il ne fait que lire le localStorage déjà rempli par EmbedRootComponent, il ne
-// déclenche jamais de redirection lui-même (ça, c'est authentification.page.ts, jamais chargé ici).
-//
-// LocationStrategy -> MemoryLocationStrategy (pas withHashLocation()) : constaté en testant
-// <indicateurs-app> à l'intérieur d'une vraie app Angular (pas juste test-host.html, une page
-// statique sans routeur) que withHashLocation() écrit dans window.location et écrase
-// silencieusement l'URL de la page hôte dès l'initialisation du widget. PLaTon a sa propre URL
-// réelle à préserver - voir memory-location.strategy.ts pour le détail et la contrepartie
-// assumée (pas de deep-link direct vers une vue précise du widget).
+// Fournisseurs du point d'entrée embarqué - reprend app.config.ts sans provideZoneChangeDetection
+// (zone.js fourni via polyfills à la place). AuthProvider et provideAnimationsAsync() sont
+// nécessaires même embarqué : DashboardSettingsService et ng-zorro en dépendent. LocationStrategy
+// utilise MemoryLocationStrategy plutôt que withHashLocation(), qui écrirait dans
+// window.location et écraserait l'URL de la page hôte (voir memory-location.strategy.ts).
 import { ApplicationConfig } from '@angular/core';
 import { LocationStrategy } from '@angular/common';
 import { provideRouter, withRouterConfig } from '@angular/router';

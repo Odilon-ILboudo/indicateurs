@@ -28,12 +28,10 @@ export class IndicatorSocketService implements OnDestroy {
 
     this.socket.on('connect', () => {
       this.connected = true;
-      console.log('[WS] Connecté au serveur d\'indicateurs');
     });
 
     this.socket.on('disconnect', () => {
       this.connected = false;
-      console.log('[WS] Déconnecté');
     });
 
     this.socket.on('indicator.updated', (payload: IndicatorUpdateEvent) => {

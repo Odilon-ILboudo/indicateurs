@@ -1,4 +1,3 @@
-// src/indicators/entities/user-indicator-preference.entity.ts
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
 import { IndicatorDefinition } from '../../indicators/entities/indicator-definition.entity';
 

@@ -1,4 +1,3 @@
-// frontend/src/app/features/admin/event-rule-builder.component.ts
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';

@@ -1,7 +1,4 @@
-// src/modules/features/indicators/dto/indicator.dto.ts
-// DTOs de validation runtime pour create/update d'indicateur - avant ces DTOs, les endpoints
-// acceptaient `@Body() definition: any` : le ValidationPipe global (whitelist/forbidNonWhitelisted/
-// transform, voir main.ts) était configuré mais totalement inopérant faute de classe décorée.
+// DTOs de validation runtime pour create/update d'indicateur.
 import { PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
@@ -50,10 +47,8 @@ export class VisualizationDto {
   @IsOptional() @IsString() @MaxLength(40) unit?: string;
 }
 
-/** Validation volontairement large sur `params` (pas de contrôle par type d'étape ici) : la
- *  validation fine par type (table/colonnes/paramètres requis) est déjà faite deux fois côté
- *  frontend (import YAML/JSON et wizard visuel, voir pipeline-import.util.ts) - le backend ne
- *  fait qu'une vérification de forme minimale, en dernière ligne de défense. */
+/** Validation large sur `params` : la validation fine par type est déjà faite côté frontend,
+ *  le backend ne fait qu'une vérification de forme minimale. */
 export class FormulaStepDto {
   @IsString() @IsNotEmpty() id: string;
   @IsIn(VALID_STEP_TYPES) type: string;

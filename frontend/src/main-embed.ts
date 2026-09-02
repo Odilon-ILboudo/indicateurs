@@ -1,5 +1,4 @@
-// Point d'entrée du build embarqué (cible Angular CLI "indicateurs-embed").
-// Enregistre <indicateurs-app> comme élément personnalisé - voir docs/integration-indicateurs.md.
+// Point d'entrée du build embarqué : enregistre <indicateurs-app> comme élément personnalisé.
 import { createApplication } from '@angular/platform-browser';
 import { createCustomElement } from '@angular/elements';
 import { embedConfig } from './embed/embed.config';

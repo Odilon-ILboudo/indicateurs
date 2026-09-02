@@ -24,8 +24,8 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         localStorage.removeItem('platonOrigin')
 
         if (embedded) {
-          // Pas d'écran de connexion à soi dans l'embarqué : on prévient l'hôte (PLaTon) via un
-          // évènement DOM, jamais une navigation interne (voir docs/integration-platon.md §5).
+          // Pas d'écran de connexion à soi dans l'embarqué : on prévient l'hôte via un
+          // évènement DOM, jamais une navigation interne.
           document.querySelector('indicateurs-app')
             ?.dispatchEvent(new CustomEvent('indicateurs-token-expired', { bubbles: true }))
         } else {

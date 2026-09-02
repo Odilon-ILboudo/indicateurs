@@ -4,17 +4,13 @@ import { LocationChangeEvent, LocationChangeListener, LocationStrategy } from '@
 /**
  * LocationStrategy purement interne, qui n'écrit jamais dans window.location/history.
  *
- * Nécessaire pour le build embarqué : withHashLocation() (comme toute stratégie standard,
- * Hash ou Path) écrit dans window.location - le même objet URL que le routeur de la page hôte
- * (PLaTon, qui a sa propre URL réelle). Confirmé en testant `<indicateurs-app>` à l'intérieur
- * d'une vraie app Angular (pas juste une page HTML statique) : dès l'initialisation du widget,
- * son router écrasait silencieusement l'URL de l'app hôte (ex. `/dashboard/embed-test` devenait
- * `/#/overview`) - aucune erreur, juste une navigation hôte perdue.
+ * Nécessaire en mode embarqué : toute stratégie standard (Hash ou Path) écrit dans
+ * window.location, le même objet URL que le routeur de la page hôte (PLaTon) - le widget
+ * écraserait silencieusement son URL dès son initialisation.
  *
- * Contrepartie assumée : pas de deep-link direct vers une vue précise du widget depuis
- * l'extérieur, pas de bouton précédent/suivant du NAVIGATEUR pour naviguer dans le widget
- * (uniquement back()/forward() internes, jamais déclenchés par l'utilisateur ici puisque rien
- * n'expose de bouton pour ça côté widget). PLaTon garde entièrement la main sur l'URL visible.
+ * Contrepartie assumée : pas de deep-link direct vers une vue précise du widget, pas de
+ * bouton précédent/suivant du navigateur pour naviguer dedans. PLaTon garde la main sur l'URL
+ * visible.
  */
 @Injectable()
 export class MemoryLocationStrategy extends LocationStrategy {

@@ -12,13 +12,4 @@ export const appRoutes: Route[] = [
     canActivate: [authGuard],
     loadChildren: () => import('./features/dashboard/dashboard.routes'),
   },
-  // Routes platon temporairement désactivées (double instance Angular)
-  // {
-  //   path: 'courses',
-  //   loadChildren: () => import('../../../../platon/apps/web/src/app/pages/courses/courses.routes'),
-  // },
-  // {
-  //   path: 'activities',
-  //   loadChildren: () => import('../../../../platon/apps/web/src/app/pages/activities/activities.routes'),
-  // },
 ]

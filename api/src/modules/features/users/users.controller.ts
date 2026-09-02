@@ -1,4 +1,3 @@
-// src/modules/features/users/users.controller.ts
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { PlatonService } from '../../core/platon/platon.service';
 
@@ -8,11 +7,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export class UsersController {
   constructor(private readonly platonService: PlatonService) {}
 
-  /**
-   * Recherche d'utilisateurs pour la modale "Ajouter un membre" du front (UserSearchBarComponent,
-   * stub de @platon/core/browser). Enveloppe { success, data: { resources, total } } attendue
-   * telle quelle par UserService.search() côté frontend.
-   */
+  /** Enveloppe { success, data: { resources, total } } attendue par UserService.search(). */
   @Get()
   async searchUsers(
     @Query('search') search?: string,
