@@ -288,7 +288,10 @@ n'importe quel lien de sidebar.
   réelles complètes reste la responsabilité de l'équipe PLaTon**, une fois
   les 6 éléments ci-dessus implémentés de leur côté.
 - **Où héberger le script** `main.js` : servi directement par le serveur
-  d'Indicateurs (son propre domaine), pas copié/proxifié par PLaTon. PLaTon
+  d'Indicateurs (son propre domaine, chemin `/embed/`), pas copié/proxifié
+  par PLaTon. Choix indépendant du LMS hôte : Indicateurs n'est pas destiné
+  à PLaTon exclusivement, et un hébergement propre à Indicateurs évite de
+  reconfigurer un nginx différent à chaque nouvelle intégration. PLaTon
   charge donc le script et le CSS depuis une origine différente de la
   sienne - nécessite que l'API Indicateurs autorise ces requêtes cross-origin
   (CORS), voir `api/src/main.ts`, déjà permissive en prod (`origin: true`).

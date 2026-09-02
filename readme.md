@@ -11,6 +11,11 @@ fonctionnement global du projet sans avoir à parcourir tout le code source.
 > - [`docs/parcours-donnees.md`](docs/parcours-donnees.md) - pour chaque route listée en
 >   §9, trace fichier par fichier et ligne par ligne le chemin complet
 >   composant frontend → service → contrôleur → service backend → accès BDD.
+> - [`docs/integration-indicateurs.md`](docs/integration-indicateurs.md) et
+>   [`docs/integration-platon.md`](docs/integration-platon.md) - le second point
+>   d'entrée de build (`indicateurs-embed`, voir §10 "Point d'entrée embarqué"),
+>   qui expose `<indicateurs-app>` comme Web Component intégrable dans un LMS
+>   hôte (PLaTon aujourd'hui, potentiellement un autre demain).
 
 ## Sommaire
 
@@ -927,6 +932,21 @@ d'onglet "Admin" dédié dans la navigation principale - les composants admin
 (`admin-indicator-manager`, `indicator-builder`) sont accessibles via l'onglet
 "Indicateurs" pour les rôles habilités (`canManageIndicators` /
 `canCreateIndicators`).
+
+### Point d'entrée embarqué (`<indicateurs-app>`)
+
+Second point d'entrée de build (`ng build indicateurs-embed`, cible
+`src/main-embed.ts`), à côté de l'app standalone ci-dessus - sans admin, sans
+sidebar/toolbar propres (fournies par le LMS hôte), compilé comme
+[Web Component](https://developer.mozilla.org/fr/docs/Web/API/Web_components)
+(`@angular/elements`). Le LMS hôte (PLaTon aujourd'hui) charge un `<script>` et
+monte `<indicateurs-app access-token="..." user="...">` sur ses propres pages ;
+routage interne isolé (`MemoryLocationStrategy`, jamais `window.location`),
+`ROUTE_BASE_PATH` vide (routes montées à la racine, pas sous `/dashboard`).
+Servi par le serveur d'Indicateurs lui-même sous `/embed/` (voir
+`.docker/frontend/Dockerfile`/`nginx.conf`) - détail complet et contrat exact
+dans [`docs/integration-indicateurs.md`](docs/integration-indicateurs.md) et
+[`docs/integration-platon.md`](docs/integration-platon.md).
 
 ### `DashboardContext` et navigation par page cours/activité
 

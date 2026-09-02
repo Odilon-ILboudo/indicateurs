@@ -116,6 +116,14 @@ Variables importantes à adapter :
 | `INDICATEURS_PORT` | Port exposé pour le frontend (défaut : `4300`) |
 | `PLATON_DB_ADMIN_USERNAME`/`PASSWORD` | Optionnel - identifiant Postgres à privilèges élevés pour l'installation des déclencheurs dynamiques (readme.md §6bis). Laisser vide si non utilisé. |
 
+**Pas une variable d'environnement, un fichier à éditer avant de builder** :
+`frontend/src/environments/environment.embed.prod.ts` contient un placeholder
+`<domaine-indicateurs-a-remplacer>` (adresse de l'API appelée par le widget
+embarqué, voir `docs/integration-indicateurs.md` §5bis) - à remplacer par le
+vrai domaine de production avant tout déploiement réel du widget. Le build
+réussit même si l'oubli persiste ; l'erreur n'apparaît qu'au runtime, dans le
+navigateur de l'utilisateur final.
+
 ---
 
 ## Schéma de la base `indicators` (migrations TypeORM)
@@ -191,8 +199,8 @@ indicateurs/
 │   ├── api/
 │   │   └── Dockerfile          ← NestJS multi-stage (compile les addons natifs)
 │   └── frontend/
-│       ├── Dockerfile          ← Build Angular → image Nginx
-│       └── nginx.conf          ← Proxy API + WebSocket + SPA fallback
+│       ├── Dockerfile          ← Build Angular (app standalone + widget embarqué) → image Nginx
+│       └── nginx.conf          ← Proxy API + WebSocket + SPA fallback + widget embarqué (/embed/)
 ├── bin/docker/
 │   ├── up.sh                   ← Lance dev ou prod (option -p)
 │   └── down.sh                 ← Arrête la stack prod

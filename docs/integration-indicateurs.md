@@ -604,11 +604,17 @@ l'existence d'une page hôte précise.
 
 ## Décisions actées
 
-- Emplacement d'hébergement du dossier de sortie : sous-chemin du domaine
-  PLaTon lui-même (voir `integration-platon.md`, "Décisions actées"), même
-  origine que le reste de PLaTon, aucune configuration CORS supplémentaire
-  requise. Retenu comme choix par défaut ; à reconsidérer si l'équipe PLaTon
-  propose une autre méthode d'hébergement.
+- Emplacement d'hébergement du dossier de sortie : servi directement par le
+  serveur d'Indicateurs, sous `/embed/` (voir `.docker/frontend/Dockerfile`
+  et `nginx.conf` - deuxième stage de build `indicateurs-embed`, copié à côté
+  de l'app standalone dans la même image Nginx). Choix indépendant du LMS
+  hôte (PLaTon aujourd'hui, potentiellement un autre demain) : un seul
+  endroit sert n'importe quel LMS, sans configuration nginx à refaire côté
+  hôte à chaque nouvelle intégration. Le CORS se règle côté API Indicateurs
+  (`api/src/main.ts`, `origin: true` en prod), pas côté hébergement des
+  fichiers statiques (charger un `<script>`/`<link>` cross-origin n'est pas
+  soumis au CORS). Retenu comme choix par défaut ; à reconsidérer si un LMS
+  hôte propose une autre méthode d'hébergement.
 
 ## Ouvert / à trancher
 
