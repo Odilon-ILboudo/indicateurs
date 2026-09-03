@@ -155,7 +155,8 @@ Desktop.ini
 # =========================================================
 # Docker
 # =========================================================
-.docker/
+# .docker/ contient les Dockerfiles/nginx.conf réels du build - suivis par git,
+# jamais ignorés (docker-compose.*.yml en dépend comme contexte de build).
 
 # Docker compose overrides
 docker-compose.override.yml
