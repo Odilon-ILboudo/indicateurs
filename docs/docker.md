@@ -33,11 +33,11 @@ Docker démarre **un seul service** :
 
 ```
 Docker lance :
-  └── indicateurs_rabbitmq  (port 5672 + UI de gestion port 15672)
+  └ indicateurs_rabbitmq  (port 5672 + UI de gestion port 15672)
 
 Tu lances manuellement :
-  ├── cd api && yarn start:dev     → NestJS sur localhost:3001
-  └── cd frontend && yarn start   → Angular sur localhost:4200
+  ├ cd api && yarn start:dev     → NestJS sur localhost:3001
+  └ cd frontend && yarn start   → Angular sur localhost:4200
 ```
 
 RabbitMQ est le seul service qu'on ne peut pas lancer avec une commande npm - il a besoin d'un daemon. Le reste tourne en local pour avoir le **hot-reload** (modification du code → rechargement immédiat).
@@ -59,14 +59,14 @@ Docker démarre **trois services** (plus deux services éphémères de provision
 
 ```
 Docker lance :
-  ├── indicateurs_init_db    (éphémère - crée la base "indicators" si absente, puis s'arrête)
-  ├── indicateurs_migrate    (éphémère - applique les migrations TypeORM en attente, puis s'arrête)
-  ├── indicateurs_rabbitmq   (interne, pas exposé)
-  ├── indicateurs_api        (interne, pas exposé directement - attend init_db + migrate)
-  └── indicateurs_nginx      (exposé sur le port 4300 de la machine)
-        ├── sert les fichiers Angular compilés (dist/)
-        ├── proxie /api/*      → indicateurs_api:3001
-        └── proxie /socket.io/ → indicateurs_api:3001 (WebSocket)
+  ├ indicateurs_init_db    (éphémère - crée la base "indicators" si absente, puis s'arrête)
+  ├ indicateurs_migrate    (éphémère - applique les migrations TypeORM en attente, puis s'arrête)
+  ├ indicateurs_rabbitmq   (interne, pas exposé)
+  ├ indicateurs_api        (interne, pas exposé directement - attend init_db + migrate)
+  └ indicateurs_nginx      (exposé sur le port 4300 de la machine)
+        ├ sert les fichiers Angular compilés (dist/)
+        ├ proxie /api/*      → indicateurs_api:3001
+        └ proxie /socket.io/ → indicateurs_api:3001 (WebSocket)
 ```
 
 Nginx est le **seul point d'entrée** : le navigateur ne communique qu'avec lui.
@@ -119,7 +119,8 @@ Variables importantes à adapter :
 **Pas une variable d'environnement, un fichier à éditer avant de builder** :
 `frontend/src/environments/environment.embed.prod.ts` contient un placeholder
 `<domaine-indicateurs-a-remplacer>` (adresse de l'API appelée par le widget
-embarqué, voir `docs/integration-indicateurs.md` §5bis) - à remplacer par le
+embarqué, voir `docs/integration-indicateurs.md` §"environment.embed.prod.ts")
+- à remplacer par le
 vrai domaine de production avant tout déploiement réel du widget. Le build
 réussit même si l'oubli persiste ; l'erreur n'apparaît qu'au runtime, dans le
 navigateur de l'utilisateur final.
@@ -195,20 +196,20 @@ workflow.
 
 ```
 indicateurs/
-├── .docker/
-│   ├── api/
-│   │   └── Dockerfile          ← NestJS multi-stage (compile les addons natifs)
-│   └── frontend/
-│       ├── Dockerfile          ← Build Angular (app standalone + widget embarqué) → image Nginx
-│       └── nginx.conf          ← Proxy API + WebSocket + SPA fallback + widget embarqué (/embed/)
-├── bin/docker/
-│   ├── up.sh                   ← Lance dev ou prod (option -p)
-│   └── down.sh                 ← Arrête la stack prod
-├── bin/migration/
-│   ├── create.sh / generate.sh ← Créer/générer une migration TypeORM
-│   ├── run.sh / revert.sh      ← Appliquer/annuler les migrations
-├── api/src/typeorm-cli.datasource.ts  ← DataSource dédié au CLI (ts-node)
-├── api/src/migrations/         ← Fichiers de migration horodatés
-├── docker-compose.dev.yml      ← RabbitMQ uniquement
-└── docker-compose.prod.yml     ← Stack complète (+ init-db, migrate)
+├ .docker/
+│   ├ api/
+│   │   └ Dockerfile          ← NestJS multi-stage (compile les addons natifs)
+│   └ frontend/
+│       ├ Dockerfile          ← Build Angular (app standalone + widget embarqué) → image Nginx
+│       └ nginx.conf          ← Proxy API + WebSocket + SPA fallback + widget embarqué (/embed/)
+├ bin/docker/
+│   ├ up.sh                   ← Lance dev ou prod (option -p)
+│   └ down.sh                 ← Arrête la stack prod
+├ bin/migration/
+│   ├ create.sh / generate.sh ← Créer/générer une migration TypeORM
+│   ├ run.sh / revert.sh      ← Appliquer/annuler les migrations
+├ api/src/typeorm-cli.datasource.ts  ← DataSource dédié au CLI (ts-node)
+├ api/src/migrations/         ← Fichiers de migration horodatés
+├ docker-compose.dev.yml      ← RabbitMQ uniquement
+└ docker-compose.prod.yml     ← Stack complète (+ init-db, migrate)
 ```

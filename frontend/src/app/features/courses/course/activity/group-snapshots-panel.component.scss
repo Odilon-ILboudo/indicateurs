@@ -1,0 +1,201 @@
+    .group-snapshots-panel {
+      margin-top: 4px;
+    }
+
+    .indicator-panel {
+      margin-bottom: 8px;
+    }
+
+    .indicator-panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .indicator-panel-info {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .indicator-name {
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--brand-background-sidebar, #3C2964);
+      line-height: 1.3;
+    }
+
+    .indicator-desc {
+      font-size: 12px;
+      color: #8c8c8c;
+      font-style: italic;
+      line-height: 1.4;
+    }
+
+    .snapshot-col {
+      width: 200px;
+      min-width: 180px;
+    }
+
+    .snapshot-wrapper {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .add-col {
+      display: flex;
+      align-items: stretch;
+    }
+
+    .add-snapshot-area {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      width: 100%;
+    }
+
+    /* Bouton carte pointillée */
+    .add-card-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 180px;
+      height: 140px;
+      border: 2px dashed #d9d9d9;
+      border-radius: 8px;
+      background: transparent;
+      cursor: pointer;
+      color: #8c8c8c;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+      padding: 0;
+    }
+
+    .add-card-btn:hover:not(:disabled) {
+      border-color: #1890ff;
+      color: #1890ff;
+      background: #e6f4ff;
+    }
+
+    .add-card-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .add-icon {
+      font-size: 28px !important;
+      width: 28px !important;
+      height: 28px !important;
+    }
+
+    .add-label {
+      font-size: 12px;
+      font-weight: 500;
+      text-align: center;
+      line-height: 1.3;
+    }
+
+    /* Formulaire d'ajout (état ouvert) */
+    .add-form-card {
+      width: 180px;
+      border: 1px solid #d9d9d9;
+      border-radius: 8px;
+      padding: 12px;
+      background: #fafafa;
+    }
+
+    .add-form-title {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: #595959;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .add-form-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    /*  Modal comparaison ─ */
+    .compare-modal { padding: 0 4px; }
+    .compare-header {
+      display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .compare-header-info {
+      flex: 1;
+      min-width: 0;
+      h3 { margin: 0; font-size: 16px; font-weight: 700; }
+    }
+    .compare-indicator-desc {
+      margin: 3px 0 0;
+      font-size: 13px;
+      color: #595959;
+      font-style: italic;
+    }
+    .compare-group-toggles {
+      display: flex; flex-wrap: wrap; gap: 6px;
+    }
+    .compare-group-tag {
+      cursor: pointer;
+      display: inline-flex; align-items: center; gap: 4px;
+      transition: opacity 0.15s;
+      user-select: none;
+    }
+    .compare-group-tag:hover { opacity: 0.8; }
+    .compare-group-tag--off { opacity: 0.45; }
+    .compare-tag-icon {
+      font-size: 12px !important;
+      width: 12px !important;
+      height: 12px !important;
+      line-height: 1 !important;
+    }
+    .compare-sections { display: flex; flex-direction: column; gap: 16px; }
+    /* Même motif que .wizard-section (indicator-builder) : bordure bleue, coins arrondis -
+       une vraie boîte par visualisation, plus seulement un espacement + un liseré sous le titre. */
+    .compare-section { border: 1px solid #1890ff; border-radius: 10px; padding: 16px 18px; background: #fff; }
+    .compare-section-title {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 13px; font-weight: 600; color: #444;
+      margin-bottom: 14px;
+    }
+    .compare-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .compare-card {
+      border: 1px solid #f0f0f0;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+    .compare-card-title {
+      display: flex; align-items: center; gap: 6px;
+      padding: 10px 14px;
+      background: #f9f0ff;
+      border-bottom: 1px solid #efdbff;
+      font-size: 13px; font-weight: 600; color: #531dab;
+    }
+    .compare-card-body {
+      padding: 16px;
+      display: flex; flex-direction: column; align-items: center;
+      width: 100%; box-sizing: border-box;
+    }
+    .compare-scalar {
+      font-size: 36px; font-weight: 700; line-height: 1;
+      display: flex; align-items: baseline; gap: 6px;
+    }
+    .compare-unit { font-size: 15px; font-weight: 400; }
+    /* Format compact pour tenir dans une carte de la grille (3 colonnes max) - même rendu
+       ECharts que la page détail, juste redimensionné. */
+    .compare-chart { width: 100%; height: 200px; }
+    .compare-loading-cell { padding: 24px; }

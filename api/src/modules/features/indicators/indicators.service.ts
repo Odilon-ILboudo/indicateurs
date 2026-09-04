@@ -114,7 +114,6 @@ export class IndicatorsService {
       values: values.map(v => ({
         value: v.value,
         timestamp: v.metadata?.lastUpdate,
-        trend: this.calculateTrend(v.metadata?.history || []),
         metadata: v.metadata,
       })),
     };
@@ -126,8 +125,9 @@ export class IndicatorsService {
     return this.getValues(indicator.id, contextType, contextId, 'day', limit);
   }
 
-  /** Sans déclencheur installé, un événement requis ne recalcule jamais en temps réel : on
-   *  refuse l'enregistrement plutôt que de laisser croire que l'indicateur est fonctionnel. */
+  /* Sans déclencheur installé, un événement requis ne recalcule jamais en temps réel : on
+   refuse l'enregistrement plutôt que de laisser croire que l'indicateur est fonctionnel.
+  */
   private async assertRequiredEventsHaveInstalledTriggers(requiredEvents: string[] | null | undefined): Promise<void> {
     if (!requiredEvents || requiredEvents.length === 0) return;
 
@@ -234,8 +234,10 @@ export class IndicatorsService {
     const userIds = prefs.map(p => p.userId);
     this.logger.log(`Recalcul de "${indicator.name}" pour ${userIds.length} utilisateurs (ayant activé cet indicateur)`);
 
-    // Un indicateur personnel activity/course-aware n'a pas UNE valeur par utilisateur mais
-    // une par (utilisateur, activité/cours) - même distinction que resolveCacheContextId().
+    /*
+    Un indicateur personnel activity/course-aware n'a pas UNE valeur par utilisateur mais
+    une par (utilisateur, activité/cours); même distinction que resolveCacheContextId().
+    */
     const isPersonal = indicator.contextType === 'learner' || indicator.contextType === 'teacher' || indicator.contextType === 'admin';
     const activityAware = isPersonal && isActivityAware(formula);
     const courseAware = isPersonal && isCourseAware(formula);
@@ -261,9 +263,11 @@ export class IndicatorsService {
           return;
         }
 
-        // Indicateur scopé : une valeur par activité (ou cours) où l'utilisateur a une trace
-        // réelle dans SessionData - computeView() se charge de recalculer et d'écrire la bonne
-        // ligne de cache (avec le suffixe :activityId ou :courseId).
+        /*
+        Indicateur scopé : une valeur par activité (ou cours) où l'utilisateur a une trace
+        réelle dans SessionData - computeView() se charge de recalculer et d'écrire la bonne
+        ligne de cache (avec le suffixe :activityId ou :courseId).
+        */
         let sessions: { activity_id?: string; course_id?: string }[] = [];
         try {
           sessions = await this.platonService.getUserSessionData(userId);
@@ -310,9 +314,10 @@ export class IndicatorsService {
     return this.platonService.getStudentsByCourse(courseId);
   }
 
-  /** Suffixe activityId ou courseId ajouté à la clé de cache quand contexte et formule en ont
-   *  besoin. Partagée par computeView() et computeViewIncremental() : une divergence entre les
-   *  deux ferait manquer le cache en incrémental et retomber sans erreur sur un recalcul complet. */
+  /* Suffixe activityId ou courseId ajouté à la clé de cache quand contexte et formule en ont
+   besoin. Partagée par computeView() et computeViewIncremental() : une divergence entre les
+   deux ferait manquer le cache en incrémental et retomber sans erreur sur un recalcul complet.
+  */
   private resolveCacheContextId(
     contextType: string,
     contextId: string,
@@ -327,8 +332,9 @@ export class IndicatorsService {
     return scopeSuffix ? `${contextId}:${scopeSuffix}` : contextId;
   }
 
-  /** Construit le FormulaContext passé à l'interpréteur, partagé par computeView() et
-   *  computeViewIncremental(). */
+  /* Construit le FormulaContext passé à l'interpréteur, partagé par computeView() et
+   computeViewIncremental().
+  */
   private buildFormulaContext(
     indicatorId: string,
     contextType: string,
@@ -338,9 +344,11 @@ export class IndicatorsService {
     courseId?: string,
   ): Record<string, any> {
     const formulaContext: any = { indicatorId };
-    // Le choix se base sur ce que LA FORMULE déclare (isActivityAware/isCourseAware), jamais
-    // sur la simple présence d'un activityId : un événement porte presque toujours un
-    // activityId même pour une formule qui ne s'intéresse qu'à course_id.
+    /*
+    Le choix se base sur ce que LA FORMULE déclare (isActivityAware/isCourseAware), jamais
+    sur la simple présence d'un activityId : un événement porte presque toujours un
+    activityId même pour une formule qui ne s'intéresse qu'à course_id.
+    */
     if (contextType === 'learner' || contextType === 'teacher' || contextType === 'admin') {
       formulaContext.userId = contextId;
       if (isActivityAware(formula)) formulaContext.activityId = activityId;
@@ -356,8 +364,9 @@ export class IndicatorsService {
     return formulaContext;
   }
 
-  /** Si vizId est fourni, utilise la formule propre à cette visualisation, sinon
-   *  visualizations[0]. Persiste et met en cache le résultat dans indicator_values. */
+  /* Si vizId est fourni, utilise la formule propre à cette visualisation, sinon
+   visualizations[0]. Persiste et met en cache le résultat dans indicator_values.
+  */
   async computeView(
     indicatorId: string,
     contextType: string,
@@ -384,10 +393,12 @@ export class IndicatorsService {
       );
     }
 
-    // Clé de cache : 1 valeur par indicateur/contexte, partagée par toutes les visualisations.
-    // `course` est toujours scopé par activité. `group` est scopé soit par activité, soit par
-    // cours entier. `learner`/`teacher`/`admin` ne sont scopés que si leur formule est
-    // activity-aware ou course-aware, sinon une valeur globale serait fragmentée à tort.
+    /*
+    Clé de cache : 1 valeur par indicateur/contexte, partagée par toutes les visualisations.
+    `course` est toujours scopé par activité. `group` est scopé soit par activité, soit par
+    cours entier. `learner`/`teacher`/`admin` ne sont scopés que si leur formule est
+    activity-aware ou course-aware.
+    */
     const cacheContextId = this.resolveCacheContextId(contextType, contextId, formula, activityId, courseId);
 
     const existing = await this.indicatorValueModel.findOne({
@@ -404,8 +415,10 @@ export class IndicatorsService {
 
     const formulaContext = this.buildFormulaContext(indicatorId, contextType, contextId, formula, activityId, courseId);
 
-    // Pour les formules éligibles au calcul incrémental, stocker l'état intermédiaire en metadata
-    // (rowValues ou groupRowValues) permet aux refresh d'événements ultérieurs d'éviter un SQL complet.
+    /*
+    Pour les formules éligibles au calcul incrémental, stocker l'état intermédiaire en metadata
+    (rowValues ou groupRowValues) permet aux refresh d'événements ultérieurs d'éviter un SQL complet.
+    */
     const shape = this.formulaInterpreter.getIncrementalShape(formula as any);
     let result: any;
     let rowValues: Record<string, number> | undefined;
@@ -498,7 +511,7 @@ export class IndicatorsService {
     return this.platonService.getSchemaWithRelations();
   }
 
-  // ── Logs ─────────────────────────────────────────────────────────────────
+  // Logs
 
   async getExecutionLogs(id: string, limit = 50): Promise<IndicatorExecutionLog[]> {
     return this.executionLogModel.find({
@@ -508,7 +521,7 @@ export class IndicatorsService {
     });
   }
 
-  // ── Snapshots ─────────────────────────────────────────────────────────────
+  // Snapshots
 
   async getSnapshots(indicatorId: string, scope: { activityId: string } | { courseId: string }): Promise<IndicatorSnapshot[]> {
     return this.snapshotModel.find({
@@ -550,9 +563,10 @@ export class IndicatorsService {
     await this.snapshotModel.remove(snapshot);
   }
 
-  /** Mise à jour incrémentale d'une vue lors d'un événement d'ingestion. Si la formule est
-   *  éligible et qu'un état incrémental existe déjà, met à jour uniquement la ligne concernée.
-   *  Sinon, retombe sur un recalcul complet qui initialise l'état incrémental pour la suite. */
+  /* Mise à jour incrémentale d'une vue lors d'un événement d'ingestion. Si la formule est
+   éligible et qu'un état incrémental existe déjà, met à jour uniquement la ligne concernée.
+   Sinon, retombe sur un recalcul complet qui initialise l'état incrémental pour la suite.
+  */
   async computeViewIncremental(
     indicatorId: string,
     contextType: string,
@@ -580,8 +594,10 @@ export class IndicatorsService {
     const shape = this.formulaInterpreter.getIncrementalShape(formula as any);
     if (!shape || !deltaEvent.sessionId) return fullRecompute();
 
-    // Sans join : payload de l'événement directement (0 SQL). Avec join : 1 fetch ciblé sur
-    // ce sessionId puis joins en mémoire.
+    /*
+    Sans join : payload de l'événement directement (0 SQL). Avec join : 1 fetch ciblé sur
+    ce sessionId puis joins en mémoire.
+    */
     const formulaContext = this.buildFormulaContext(indicatorId, contextType, contextId, formula, activityId, courseId);
     const resolveSourceRow = async (): Promise<Record<string, any> | null> => {
       if (!shape.needsTargetedFetch) return deltaEvent.payload ?? null;
@@ -592,7 +608,7 @@ export class IndicatorsService {
       shape.filterSteps.every(fs => this.formulaInterpreter.evaluateFilterRow(fs.params, row));
 
     if (shape.findFirst) {
-      // ── Chemin findFirst semi-incrémental ──────────────────────────────────
+      // Chemin findFirst semi-incrémental
       const { sortField, whereField, whereValue } = shape.findFirst;
       const buildEntry = (row: Record<string, any>) => {
         const extractedValue = parseFloat(row[shape.extractField]);
@@ -645,7 +661,7 @@ export class IndicatorsService {
     }
 
     if (shape.groupByField) {
-      // ── Chemin groupBy incrémental ─────────────────────────────────────────
+      // Chemin groupBy incrémental
       const existingGroupRowValues = (existing?.metadata as any)?.incremental?.groupRowValues as
         Record<string, Record<string, number>> | undefined;
 
@@ -685,7 +701,7 @@ export class IndicatorsService {
       return fullRecompute();
     }
 
-    // ── Chemin rowValues plat ────────────────────────────────────────────────
+    // Chemin rowValues plat
     const existingRowValues = (existing?.metadata as any)?.incremental?.rowValues as Record<string, number> | undefined;
 
     if (existingRowValues !== undefined) {
@@ -715,12 +731,13 @@ export class IndicatorsService {
       }
     }
 
-    // Fallback : rowValues absent (première consultation) ou formule non éligible → calcul complet
+    // Fallback : rowValues absent (première consultation) ou formule non éligible : calcul complet
     return fullRecompute();
   }
 
-  /** Rafraîchit tous les snapshots liés à une activité ou un cours. Avec deltaEvent, tente un
-   *  calcul incrémental ; sinon recalcul complet. */
+  /* Rafraîchit tous les snapshots liés à une activité ou un cours. Avec deltaEvent, tente un
+   calcul incrémental ; sinon recalcul complet.
+  */
   async refreshSnapshots(
     indicatorId: string,
     scope: { activityId: string } | { courseId: string },
@@ -758,8 +775,9 @@ export class IndicatorsService {
     }
   }
 
-  /** Rafraîchit toutes les vues course/group/activity déjà en cache pour une activité, au-delà
-   *  des seuls snapshots épinglés - sans quoi elles restaient figées à leur première consultation. */
+  /* Rafraîchit toutes les vues course/group/activity déjà en cache pour une activité, au-delà
+   des seuls snapshots épinglés sans quoi elles restaient figées à leur première consultation.
+  */
   async refreshActivityViews(indicatorId: string, activityId: string, deltaEvent?: DeltaEvent): Promise<void> {
     const indicator = await this.indicatorModel.findOne({ where: { id: indicatorId } });
     if (!indicator) return;
@@ -781,9 +799,11 @@ export class IndicatorsService {
 
     if (!rows.length) return;
 
-    // Déduit les couples (contextType, contextId d'origine) uniques à partir des contextId
-    // composites : pour 'activity' le contextId d'origine est l'activityId lui-même, pour
-    // 'course'/'group' c'est le premier segment (avant `:${activityId}`).
+    /*
+    Déduit les couples (contextType, contextId d'origine) uniques à partir des contextId
+    composites : pour 'activity' le contextId d'origine est l'activityId lui-même, pour
+    'course'/'group' c'est le premier segment (avant `:${activityId}`).
+    */
     const targets = new Map<string, { contextType: string; contextId: string }>();
     for (const row of rows) {
       const contextId = row.contextId.split(':')[0];
@@ -810,8 +830,7 @@ export class IndicatorsService {
     }
   }
 
-  /** Équivalent de refreshActivityViews pour les indicateurs `group` course-aware, tous
-   *  groupes confondus. */
+  // Équivalent de refreshActivityViews pour les indicateurs `group` course-aware, tous groupes confondus.
   async refreshCourseGroupViews(indicatorId: string, courseId: string, deltaEvent?: DeltaEvent): Promise<void> {
     const indicator = await this.indicatorModel.findOne({ where: { id: indicatorId } });
     if (!indicator) return;
@@ -846,8 +865,9 @@ export class IndicatorsService {
     }
   }
 
-  /** Rafraîchit tous les contextes dont les valeurs sont déjà en cache - utilisé quand on ne
-   *  connaît pas à l'avance les contextIds pertinents (ex: admin = contexte global inconnu). */
+  /* Rafraîchit tous les contextes dont les valeurs sont déjà en cache utilisé quand on ne
+   connaît pas à l'avance les contextIds pertinents (ex: admin = contexte global inconnu).
+  */
   async refreshCachedContextValues(indicatorId: string, contextType: string, deltaEvent?: DeltaEvent): Promise<void> {
     const indicator = await this.indicatorModel.findOne({ where: { id: indicatorId } });
     if (!indicator) return;
@@ -856,8 +876,10 @@ export class IndicatorsService {
     if (!rows.length) return;
 
     const vizList = indicator.visualizations ?? [];
-    // Conserve le couple (contextId de base, suffixe éventuel) : une ligne en cache peut être
-    // globale, scopée activité ou scopée cours. Les fusionner recalculerait la mauvaise ligne.
+    /*
+    Conserve le couple (contextId de base, suffixe éventuel) : une ligne en cache peut être
+    globale, scopée activité ou scopée cours. Les fusionner recalculerait la mauvaise ligne.
+    */
     const formula = resolveFormula(indicator);
     const suffixIsCourse = isCourseAware(formula);
     const uniqueCacheKeys = [...new Set(rows.map(r => r.contextId))];
@@ -883,19 +905,7 @@ export class IndicatorsService {
     }
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-
-  private calculateTrend(history: any[]): 'up' | 'down' | 'stable' | undefined {
-    if (!history || history.length < 2) return undefined;
-    const last = history[history.length - 1].value;
-    const previous = history.slice(-6, -1).map(h => h.value);
-    const avg = previous.reduce((a, b) => a + b, 0) / previous.length;
-    if (last > avg * 1.05) return 'up';
-    if (last < avg * 0.95) return 'down';
-    return 'stable';
-  }
-
-  // ── Feedbacks ────────────────────────────────────────────────────────────────
+  // Feedbacks
 
   async submitFeedback(indicatorId: string, userId: string, rating: number, comment?: string): Promise<IndicatorFeedback> {
     if (!indicatorId || !userId) throw new BadRequestException('indicatorId et userId sont requis.');

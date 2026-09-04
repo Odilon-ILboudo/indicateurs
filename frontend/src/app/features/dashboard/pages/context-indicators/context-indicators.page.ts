@@ -21,12 +21,12 @@ import { getCurrentUserId } from '../../../../core/auth/current-user';
 type ContextKind = 'activity' | 'course';
 
 /**
- * Page "indicateurs de ce contexte" - atteinte via query params (contextType=activity/course +
- * activityId/courseId) plutôt que via CoursePresenter/ActivityPresenter, hors de propos en
- * mode embarqué. Indicateurs personnels, indicateurs du contexte et indicateurs par groupe,
- * réunis en une seule page paramétrable. Pas de gestion des pins ici (nécessite une
- * vérification de permission enseignant sur le contexte).
- */
+Page "indicateurs de ce contexte" - atteinte via query params (contextType=activity/course +
+activityId/courseId) plutôt que via CoursePresenter/ActivityPresenter, hors de propos en
+mode embarqué. Indicateurs personnels, indicateurs du contexte et indicateurs par groupe,
+réunis en une seule page paramétrable. Pas de gestion des pins ici (nécessite une
+vérification de permission enseignant sur le contexte).
+*/
 @Component({
   standalone: true,
   selector: 'app-context-indicators',

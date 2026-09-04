@@ -12,7 +12,7 @@ interface AuthenticatedRequest extends Request {
 export class ResourcesController {
   constructor(private readonly resourcesService: ResourcesService) {}
 
-  // --- Static routes MUST come before /:id ---
+  // Static routes MUST come before /:id
 
   @Get('tree')
   getTree() {
@@ -34,7 +34,7 @@ export class ResourcesController {
     return this.resourcesService.getUserCircle(request.user?.id ?? '');
   }
 
-  // --- Parameterized routes ---
+  // Parameterized routes
 
   @Get()
   search(

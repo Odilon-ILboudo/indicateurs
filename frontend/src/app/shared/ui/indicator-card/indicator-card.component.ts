@@ -47,26 +47,29 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
   @Input() context!: DashboardContext;
   @Input() clickable: boolean = true;
   @Input() queryParams?: Record<string, string>;
-  /** Surcharge le titre affiché dans la card (ex : snapshot.title pour les groupes). */
+  // Surcharge le titre affiché dans la card (ex : snapshot.title pour les groupes).
   @Input() displayTitle?: string;
-  /** Affiche un bouton de suppression dans le card-context (à côté du bouton paramètres). */
+  // Affiche un bouton de suppression dans le card-context (à côté du bouton paramètres).
   @Input() showDeleteButton = false;
   /** Indicateur figé (pin enseignant) pour le cours/l'activité affiché - actif et non
-   *  désactivable pour tous les membres, indépendamment des préférences perso. */
+   désactivable pour tous les membres, indépendamment des préférences perso.
+  */
   @Input() isPinned = false;
   /** Affiche le bouton figer/défiger (visible seulement si l'utilisateur courant a un
-   *  droit d'écriture sur ce cours/cette activité - calculé par la page parente). */
+   droit d'écriture sur ce cours/cette activité - calculé par la page parente).
+  */
   @Input() showPinButton = false;
-  /** Seuils propres au pin, en override des seuils par défaut de l'indicateur (optionnel). */
+  // Seuils propres au pin, en override des seuils par défaut de l'indicateur (optionnel).
   @Input() thresholdsOverride?: IndicatorThresholds | null;
 
   @Output() valueChange = new EventEmitter<IndicatorValue>();
-  /** Émis avec le nouveau titre quand l'utilisateur confirme l'édition inline. */
+  // Émis avec le nouveau titre quand l'utilisateur confirme l'édition inline.
   @Output() titleChange = new EventEmitter<string>();
-  /** Émis quand l'utilisateur confirme la suppression via le popconfirm interne. */
+  // Émis quand l'utilisateur confirme la suppression via le popconfirm interne.
   @Output() deleteClick = new EventEmitter<void>();
   /** Émis pour figer (si pas encore épinglé) ou défiger (confirmation déjà faite via
-   *  popconfirm interne si épinglé) cet indicateur sur le contexte courant. */
+   popconfirm interne si épinglé) cet indicateur sur le contexte courant.
+  */
   @Output() pinToggle = new EventEmitter<void>();
 
   @ViewChild('titleInput') private titleInputRef?: ElementRef<HTMLInputElement>;
@@ -77,7 +80,8 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
   userColorPreference: string | null = null;
 
   /** mouseenter/mouseleave ne remontent pas, stopPropagation() est sans effet sur le tooltip
-   *  parent : seul moyen fiable d'éviter deux tooltips superposés (carte + bouton). */
+   parent : seul moyen fiable d'éviter deux tooltips superposés (carte + bouton).
+  */
   protected suppressCardTooltip = false;
 
   // Configuration modal
@@ -118,8 +122,10 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    // Ne recharge que si indicator/context ont vraiment changé de référence, pas à chaque
-    // cycle de détection (sinon isLoading reste bloqué à true en boucle).
+    /*
+    Ne recharge que si indicator/context ont vraiment changé de référence, pas à chaque
+    cycle de détection (sinon isLoading reste bloqué à true en boucle).
+    */
     if (!changes['indicator'] && !changes['context']) return;
     if (this.indicator && this.context) {
       this.initActiveViz();
@@ -174,7 +180,7 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
     this.cdr.detectChanges();
   }
 
-  /** Visualisations que l'utilisateur a choisi de voir (toutes par défaut). */
+  // Visualisations que l'utilisateur a choisi de voir (toutes par défaut).
   get visibleVisualizations(): IndicatorVisualization[] {
     const all = this.indicator?.visualizations ?? [];
     const visible = all.filter(v => this.indicatorService.isVizEnabled(this.indicator.id, v.id));
@@ -197,14 +203,18 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
     this.isLoading = true;
     const scope = this.context.scope;
 
-    // learner/teacher/admin + activityId ou courseId : indicateur personnel activity/course-aware,
-    // calculé à la demande, jamais depuis la valeur "globale" précalculée.
+    /*
+    learner/teacher/admin + activityId ou courseId : indicateur personnel activity/course-aware,
+    calculé à la demande, jamais depuis la valeur "globale" précalculée.
+    */
     const isPersonal = scope === 'learner' || scope === 'teacher' || scope === 'admin';
     const isScopedPersonal = isPersonal && (!!this.context.activityId || !!this.context.courseId);
 
     if (scope === 'course' || scope === 'group' || scope === 'activity' || isScopedPersonal) {
-      // group/personnel : activityId (une activité) OU courseId (tout le cours, isCourseAware)
-      // requis, l'un ou l'autre - voir DashboardContext.courseId.
+      /*
+      group/personnel : activityId (une activité) OU courseId (tout le cours, isCourseAware)
+      requis, l'un ou l'autre - voir DashboardContext.courseId.
+      */
       if ((scope === 'group' || isPersonal) && !this.context.activityId && !this.context.courseId) {
         this.isLoading = false;
         this.cdr.detectChanges();
@@ -258,11 +268,13 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
   get viz() { return this.activeViz; }
 
   /** Icône fixe par contexte (apprenant/enseignant/cours/...) - jamais celle de la
-   *  visualisation, pour rester reconnaissable d'un coup d'œil quel que soit l'indicateur. */
+   visualisation, pour rester reconnaissable d'un coup d'œil quel que soit l'indicateur.
+  */
   readonly contextIcon = contextIcon;
 
   /** `null` si aucun seuil n'est configuré - le template retire alors la bordure de statut
-   *  au lieu de retomber sur une couleur par défaut. */
+   au lieu de retomber sur une couleur par défaut.
+  */
   getThresholdColor(): string | null {
     if (!this.value) return null;
     const val = this.value.value;
@@ -274,7 +286,8 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /** Couleur affichée pour la valeur/l'unité/l'icône : préférence perso de l'utilisateur en
-   *  priorité, sinon la couleur configurée par l'admin à l'étape 2, sinon un gris neutre. */
+   priorité, sinon la couleur configurée par l'admin à l'étape 2, sinon un gris neutre.
+  */
   get displayColor(): string {
     return this.userColorPreference || this.activeViz?.color || '#7f8c8d';
   }
@@ -292,22 +305,6 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
       return (val / 1000) + 'k';
     }
     return String(val);
-  }
-
-  getTrendIcon(trend: string): string {
-    switch (trend) {
-      case 'up': return 'trending_up';
-      case 'down': return 'trending_down';
-      default: return 'trending_flat';
-    }
-  }
-
-  getTrendLabel(trend: string): string {
-    switch (trend) {
-      case 'up': return 'En hausse par rapport aux dernières valeurs';
-      case 'down': return 'En baisse par rapport aux dernières valeurs';
-      default: return 'Stable par rapport aux dernières valeurs';
-    }
   }
 
   getContextLabel(scope: string): string {
@@ -353,8 +350,10 @@ export class IndicatorCardComponent implements OnInit, OnChanges, OnDestroy {
 
     this.indicatorService.setEnabledVizIds(userId, this.indicator.id, allVizIds);
 
-    // La visualisation choisie pour piloter la carte (icône/valeur/graphique) - un seul choix,
-    // toujours parmi les visualisations activées (voir indicator-config-modal.component.ts).
+    /*
+    La visualisation choisie pour piloter la carte (icône/valeur/graphique) - un seul choix,
+    toujours parmi les visualisations activées (voir indicator-config-modal.component.ts).
+    */
     const chosenVizId = componentInstance.getSelectedActiveVizId();
     if (chosenVizId && chosenVizId !== this.activeVizId) {
       this.indicatorService.setVizPreference(userId, this.indicator.id, chosenVizId);

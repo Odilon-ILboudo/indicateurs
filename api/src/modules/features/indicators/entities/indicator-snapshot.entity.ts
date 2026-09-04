@@ -1,7 +1,9 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
-// L'unicité est appliquée par deux index uniques partiels en base, pas par @Unique() :
-// activityId et courseId sont mutuellement exclusifs, l'un des deux est toujours NULL.
+/*
+L'unicité est appliquée par deux index uniques partiels en base, pas par @Unique() :
+activityId et courseId sont mutuellement exclusifs, l'un des deux est toujours NULL.
+*/
 @Entity('indicator_snapshots')
 export class IndicatorSnapshot {
   @PrimaryGeneratedColumn('uuid')
@@ -16,7 +18,7 @@ export class IndicatorSnapshot {
   @Column()
   contextId: string;  // groupId (CourseGroups.id)
 
-  /** Exactement l'un des deux (activityId ou courseId) est renseigné, jamais les deux. */
+  // Exactement l'un des deux (activityId ou courseId) est renseigné, jamais les deux
   @Column({ type: 'varchar', nullable: true })
   activityId: string | null;
 

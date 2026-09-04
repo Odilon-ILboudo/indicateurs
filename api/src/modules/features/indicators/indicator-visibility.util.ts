@@ -1,9 +1,9 @@
 import { ContextType } from './entities/indicator-definition.entity';
 
-/**
- * Miroir de INDICATOR_VISIBILITY (frontend RoleService) - les deux doivent rester synchronisés
- * à la main, pas de source unique partagée entre le front et l'API. Voir IndicatorVisibilityGuard.
- */
+/*
+Miroir de INDICATOR_VISIBILITY (frontend RoleService). Les deux doivent rester synchronisés
+à la main, pas de source unique partagée entre le front et l'API. Voir IndicatorVisibilityGuard.
+*/
 export const INDICATOR_VISIBILITY: Record<ContextType, string[]> = {
   learner: ['student'],
   teacher: ['teacher'],
@@ -13,8 +13,9 @@ export const INDICATOR_VISIBILITY: Record<ContextType, string[]> = {
   group: ['teacher', 'admin'],
 };
 
-/** Même règle que `RoleService#canSeeIndicatorContext` côté front : `visibilityRoles`, quand
- *  renseigné sur l'indicateur, prend le dessus sur la règle par défaut du contextType. */
+/* Même règle que `RoleService#canSeeIndicatorContext` côté front : `visibilityRoles`, quand
+ renseigné sur l'indicateur, prend le dessus sur la règle par défaut du contextType.
+*/
 export function canRoleSeeIndicator(
   role: string | undefined | null,
   contextType: ContextType,

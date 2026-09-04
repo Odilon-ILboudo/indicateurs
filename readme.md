@@ -16,6 +16,10 @@ fonctionnement global du projet sans avoir à parcourir tout le code source.
 >   d'entrée de build (`indicateurs-embed`, voir §10 "Point d'entrée embarqué"),
 >   qui expose `<indicateurs-app>` comme Web Component intégrable dans un LMS
 >   hôte (PLaTon aujourd'hui, potentiellement un autre demain).
+> - [`docs/integration-platon-relay.md`](docs/integration-platon-relay.md) - le
+>   relais d'événements (`platon_outbox_events` → RabbitMQ, voir §6bis et
+>   `docs/ingestion.md` étape 2), qui vit côté LMS hôte, pas dans ce dépôt ;
+>   fichiers prêts à copier dans `docs/platon-integration/`.
 
 ## Sommaire
 
@@ -40,7 +44,7 @@ fonctionnement global du projet sans avoir à parcourir tout le code source.
 Le projet est un microservice de **suivi de performance e-learning** pour la
 plateforme PLaTon. Il combine :
 
-- un **frontend Angular 21** (`frontend/`)
+- un **frontend Angular 18** (`frontend/`)
 - un **backend NestJS** (`api/`, port 3001)
 - une lecture de la **base PLaTon** (données pédagogiques, lecture seule)
 - un stockage des définitions et valeurs d'indicateurs dans une **base
@@ -129,13 +133,14 @@ modules/
       indicators.service.ts     - logique métier (computeView, recalculate, snapshots…)
     event-types/                - types d'événements PLaTon gérés en BDD (CRUD, seed au démarrage)
     event-rules/                 - déclencheurs dynamiques : règle → trigger PostgreSQL généré (section 6bis)
+      event-classifier.service.ts - interprète un événement générique brut selon les règles actives
     indicator-pins/             - indicateurs figés par un enseignant sur un cours/activité (voir section 5)
     user-preferences/           - préférences d'affichage par utilisateur
     ingestion/                  - consumers RabbitMQ, WebSocket gateway, service d'ingestion
       ingestion-consumer.service.ts - 2 consumers routing key '#' (learner + aggregate)
       indicators.gateway.ts     - WebSocket /indicators, émet indicator.updated
       ingestion.service.ts      - logique de calcul incrémental / recalcul total
-    ingestion-relay/            - cron */2 * * * * * : lit platon_outbox_events → publie RabbitMQ
+    outbox-maintenance/          - purge quotidienne de platon_outbox_events (> 7 jours) sur la BDD PLaTon
     aggregation/                - recalcul périodique des indicateurs actifs sans déclencheur (fréquence configurable via TRIGGERLESS_RECALC_CRON, voir section 6)
     courses/                    - proxy lecture PLaTon : cours, sections, activités, groupes, résultats
     resources/                  - proxy lecture PLaTon : ressources, arbre de cercles
@@ -182,9 +187,12 @@ shared/
 
 ### 3.3 Stubs PLaTon (`frontend/src/platon-stubs/`)
 
-PLaTon utilise Angular 18, ce projet Angular 21 → **impossible d'importer
-directement les libs PLaTon** (deux instances Angular en conflit). Les pages
-"Cours" et "Ressources" ont donc été **copiées depuis PLaTon puis adaptées**, et
+PLaTon est un monorepo Nx ; `@platon/*`/`@cisstech/nge/*` sont des libs
+internes à son workspace Nx, résolues par son propre système de build - pas de
+vrais paquets npm publiés, indépendamment importables. Ce projet n'utilise pas
+Nx (choix délibéré) → **impossible d'importer directement les libs PLaTon**.
+Les pages "Cours" et "Ressources" ont donc été **copiées depuis PLaTon puis
+adaptées**, et
 toutes les dépendances `@platon/*` / `@cisstech/nge/*` sont remplacées par des
 **stubs locaux** via des alias `tsconfig.json` :
 
@@ -220,7 +228,8 @@ Points clés de ces stubs :
   **opérations d'écriture** (créer/déplacer/etc.) sont des no-ops car la BDD
   PLaTon est en lecture seule.
 - Les composants UI (`UiLayoutTabsComponent`, `UiStatisticCardComponent`,
-  `UiSearchBarComponent`, etc.) sont réimplémentés en Angular 21.
+  `UiSearchBarComponent`, etc.) sont réimplémentés localement, sans dépendre
+  du workspace Nx de PLaTon.
 - `@angular/cdk/portal` n'est pas installé : `ComponentType<T>` est défini
   localement dans les stubs qui en ont besoin (ex. `event-item`).
 - Les icônes assets nge (`assets/vendors/nge/icons/`) sont absentes :
@@ -571,12 +580,11 @@ résultats, "Afficher tout" si > 5 lignes).
 
 ## 6bis. Déclencheurs dynamiques (`event-rules`)
 
-Un seul événement est câblé en dur dans le code : `exercise.answered`, produit
-par le trigger `trg_platon_outbox_session_data` sur `SessionData.grade`
-(installé manuellement, voir [`docs/ingestion.md`](docs/ingestion.md) étape 1). Pour
-ajouter un **nouvel** événement (autre table, autre colonne, autre condition)
-sans redéploiement, l'écran admin **"Événements & déclencheurs"**
-(`event-rule-manager.component.ts`) permet de :
+Aucun événement n'est câblé en dur dans le code : `api/scripts/migrations/platon-outbox.sql`
+crée uniquement la table `platon_outbox_events` (voir
+[`docs/ingestion.md`](docs/ingestion.md) étape 1) - tous les déclencheurs, y
+compris pour l'événement historique `exercise.answered`, se créent depuis
+l'écran admin **"Événements & déclencheurs"** (`event-rule-manager.component.ts`) :
 
 1. **Créer une règle** (`event-rule-builder.component.ts`) : table PLaTon →
    colonne surveillée → opération → condition → mapping contexte (colonnes →
@@ -590,11 +598,14 @@ sans redéploiement, l'écran admin **"Événements & déclencheurs"**
 3. **Supprimer** : retire le trigger (ou le réduit s'il est partagé par
    d'autres règles actives sur la même table) puis désactive la règle.
 
-`IngestionRelayService.classify()` (voir [`docs/ingestion.md`](docs/ingestion.md) étape
-1bis) évalue les règles actives contre chaque événement générique brut
+`EventClassifierService.classify()` (voir [`docs/ingestion.md`](docs/ingestion.md)
+étape 3) évalue les règles actives contre chaque événement générique brut
 (`event_type` préfixé `raw:`) pour déterminer le(s) événement(s) métier réel(s)
-à publier. Le chemin historique (`exercise.answered` et tout `event_type` non
-préfixé `raw:`) reste totalement inchangé.
+- appelée depuis les consumers RabbitMQ, pas depuis le relais (qui vit
+désormais côté LMS hôte, voir [`docs/integration-platon-relay.md`](docs/integration-platon-relay.md),
+et republie tout tel quel sans l'interpréter). Le chemin historique
+(`exercise.answered` et tout `event_type` non préfixé `raw:`) reste
+totalement inchangé.
 
 `DROP TRIGGER` exigeant en PostgreSQL la propriété de la table (pas juste un
 privilège `GRANT`), l'installation peut échouer si le rôle applicatif n'est
@@ -714,10 +725,9 @@ table est dupliquée dans `api/src/modules/features/indicators/indicator-visibil
 `getIndicatorValues`/`computeView`/`getSnapshots`/`createSnapshot`
 (`indicators.controller.ts`) et `createPreference`/`updatePreference`
 (`user-preferences.controller.ts`) - le rôle vient de la table `Users` de
-`platon_db` (jamais du rôle envoyé par le client). Avant ce guard, la
-restriction n'existait qu'en affichage : un appel API direct avec le bon
-`contextId` contournait totalement `RoleService`, quel que soit le rôle
-réel de l'utilisateur.
+`platon_db` (jamais du rôle envoyé par le client), pour que la restriction
+tienne aussi face à un appel API direct, pas seulement via l'interface
+Angular.
 
 ### Comment changer de rôle pour tester
 
@@ -970,8 +980,7 @@ Angular courante) - naviguer vers un cours ou une activité *est* le
 changement de contexte. La page **cours** (`dashboard.page.ts`) affiche
 directement, sur la même page, les indicateurs `course`, les indicateurs
 personnels (`learner`/`teacher`/`admin`, restreints à ce cours) et les
-indicateurs `group` scopés au cours entier - plus d'onglet "Mes
-statistiques" séparé (supprimé, fusionné ici). La page **activité**
+indicateurs `group` scopés au cours entier, sans onglet séparé. La page **activité**
 (`activity.page.ts`) affiche de même ses indicateurs personnels (restreints
 à cette activité), "Indicateurs de l'activité" (`activity`) et "Indicateurs
 par groupe" (`group`, scopés à l'activité) directement sur la même page.
@@ -1007,9 +1016,8 @@ valeurs par défaut.
 
 ### Page activité (`/dashboard/courses/:id/activities/:activityId`)
 
-Trois sections d'indicateurs, toutes sur la même page (pas d'onglet séparé -
-comme la page cours depuis la fusion de son ancien onglet "Mes
-statistiques") :
+Trois sections d'indicateurs, toutes sur la même page (pas d'onglet séparé,
+comme la page cours) :
 1. **"Mes statistiques"** - indicateurs personnels (`learner`/`teacher`/
    `admin`) dont la formule est activity-aware, restreints à cette activité
    (voir `isActivityAware()`).
@@ -1046,10 +1054,12 @@ Pour les visualisations `line-chart`, un sélecteur de période est affiché :
    backend vérifie le cache (`indicator_values`), sinon exécute le pipeline DSL
    sur la base PLaTon via `FormulaInterpreterService` + `PlatonService`, stocke
    le résultat et le retourne.
-4. Un événement PLaTon déclenche le trigger PostgreSQL sur `SessionData` →
-   écrit dans `platon_outbox_events` → `IngestionRelayService` (cron 2s) publie
+4. Un événement PLaTon déclenche un trigger générique installé depuis l'admin
+   sur `SessionData` → écrit dans `platon_outbox_events` → un relais côté LMS
+   hôte (cron 2s, voir `docs/integration-platon-relay.md`) republie tel quel
    vers RabbitMQ → 2 consumers (`indicators.learner` et `indicators.aggregate`)
-   traitent en parallèle. Le consumer `learner` met à jour la valeur incrémentale
+   classifient (`EventClassifierService`) puis traitent en parallèle. Le
+   consumer `learner` met à jour la valeur incrémentale
    ou recalcule en SQL complet. Le consumer `aggregate` dispatch par `contextType`
    (activity/course/group/teacher/admin). Après chaque traitement, `refreshSnapshots()`
    et `refreshActivityViews()` sont appelés en fire-and-forget. Un événement
@@ -1102,9 +1112,9 @@ Doit toujours être posé **après** `AuthGuard`
 (`@UseGuards(AuthGuard, IndicatorVisibilityGuard)`) : lit le rôle réel de
 `request.user.id` en base PLaTon locale (jamais un rôle envoyé par le
 client) et applique la même règle que `RoleService.canSeeIndicatorContext`
-côté front (§8), mais pour de vrai - sans lui, un appel API direct (hors
-interface Angular) contournait entièrement la restriction de rôle/contexte,
-qui n'existait auparavant qu'en affichage. Posé sur
+côté front (§8), mais pour de vrai - pour que la restriction de rôle/contexte
+tienne aussi face à un appel API direct, pas seulement via l'interface
+Angular. Posé sur
 `getIndicatorValues`/`computeView`/`getSnapshots`/`createSnapshot`
 (`indicators.controller.ts`) et `createPreference`/`updatePreference`
 (`user-preferences.controller.ts`).

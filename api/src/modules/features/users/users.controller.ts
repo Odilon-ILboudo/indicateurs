@@ -7,7 +7,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export class UsersController {
   constructor(private readonly platonService: PlatonService) {}
 
-  /** Enveloppe { success, data: { resources, total } } attendue par UserService.search(). */
+  // Enveloppe { success, data: { resources, total } } attendue par UserService.search()
   @Get()
   async searchUsers(
     @Query('search') search?: string,

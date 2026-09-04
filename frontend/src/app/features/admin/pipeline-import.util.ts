@@ -1,95 +1,22 @@
-// Parsing/validation d'un import YAML/JSON d'indicateur - partagé entre le wizard et la modale
-// de choix initial, qui doit valider avant d'ouvrir le wizard.
+/*
+Parsing/validation d'un import YAML/JSON d'indicateur - partagé entre le wizard et la modale
+de choix initial, qui doit valider avant d'ouvrir le wizard.
+*/
 import * as yaml from 'js-yaml';
-import { IndicatorScope, ViewVisualizationType } from '../../core/models/indicator.model';
+import {
+  ImportedIndicatorMeta,
+  PipelineError,
+  PipelineStep,
+  PlatonTableSchema,
+  REQUIRED_ROOT_KEYS,
+  STEP_TYPE_LABELS,
+  StepType,
+  VALID_CONTEXT_TYPES,
+  VALID_ROOT_KEYS,
+  VALID_VIZ_TYPES,
+} from './pipeline-import-types';
 
-const VALID_CONTEXT_TYPES: IndicatorScope[] = ['learner', 'teacher', 'admin', 'course', 'activity', 'group'];
-const VALID_VIZ_TYPES: ViewVisualizationType[] = ['card', 'gauge', 'line-chart', 'bar-chart', 'histogram'];
-
-export type StepType = 'fetch' | 'join' | 'filter' | 'groupBy' | 'findFirst' | 'extract' | 'aggregate' | 'round' | 'divide' | 'js';
-
-export interface PipelineStep {
-  id: string; type: StepType; label: string;
-  // fetch
-  table?: string; contextFields?: string[]; useGroupContext?: boolean;
-  // join
-  joinTable?: string; joinContextFields?: string[]; joinLeftKey?: string; joinRightKey?: string;
-  joinType?: 'left' | 'inner' | 'right' | 'full';
-  // filter
-  filterField?: string; filterOperator?: string; filterValue?: string | number;
-  // groupBy
-  groupField?: string;
-  // findFirst
-  whereField?: string; whereValue?: string | number; sortField?: string;
-  // extract
-  extractField?: string;
-  // aggregate
-  aggregateFn?: string;
-  // round / divide / js
-  decimals?: number; divideBy?: number; jsCode?: string;
-}
-
-export interface PlatonTableSchema { name: string; columns: { name: string; type: string }[]; }
-
-export const STEP_TYPE_LABELS: Record<StepType, string> = {
-  fetch: 'Récupérer données', join: 'Jointure', filter: 'Filtrer',
-  groupBy: 'Grouper par', findFirst: 'Premier résultat', extract: 'Extraire champ',
-  aggregate: 'Agréger', round: 'Arrondir', divide: 'Diviser', js: 'Code JS',
-};
-
-/** Champs de l'indicateur reconnus au niveau racine d'un import YAML/JSON, en plus du
- *  pipeline. `name` est le seul obligatoire avec `pipeline` - le reste garde les valeurs déjà
- *  présentes dans le formulaire si absent de l'import. */
-export interface ImportedIndicatorMeta {
-  name: string;
-  description?: string;
-  interpretationHint?: string;
-  requiredEvents?: string[];
-  contextType?: IndicatorScope;
-  thresholds?: { good?: number | null; warning?: number | null; critical?: number | null } | null;
-  visualizations?: { label?: string; type?: string; icon?: string; color?: string; unit?: string }[];
-}
-
-export class PipelineError extends Error {
-  constructor(
-    message: string,
-    readonly available?: string[],
-    readonly availableLabel?: string,
-    readonly wrongValue?: string,
-    readonly availableDisplay?: string[], // étiquettes d'affichage (si différentes de available)
-  ) { super(message); }
-}
-
-/** Forme d'affichage d'une erreur de `parseIndicatorImport()`, partagée par tous les panneaux
- *  d'import (wizard étape 3, modale de choix initial) pour un rendu cohérent. */
-export interface ImportErrorDisplay {
-  main: string;
-  available?: string[];           // valeurs à insérer au clic
-  availableDisplay?: string[];    // étiquettes affichées (si différentes de available)
-  availableLabel?: string;
-  wrongValue?: string;
-}
-
-export function toImportErrorDisplay(e: unknown): ImportErrorDisplay {
-  if (e instanceof PipelineError) {
-    return { main: e.message, available: e.available, availableLabel: e.availableLabel, wrongValue: e.wrongValue, availableDisplay: e.availableDisplay };
-  }
-  return { main: e instanceof Error ? e.message : String(e) };
-}
-
-/** Remplace la valeur fautive par la suggestion choisie dans le texte importé (clic sur une
- *  valeur proposée) - utilisé par le bouton "cliquer pour corriger" des panneaux d'import. */
-export function replaceValueInText(text: string, wrongValue: string, suggestion: string): string {
-  const escaped = wrongValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(`(["']?)\\b${escaped}\\b\\1`);
-  return text.replace(re, `$1${suggestion}$1`);
-}
-
-const VALID_ROOT_KEYS = [
-  'name', 'description', 'interpretationHint', 'requiredEvents',
-  'contextType', 'thresholds', 'visualizations', 'pipeline',
-];
-const REQUIRED_ROOT_KEYS = ['name', 'pipeline'];
+export * from './pipeline-import-types';
 
 export function dehydrateStep(s: any): PipelineStep {
   return {
@@ -122,7 +49,8 @@ export function dehydrateStep(s: any): PipelineStep {
 }
 
 /** Vérifie qu'une étape du pipeline a bien ses champs requis pour son type. Ne vérifie pas
- *  qu'il y a au moins une étape : un brouillon peut avoir un pipeline vide ou partiel. */
+ qu'il y a au moins une étape : un brouillon peut avoir un pipeline vide ou partiel.
+*/
 export function validatePipelineStepComplete(s: PipelineStep, stepIndex: number): string | null {
   const ctx = `Étape ${stepIndex + 1} (${STEP_TYPE_LABELS[s.type]})`;
   switch (s.type) {
@@ -190,7 +118,7 @@ function validateAndDehydrateStep(raw: any, stepNum: number): PipelineStep {
     throw new Error(`Étape ${stepNum} : doit être un objet avec au minimum les clés "type" et "params".`);
   }
 
-  // ── Niveau 1 : clés de l'étape (type / label / params) ──────────────────
+  //  Niveau 1 : clés de l'étape (type / label / params) 
   const stepKeys = Object.keys(raw);
   const wrongStepKey = stepKeys.find(k => !VALID_STEP_KEYS.includes(k));
 
@@ -224,7 +152,7 @@ function validateAndDehydrateStep(raw: any, stepNum: number): PipelineStep {
   if (!raw.label) raw.label = STEP_TYPE_LABELS[raw.type as StepType];
   const ctx = `Étape ${stepNum} (${STEP_TYPE_LABELS[raw.type as StepType]})`;
 
-  // ── Niveau 2 : params doit être un objet plain ───────────────────────────
+  //  Niveau 2 : params doit être un objet plain
   if (raw.params !== undefined && raw.params !== null) {
     if (Array.isArray(raw.params))
       throw new Error(`${ctx} : "params" doit être un objet clé:valeur, pas une liste.`);
@@ -233,7 +161,7 @@ function validateAndDehydrateStep(raw: any, stepNum: number): PipelineStep {
   }
   const p = raw.params ?? {};
 
-  // ── Niveau 3 : clés à l'intérieur de params ──────────────────────────────
+  //  Niveau 3 : clés à l'intérieur de params 
   const validParamKeys = VALID_PARAMS[raw.type as StepType];
   const wrongParamKey = Object.keys(p).find(k => !validParamKeys.includes(k));
   if (wrongParamKey) {
@@ -407,16 +335,18 @@ function validatePipelineColumns(pipeline: PipelineStep[], platonSchema: PlatonT
 }
 
 /** `true` si `text` est du JSON strictement valide - utilisé pour rejeter du JSON collé par
- *  erreur en mode YAML (le YAML est un sur-ensemble du JSON, `yaml.load` l'accepterait
- *  silencieusement sinon) : voir `parseIndicatorImport` et `formatImportText`. */
+ erreur en mode YAML (le YAML est un sur-ensemble du JSON, `yaml.load` l'accepterait
+ silencieusement sinon) : voir `parseIndicatorImport` et `formatImportText`.
+*/
 export function looksLikeJson(text: string): boolean {
   try { JSON.parse(text); return true; } catch { return false; }
 }
 
 /** Parse et valide un import YAML/JSON complet d'indicateur (pas seulement le pipeline).
- *  `platonSchema` peut être vide (validation des tables/colonnes alors ignorée) - utile pour
- *  valider avant que le schéma PLaTon soit chargé. Lève `PipelineError`/`Error` sur tout
- *  problème, avec un message prêt à afficher tel quel. */
+ `platonSchema` peut être vide (validation des tables/colonnes alors ignorée) - utile pour
+ valider avant que le schéma PLaTon soit chargé. Lève `PipelineError`/`Error` sur tout
+ problème, avec un message prêt à afficher tel quel.
+*/
 export function parseIndicatorImport(
   text: string,
   mode: 'yaml' | 'json',
@@ -424,9 +354,11 @@ export function parseIndicatorImport(
 ): { pipeline: PipelineStep[]; meta: ImportedIndicatorMeta } {
   if (!text.trim()) throw new Error('Le champ est vide. Collez votre indicateur ci-dessus avant d\'appliquer.');
 
-  // Mode strict : le YAML est un sur-ensemble du JSON (js-yaml accepterait silencieusement du
-  // JSON collé par erreur en mode YAML) - on rejette explicitement ce cas plutôt que de laisser
-  // passer, pour que le mode sélectionné corresponde vraiment au texte collé.
+  /*
+  Mode strict : le YAML est un sur-ensemble du JSON (js-yaml accepterait silencieusement du
+  JSON collé par erreur en mode YAML) - on rejette explicitement ce cas plutôt que de laisser
+  passer, pour que le mode sélectionné corresponde vraiment au texte collé.
+  */
   if (mode === 'yaml' && looksLikeJson(text)) {
     throw new Error(
       'Ce texte est du JSON valide, pas du YAML. Sélectionnez le mode JSON, ou reformulez en syntaxe YAML (indentation, sans accolades).',

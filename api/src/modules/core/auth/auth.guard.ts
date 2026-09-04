@@ -13,11 +13,11 @@ interface PlatonJwtPayload extends jwt.JwtPayload {
 }
 
 /**
- * Vérifie le token `Authorization: Bearer`. Comportement contrôlé par NODE_ENV :
- * - production : vérification cryptographique complète (signature + expiration).
- * - dev (par défaut) : le secret de signature du PLaTon de production est inconnu ici, on ne
- *   peut donc que décoder le payload et contrôler l'expiration.
- */
+Vérifie le token `Authorization: Bearer`. Comportement contrôlé par NODE_ENV :
+- production : vérification cryptographique complète (signature + expiration).
+- dev (par défaut) : le secret de signature du PLaTon de production est inconnu ici, on ne
+  peut donc que décoder le payload et contrôler l'expiration.
+*/
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(private readonly configService: ConfigService) {}

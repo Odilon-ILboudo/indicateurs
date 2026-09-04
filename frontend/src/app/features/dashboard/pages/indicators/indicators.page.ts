@@ -1,4 +1,3 @@
-// web/src/app/pages/dashboard/indicators/indicators.page.ts
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { RouterModule } from '@angular/router';

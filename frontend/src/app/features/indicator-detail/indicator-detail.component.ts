@@ -58,13 +58,15 @@ export class IndicatorDetailComponent implements OnInit {
   private readonly modalService = inject(NzModalService);
   private readonly cdr = inject(ChangeDetectorRef);
   protected readonly routeBasePath = inject(ROUTE_BASE_PATH, { optional: true }) ?? '/dashboard';
-  // Les bannières de contexte renvoient vers /courses/... en standalone, ou en interne vers
-  // /context en mode embarqué - jamais un lien externe vers une page PLaTon native.
+  /*
+  Les bannières de contexte renvoient vers /courses/... en standalone, ou en interne vers
+  /context en mode embarqué - jamais un lien externe vers une page PLaTon native.
+  */
   protected readonly embedded = inject(EMBEDDED_MODE, { optional: true }) ?? false;
 
   readonly contextIcon = contextIcon;
 
-  // ── Feedback ──────────────────────────────────────────────────────────────
+  //  Feedback
   feedbackModalVisible = false;
   feedbackRating = 0;
   feedbackComment = '';
@@ -79,8 +81,10 @@ export class IndicatorDetailComponent implements OnInit {
   activeCourseId: string | undefined = undefined;
 
   courseContextCourseName = '';
-  // Id du cours pour le lien "Retour au cours" - distinct de activeContextId, qui vaut l'id de
-  // l'utilisateur (pas celui du cours) pour un indicateur personnel course-aware.
+  /*
+  Id du cours pour le lien "Retour au cours" - distinct de activeContextId, qui vaut l'id de
+  l'utilisateur (pas celui du cours) pour un indicateur personnel course-aware.
+  */
   courseContextCourseId = '';
   hasCourseContext = false;
 
@@ -104,10 +108,10 @@ export class IndicatorDetailComponent implements OnInit {
   loading: Record<string, boolean> = {};
   chartOptions: Record<string, EChartsOption> = {};
 
-  /** Période affichée pour les graphiques en courbe (jours), par vizId. 7 jours par défaut. -1 = plage personnalisée. */
+  // Période affichée pour les graphiques en courbe (jours), par vizId. 7 jours par défaut. -1 = plage personnalisée.
   historyPeriodDays: Record<string, number> = {};
 
-  /** Plage de dates personnalisée par vizId, utilisée quand historyPeriodDays[vizId] === -1. */
+  // Plage de dates personnalisée par vizId, utilisée quand historyPeriodDays[vizId] === -1.
   historyCustomRange: Record<string, [Date, Date] | null> = {};
 
   readonly historyPeriodOptions: { label: string; value: number }[] = [
@@ -120,7 +124,7 @@ export class IndicatorDetailComponent implements OnInit {
 
   isLoading = true;
 
-  /** Visualisation active (choisie par l'utilisateur, persistée en BDD). */
+  // Visualisation active (choisie par l'utilisateur, persistée en BDD).
   activeVizId: string | null = null;
 
   get isTeacher(): boolean { return this.roleService.isTeacher(); }
@@ -143,10 +147,12 @@ export class IndicatorDetailComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    // Une navigation entre deux /indicator/:id réutilise la même instance de composant : on
-    // réagit à chaque NavigationEnd plutôt qu'une seule fois dans ngOnInit. On relit
-    // route.snapshot plutôt que combiner paramMap/queryParams (deux flux qui peuvent émettre de
-    // façon non atomique et produire une combinaison transitoire incohérente).
+    /*
+    Une navigation entre deux /indicator/:id réutilise la même instance de composant : on
+    réagit à chaque NavigationEnd plutôt qu'une seule fois dans ngOnInit. On relit
+    route.snapshot plutôt que combiner paramMap/queryParams (deux flux qui peuvent émettre de
+    façon non atomique et produire une combinaison transitoire incohérente).
+    */
     this.router.events.pipe(
       filter((e): e is NavigationEnd => e instanceof NavigationEnd),
       startWith(null),
@@ -156,8 +162,10 @@ export class IndicatorDetailComponent implements OnInit {
   }
 
   private loadFromRoute(id: string | null, q: Params): void {
-    // Réinitialise tout l'état dépendant de la route - nécessaire car l'instance peut être
-    // réutilisée d'une navigation à l'autre (voir commentaire ngOnInit).
+    /*
+    Réinitialise tout l'état dépendant de la route - nécessaire car l'instance peut être
+    réutilisée d'une navigation à l'autre (voir commentaire ngOnInit).
+    */
     this.isLoading = true;
     this.indicator = null;
     this.results = {};
@@ -224,8 +232,10 @@ export class IndicatorDetailComponent implements OnInit {
       this.courseContextCourseId = q['courseId'];
       this.hasCourseContext = true;
     } else if (q['from'] === 'activity-personal' && q['contextType'] && q['activityId']) {
-      // Carte personnelle activity-aware : contextType dépend de l'indicateur cliqué, donc
-      // fourni explicitement en query param plutôt que déduit de `from`.
+      /*
+      Carte personnelle activity-aware : contextType dépend de l'indicateur cliqué, donc
+      fourni explicitement en query param plutôt que déduit de `from`.
+      */
       this.activeContextType = q['contextType'];
       this.activeContextId = getCurrentUserId();
       this.activeActivityId = q['activityId'];
@@ -258,8 +268,10 @@ export class IndicatorDetailComponent implements OnInit {
           return;
         }
 
-        // Pas de contexte spécifique (clic depuis le tableau de bord) :
-        // résout le contexte sur celui de l'indicateur (learner/teacher/admin = userId)
+        /*
+        Pas de contexte spécifique (clic depuis le tableau de bord) :
+        résout le contexte sur celui de l'indicateur (learner/teacher/admin = userId)
+        */
         if (!this.hasGroupSnapshotContext && !this.hasActivityContext && !this.hasCourseContext) {
           this.activeContextType = this.indicator.contextType;
         }
@@ -281,7 +293,7 @@ export class IndicatorDetailComponent implements OnInit {
     });
   }
 
-  /** Appelé quand l'utilisateur clique sur un autre onglet de visualisation. */
+  // Appelé quand l'utilisateur clique sur un autre onglet de visualisation.
   onVizTabChange(index: number): void {
     const viz = this.visualizations[index];
     if (!viz || viz.id === this.activeVizId) return;
@@ -325,9 +337,11 @@ export class IndicatorDetailComponent implements OnInit {
 
   private buildChartOptions(viz: IndicatorVisualization, result: ViewResult): void {
     if (viz.type === 'line-chart') {
-      // Seul cas non couvert par l'utilitaire partagé : dépend de l'historique temporel et de
-      // l'état de sélection de période (historyPeriodDays/historyCustomRange), propres à cette
-      // page - une modale de comparaison par snapshots ponctuels n'a pas cette notion.
+      /*
+      Seul cas non couvert par l'utilitaire partagé : dépend de l'historique temporel et de
+      l'état de sélection de période (historyPeriodDays/historyCustomRange), propres à cette
+      page - une modale de comparaison par snapshots ponctuels n'a pas cette notion.
+      */
       const color = viz.color ?? '#5470c6';
       const unit  = viz.unit  ?? '';
       const fullHistory = result.metadata?.['history'] ?? [];
@@ -345,7 +359,7 @@ export class IndicatorDetailComponent implements OnInit {
     if (options) this.chartOptions[viz.id] = options;
   }
 
-  /** Change la période affichée pour la courbe d'un viz et reconstruit le graphique. */
+  // Change la période affichée pour la courbe d'un viz et reconstruit le graphique.
   onHistoryPeriodChange(viz: IndicatorVisualization, days: number): void {
     this.historyPeriodDays[viz.id] = days;
     const result = this.results[viz.id];
@@ -353,7 +367,7 @@ export class IndicatorDetailComponent implements OnInit {
     this.cdr.markForCheck();
   }
 
-  /** Change la plage de dates personnalisée pour la courbe d'un viz et reconstruit le graphique. */
+  // Change la plage de dates personnalisée pour la courbe d'un viz et reconstruit le graphique.
   onCustomRangeChange(viz: IndicatorVisualization, range: [Date, Date] | null): void {
     this.historyCustomRange[viz.id] = range;
     const result = this.results[viz.id];
@@ -361,7 +375,7 @@ export class IndicatorDetailComponent implements OnInit {
     this.cdr.markForCheck();
   }
 
-  /** Filtre l'historique selon la période sélectionnée (jours glissants, tout, ou plage personnalisée). */
+  // Filtre l'historique selon la période sélectionnée (jours glissants, tout, ou plage personnalisée).
   private filterHistory(viz: IndicatorVisualization, history: { value: number; timestamp: Date }[]): { value: number; timestamp: Date }[] {
     const days = this.historyPeriodDays[viz.id] ?? 7;
 
@@ -381,7 +395,7 @@ export class IndicatorDetailComponent implements OnInit {
     return history.filter(h => new Date(h.timestamp).getTime() >= cutoff);
   }
 
-  // ── Helpers template ──────────────────────────────────────────────────────
+  //  Helpers template
 
   getContextLabel(contextType: string): string {
     const labels: Record<string, string> = {

@@ -1,10 +1,7 @@
 name: Déploiement production
 
-# Déclenchement manuel uniquement (onglet Actions du repo) - choix délibéré,
-# pas d'automatisation sur push. Le build a lieu directement sur le serveur
-# (bin/docker/up.sh -p -d), donc aucune image n'est poussée sur un registre :
-# ce workflow ne fait que déclencher à distance ce qu'on lancerait à la main
-# en SSH.
+# Déclenchement manuel uniquement (onglet Actions du repo) - pas d'automatisation sur push. Le build a lieu directement sur le serveur
+# (bin/docker/up.sh -p -d), donc aucune image n'est poussée sur un registre.
 on:
   workflow_dispatch:
     inputs:
@@ -42,6 +39,10 @@ jobs:
 
             PORT=$(grep -E '^INDICATEURS_PORT=' .env | cut -d= -f2)
             PORT=${PORT:-4300}
+            # 6 tentatives x 5s = 30s max : choix empirique, pas mesuré précisément - le temps
+            # que nginx/l'API démarrent réellement (migrations comprises) après "up -d", qui rend
+            # la main immédiatement sans attendre que les conteneurs soient prêts. À allonger sans
+            # risque si les migrations ou le démarrage prennent plus de temps.
             for i in 1 2 3 4 5 6; do
               if curl -sf "http://localhost:${PORT}/" > /dev/null; then
                 echo "OK : le frontend répond sur le port ${PORT}"

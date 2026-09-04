@@ -1,19 +1,17 @@
-// web/src/app/core/services/role.service.ts
 import { Injectable, signal, computed } from '@angular/core';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { Observable } from 'rxjs';
 import { IndicatorScope } from '../models/indicator.model';
 
-export type UserRole = 'student' | 'teacher' | 'admin' | 'demo';
+export type UserRole = 'student' | 'teacher' | 'admin';
 
-/** Qui peut voir les indicateurs de chaque contexte (le rôle 'demo' suit la règle la plus
- *  restrictive - celle de 'student' - par défaut, faute de spécification dédiée). */
+// Qui peut voir les indicateurs de chaque contexte.
 const INDICATOR_VISIBILITY: Record<IndicatorScope, UserRole[]> = {
   learner:  ['student'],
   teacher:  ['teacher'],
   admin:    ['admin'],
-  course:   ['student', 'teacher', 'admin', 'demo'],
-  activity: ['student', 'teacher', 'admin', 'demo'],
+  course:   ['student', 'teacher', 'admin'],
+  activity: ['student', 'teacher', 'admin'],
   group:    ['teacher', 'admin'],
 };
 
@@ -21,7 +19,7 @@ const INDICATOR_VISIBILITY: Record<IndicatorScope, UserRole[]> = {
 export class RoleService {
   private currentRole = signal<UserRole>('student');
 
-  /** Observable du rôle courant - émet à chaque changement (utile pour combineLatest). */
+  // Observable du rôle courant - émet à chaque changement (utile pour combineLatest).
   readonly role$: Observable<UserRole> = toObservable(this.currentRole);
 
   // Computed values for UI
@@ -31,9 +29,10 @@ export class RoleService {
   canManageIndicators = computed(() => this.isAdmin() || this.isTeacher());
   canCreateIndicators = computed(() => this.isAdmin());
 
-  /** Le rôle courant peut-il voir les indicateurs de ce contexte (`learner`/`group`/...) ?
-   *  Si `visibilityRoles` est renseigné sur l'indicateur, il prend le dessus sur la règle par
-   *  défaut du contextType (ex. restreindre un indicateur `course` nominatif à teacher/admin). */
+  /* Le rôle courant peut-il voir les indicateurs de ce contexte (`learner`/`group`/...) ?
+   Si `visibilityRoles` est renseigné sur l'indicateur, il prend le dessus sur la règle par
+   défaut du contextType (ex. restreindre un indicateur `course` nominatif à teacher/admin).
+  */
   canSeeIndicatorContext(contextType: IndicatorScope, visibilityRoles?: string[] | null): boolean {
     if (visibilityRoles && visibilityRoles.length > 0) {
       return visibilityRoles.includes(this.currentRole());
@@ -52,7 +51,7 @@ export class RoleService {
   
   loadRoleFromStorage(): void {
     const savedRole = localStorage.getItem('userRole') as UserRole;
-    if (savedRole && ['student', 'teacher', 'admin', 'demo'].includes(savedRole)) {
+    if (savedRole && ['student', 'teacher', 'admin'].includes(savedRole)) {
       this.currentRole.set(savedRole);
     }
   }

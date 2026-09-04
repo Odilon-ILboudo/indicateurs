@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { CoreModule } from './modules/core/core.module';
 import { IndicatorsModule } from './modules/features/indicators/indicators.module';
 import { IngestionModule } from './modules/features/ingestion/ingestion.module';
-import { IngestionRelayModule } from './modules/features/ingestion-relay/ingestion-relay.module';
+import { OutboxMaintenanceModule } from './modules/features/outbox-maintenance/outbox-maintenance.module';
 import { AggregationModule } from './modules/features/aggregation/aggregation.module';
 import { UsersModule } from './modules/features/users/users.module';
 import { UserPreferencesModule } from './modules/features/user-preferences/user-preferences.module';
@@ -17,7 +17,7 @@ import { EventRulesModule } from './modules/features/event-rules/event-rules.mod
     IndicatorsModule,
     UserPreferencesModule,
     IngestionModule,
-    IngestionRelayModule,
+    OutboxMaintenanceModule,
     AggregationModule,
     UsersModule,
     CoursesModule,

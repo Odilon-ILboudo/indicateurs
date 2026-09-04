@@ -47,7 +47,7 @@ export class IndicatorSocketService implements OnDestroy {
     if (this.connected) this.socket.disconnect();
   }
 
-  /** Observable filtré par indicatorId + contextType + contextId */
+  // Observable filtré par indicatorId + contextType + contextId
   watchIndicator(
     indicatorId: string,
     contextType: string,
@@ -62,7 +62,7 @@ export class IndicatorSocketService implements OnDestroy {
     );
   }
 
-  /** Observable de toutes les mises à jour (pour un dashboard global) */
+  // Observable de toutes les mises à jour (pour un dashboard global)
   watchAll(): Observable<IndicatorUpdateEvent> {
     return this.updates$.asObservable();
   }

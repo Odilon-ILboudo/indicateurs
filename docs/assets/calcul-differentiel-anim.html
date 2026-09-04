@@ -67,7 +67,7 @@
   }
   .mode-label .pill.show { opacity: 1; }
 
-  /* ── Ligne source → cartes ─────────────────────────────────────────── */
+  /*  Ligne source → cartes ─ */
   .lane { display: flex; align-items: center; gap: 14px; }
   .source {
     flex: none; width: 168px; min-height: 54px; border-radius: 10px;
@@ -101,7 +101,7 @@
   }
   @keyframes flow { from { background-position: 0 0; } to { background-position: -34px 0; } }
 
-  /* ── Aire de lecture/calcul : ce qui rend le mécanisme visible ──────── */
+  /*  Aire de lecture/calcul : ce qui rend le mécanisme visible  */
   .staging {
     flex: none; width: 76px; min-height: 40px; border-radius: 10px;
     border: 1.5px dashed var(--border); background: var(--bg);
@@ -370,7 +370,7 @@
     valDuree.textContent = ((performance.now() - t0) / 1000).toFixed(1) + 's';
   }
 
-  // ── Jetons volants : rendent visible le trajet réel d'une valeur ──────
+  //  Jetons volants : rendent visible le trajet réel d'une valeur 
   function rectCenter(el, containerRect) {
     const r = el.getBoundingClientRect();
     return { x: r.left + r.width / 2 - containerRect.left, y: r.top + r.height / 2 - containerRect.top };

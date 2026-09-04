@@ -1,4 +1,3 @@
-// web/src/app/shared/components/index.ts
 export { IndicatorCardComponent } from './indicator-card/indicator-card.component';
 export { IndicatorDetailComponent } from '../../features/indicator-detail/indicator-detail.component';
 export { IndicatorSelectorComponent } from '../../features/indicator-selector/indicator-selector.component';

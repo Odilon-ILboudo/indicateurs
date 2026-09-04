@@ -151,9 +151,11 @@ export class UserPreferencesService {
     }
   }
 
-  // Pré-calcule la valeur d'un indicateur learner/teacher/admin et la persiste. Skip
-  // course/group/activity (calculés à la demande via computeView) et skip aussi les
-  // indicateurs personnels activity/course-aware (pas de valeur globale à précalculer).
+  /*
+  Pré-calcule la valeur d'un indicateur learner/teacher/admin et la persiste. Skip
+  course/group/activity (calculés à la demande via computeView) et skip aussi les
+  indicateurs personnels activity/course-aware (pas de valeur globale à précalculer).
+  */
   private async calculateAndStoreValue(userId: string, indicator: IndicatorDefinition): Promise<void> {
     if (!['learner', 'teacher', 'admin'].includes(indicator.contextType)) return;
 

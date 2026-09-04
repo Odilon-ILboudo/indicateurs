@@ -28,7 +28,7 @@ export class EventRulesService {
     private readonly platonDb: DataSource,
   ) {}
 
-  /** Retourne TOUTES les règles, actives ou non - la désactivation ne doit jamais les rendre invisibles. */
+  // Retourne toutes les règles, actives ou non. La désactivation ne doit jamais les rendre invisibles.
   findAll(): Promise<IndicatorEventRule[]> {
     return this.repo.find({ order: { isActive: 'DESC', createdAt: 'DESC' } });
   }
@@ -100,16 +100,19 @@ export class EventRulesService {
     await this.repo.save(rule);
   }
 
-  /** Réactive une règle désactivée. Ne réinstalle pas le trigger tout seul si `triggerInstalled`
-   *  est déjà à false (l'admin doit relancer "Installer" explicitement, comme pour une nouvelle règle). */
+  /* Réactive une règle désactivée. Ne réinstalle pas le trigger tout seul si `triggerInstalled`
+   est déjà à false (l'admin doit relancer "Installer" explicitement, comme pour une nouvelle règle).
+  */
   async reactivate(id: string): Promise<IndicatorEventRule> {
     const rule = await this.findOne(id);
     rule.isActive = true;
     return this.repo.save(rule);
   }
 
-  // ── Suppression DÉFINITIVE (distincte de remove() ci-dessus, qui ne fait que désactiver) ──
-  // Désinstalle le trigger s'il est installé, puis supprime la ligne. Jamais automatique.
+  /*
+  Suppression définitive (distincte de remove() ci-dessus, qui ne fait que désactiver)
+  Désinstalle le trigger s'il est installé, puis supprime la ligne. Jamais automatique.
+  */
 
   async previewHardDeleteSql(id: string): Promise<{ sql: string }> {
     const rule = await this.findOne(id);
@@ -140,9 +143,11 @@ export class EventRulesService {
     return { success: true, sql: '' };
   }
 
-  // ── Suppression + désinstallation du trigger (jamais automatique) ───────────
-  // Contrairement à remove() (désactivation simple), retire aussi le trigger PostgreSQL réel :
-  // supprimé s'il n'est plus utilisé par aucune autre règle active, sinon réduit.
+  /*
+   uppression + désinstallation du trigger (jamais automatique)
+  Contrairement à remove() (désactivation simple), retire aussi le trigger PostgreSQL réel :
+  supprimé s'il n'est plus utilisé par aucune autre règle active, sinon réduit.
+  */
 
   async previewUninstallSql(id: string): Promise<{ sql: string }> {
     const rule = await this.findOne(id);
@@ -178,7 +183,7 @@ export class EventRulesService {
     }
   }
 
-  // ── Installation du trigger (jamais automatique - appelée uniquement sur clic admin) ──
+  // Installation du trigger (jamais automatique - appelée uniquement sur clic admin)
 
   async previewInstallSql(id: string): Promise<{ sql: string }> {
     const rule = await this.findOne(id);
@@ -214,9 +219,11 @@ export class EventRulesService {
     return `Échec de l'installation : ${err.message}`;
   }
 
-  // ── Exécution du DDL (installation ou désinstallation) ───────────────────
-  // Avec PLATON_DB_ADMIN_USERNAME/PASSWORD configurés, le DDL passe par cette connexion.
-  // Sinon, tentative avec la connexion applicative habituelle.
+  /*
+  Exécution du DDL (installation ou désinstallation)
+  Avec PLATON_DB_ADMIN_USERNAME/PASSWORD configurés, le DDL passe par cette connexion.
+  Sinon, tentative avec la connexion applicative habituelle.
+  */
   private async execDdl(sql: string): Promise<void> {
     const adminUsername = this.config.get<string>('platonDatabaseAdmin.username');
     const adminPassword = this.config.get<string>('platonDatabaseAdmin.password');
@@ -244,7 +251,7 @@ export class EventRulesService {
     if (!mapping?.userId) throw new NotFoundException('contextMapping.userId est obligatoire (RawEvent.userId est requis pour tout événement)');
   }
 
-  /** Le lien indicateur/règle se fait par le nom de l'event type, pas par id de règle. */
+  // Le lien indicateur/règle se fait par le nom de l'event type, pas par id de règle.
   private async assertNoActiveIndicatorDependency(rule: IndicatorEventRule): Promise<void> {
     const eventTypeName = rule.eventType?.name;
     if (!eventTypeName) return;
@@ -260,13 +267,13 @@ export class EventRulesService {
     }
   }
 
-  // ── Génération du DDL (jamais de concaténation non validée) ─────────────────
+  // Génération du DDL (jamais de concaténation non validée)
 
   private triggerNameFor(table: string): string {
     return `trg_platon_outbox_generic_${table.toLowerCase()}`;
   }
 
-  /** `AFTER INSERT OR UPDATE OF "col1","col2"` (ou juste `AFTER INSERT` si aucune colonne à surveiller). */
+  // `AFTER INSERT OR UPDATE OF "col1","col2"` (ou juste `AFTER INSERT` si aucune colonne à surveiller).
   private updateClauseFor(rules: IndicatorEventRule[]): string {
     const columns = Array.from(new Set(
       rules.filter(r => r.operation !== 'INSERT' && r.watchedColumn).map(r => r.watchedColumn as string),
@@ -306,8 +313,9 @@ export class EventRulesService {
     ].join('\n');
   }
 
-  /** DDL de retrait : si d'autres règles partagent le trigger, on le recrée sans les colonnes
-   *  de `rule` plutôt que de le supprimer complètement. */
+  /* DDL de retrait : si d'autres règles partagent le trigger, on le recrée sans les colonnes
+   de `rule` plutôt que de le supprimer complètement.
+  */
   private async buildUninstallDdl(rule: IndicatorEventRule): Promise<string> {
     const siblingRules = await this.repo.find({ where: { sourceTable: rule.sourceTable, isActive: true } });
     const remaining = siblingRules.filter(r => r.id !== rule.id && r.triggerInstalled);

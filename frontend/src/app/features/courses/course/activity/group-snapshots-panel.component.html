@@ -1,0 +1,198 @@
+    <div class="group-snapshots-panel">
+      <ng-container *ngIf="loading">
+        <nz-spin nzSimple></nz-spin>
+      </ng-container>
+
+      <ng-container *ngIf="!loading">
+        <!-- Aucun indicateur groupe -->
+        <nz-empty
+          *ngIf="panels.length === 0"
+          nzNotFoundContent="Aucun indicateur de contexte 'groupe' configuré."
+          style="margin: 16px 0">
+        </nz-empty>
+
+        <!-- Un bloc par indicateur -->
+        <div *ngFor="let panel of panels" class="indicator-panel">
+          <div class="indicator-panel-header">
+            <div class="indicator-panel-info">
+              <span class="indicator-name">{{ panel.indicator.name }}</span>
+              <span class="indicator-desc" *ngIf="panel.indicator.description">
+                {{ panel.indicator.description }}
+              </span>
+            </div>
+            <button
+              *ngIf="panel.snapshots.length >= 2"
+              nz-button nzType="primary" nzSize="small" nzGhost
+              (click)="openCompare(panel)"
+              style="border-radius:4px">
+              <span style="display:inline-flex;align-items:center;gap:4px;line-height:1">
+                <mat-icon style="font-size:14px;width:14px;height:14px;line-height:1">compare</mat-icon>
+                Comparer
+              </span>
+            </button>
+          </div>
+
+          <!-- Grille de snapshots côte à côte -->
+          <nz-row [nzGutter]="[16, 16]" nzAlign="top" style="flex-wrap: wrap">
+            <nz-col *ngFor="let row of panel.snapshots" class="snapshot-col">
+              <div class="snapshot-wrapper">
+                <!-- Card : titre éditable inline au clic, icône tune + delete intégrés -->
+                <ui-indicator-card
+                  [indicator]="panel.indicator"
+                  [context]="row.context"
+                  [clickable]="true"
+                  [queryParams]="row.queryParams"
+                  [displayTitle]="row.snapshot.title"
+                  [showDeleteButton]="true"
+                  (titleChange)="renameSnapshot(panel, row, $event)"
+                  (deleteClick)="deleteSnapshot(panel, row)"
+                />
+              </div>
+            </nz-col>
+
+            <!-- Bouton Ajouter -->
+            <nz-col class="snapshot-col add-col">
+              <div class="add-snapshot-area">
+                <!-- État fermé : bouton carte pointillée -->
+                <ng-container *ngIf="!panel.addOpen">
+                  <button class="add-card-btn" (click)="openAdd(panel)"
+                    [disabled]="panel.availableGroups.length === 0"
+                    nz-tooltip [nzTooltipTitle]="panel.availableGroups.length === 0 ? 'Tous les groupes sont déjà ajoutés' : 'Comparer avec un autre groupe'">
+                    <mat-icon class="add-icon">add_circle_outline</mat-icon>
+                    <span class="add-label">Ajouter un groupe</span>
+                  </button>
+                </ng-container>
+
+                <!-- État ouvert : sélecteur + actions -->
+                <ng-container *ngIf="panel.addOpen">
+                  <div class="add-form-card">
+                    <p class="add-form-title">
+                      <mat-icon style="font-size:16px;width:16px;height:16px;line-height:1">groups</mat-icon>
+                      Ajouter un groupe
+                    </p>
+                    <nz-select
+                      [(ngModel)]="panel.selectedGroupId"
+                      nzPlaceHolder="Choisir un groupe"
+                      style="width: 100%; margin-bottom: 12px">
+                      <nz-option
+                        *ngFor="let g of panel.availableGroups"
+                        [nzValue]="g.id"
+                        [nzLabel]="g.name">
+                      </nz-option>
+                    </nz-select>
+                    <div class="add-form-actions">
+                      <button nz-button nzType="primary" nzSize="small"
+                        [nzLoading]="addingSnapshot"
+                        [disabled]="!panel.selectedGroupId"
+                        (click)="addSnapshot(panel)">
+                        Ajouter
+                      </button>
+                      <button nz-button nzType="default" nzSize="small"
+                        (click)="closeAdd(panel)">
+                        Annuler
+                      </button>
+                    </div>
+                  </div>
+                </ng-container>
+              </div>
+            </nz-col>
+          </nz-row>
+
+          <nz-divider *ngIf="panels.indexOf(panel) < panels.length - 1"></nz-divider>
+        </div>
+      </ng-container>
+    </div>
+
+    <!--  Modal de comparaison -->
+    <ng-template #compareTpl>
+      <div *ngIf="compPanel" class="compare-modal">
+
+        <!-- En-tête -->
+        <div class="compare-header">
+          <mat-icon style="color:#722ed1;flex-shrink:0">compare</mat-icon>
+          <div class="compare-header-info">
+            <h3>{{ compPanel.indicator.name }}</h3>
+            <p class="compare-indicator-desc" *ngIf="compPanel.indicator.description">
+              {{ compPanel.indicator.description }}
+            </p>
+          </div>
+          <div class="compare-group-toggles">
+            <nz-tag
+              *ngFor="let row of compPanel.snapshots"
+              [nzColor]="isCompGroupEnabled(row.snapshot.contextId) ? 'purple' : 'default'"
+              class="compare-group-tag"
+              [class.compare-group-tag--off]="!isCompGroupEnabled(row.snapshot.contextId)"
+              (click)="toggleCompGroup(row.snapshot.contextId)"
+              nz-tooltip
+              [nzTooltipTitle]="isCompGroupEnabled(row.snapshot.contextId) ? 'Masquer ce groupe' : 'Afficher ce groupe'">
+              <mat-icon class="compare-tag-icon">
+                {{ isCompGroupEnabled(row.snapshot.contextId) ? 'visibility' : 'visibility_off' }}
+              </mat-icon>
+              {{ row.snapshot.title }}
+            </nz-tag>
+          </div>
+        </div>
+
+        <nz-spin *ngIf="compLoading" nzSimple style="display:block;text-align:center;padding:40px"></nz-spin>
+
+        <!-- Une section par visualisation, groupes en grille 3 colonnes max -->
+        <div *ngIf="!compLoading" class="compare-sections">
+
+          <div class="compare-section" *ngFor="let viz of compPanel.indicator.visualizations">
+
+            <!-- Titre de la visualisation -->
+            <div class="compare-section-title">
+              <mat-icon style="font-size:15px">{{ getVizIcon(viz.type) }}</mat-icon>
+              {{ viz.label }}
+            </div>
+
+            <!-- Grille des groupes : 3 max par ligne, wrap -->
+            <div class="compare-cards-grid">
+              <div class="compare-card" *ngFor="let row of compPanel.snapshots" [hidden]="!isCompGroupEnabled(row.snapshot.contextId)">
+
+                <!-- Nom du groupe -->
+                <div class="compare-card-title">
+                  <mat-icon style="font-size:14px;color:#722ed1">groups</mat-icon>
+                  {{ row.snapshot.title }}
+                </div>
+
+                <!-- Valeur -->
+                <div class="compare-card-body">
+                  <ng-container *ngIf="getCompResult(row.snapshot.contextId, viz.id) as res; else loadingCell">
+
+                    <!-- Scalaire simple : card / line-chart (pas d'historique disponible sur un
+                         snapshot ponctuel, donc pas de vraie courbe possible ici). -->
+                    <ng-container *ngIf="viz.type === 'card' || viz.type === 'line-chart'">
+                      <div class="compare-scalar" [style.color]="viz.color || '#5470c6'">
+                        {{ res.value | number:'1.0-2' }}
+                        <span class="compare-unit" [style.color]="viz.color || '#5470c6'">{{ viz.unit || '' }}</span>
+                      </div>
+                    </ng-container>
+
+                    <!-- Graphique réel (gauge / bar-chart / histogram) : même rendu ECharts que
+                         la page détail d'un indicateur (buildIndicatorChartOptions partagé).
+                         *ngIf sur les options elles-mêmes (pas juste sur le type) : le div
+                         echarts ne doit exister dans le DOM qu'une fois les vraies options
+                         disponibles, sinon ECharts s'initialise avec des options vides (le temps
+                         que le Promise.all(fetches) de openCompare() se résolve après l'ouverture
+                         de la modale) et ne se corrige jamais tout seul ensuite. -->
+                    <div class="compare-chart"
+                      *ngIf="(viz.type === 'gauge' || viz.type === 'bar-chart' || viz.type === 'histogram') && getCompChartOptions(row.snapshot.contextId, viz.id) as opts"
+                      echarts
+                      [options]="opts"
+                      [autoResize]="true">
+                    </div>
+
+                  </ng-container>
+                  <ng-template #loadingCell>
+                    <div class="compare-loading-cell"><nz-spin nzSimple nzSize="small"></nz-spin></div>
+                  </ng-template>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </ng-template>

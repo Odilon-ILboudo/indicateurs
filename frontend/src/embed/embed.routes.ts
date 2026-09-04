@@ -1,6 +1,8 @@
-// Routes du point d'entrée embarqué - reprises de dashboard.routes.ts, sans admin ni
-// cours/ressources. 'indicators/family/:name' est volontairement absent : cette page enveloppe
-// directement le composant d'administration, sans vérification de rôle.
+/*
+Routes du point d'entrée embarqué - reprises de dashboard.routes.ts, sans admin ni
+cours/ressources. 'indicators/family/:name' est volontairement absent : cette page enveloppe
+directement le composant d'administration, sans vérification de rôle.
+*/
 import { Routes } from '@angular/router';
 import { IndicatorDetailComponent } from '../app/shared/ui';
 import { OverviewPage } from '../app/features/dashboard/pages/overview/overview.page';

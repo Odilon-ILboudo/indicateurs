@@ -34,15 +34,15 @@ n'importe quel autre client externe le ferait.
 
 ```
 Indicateurs                              PLaTon (nouveau module PedagogicalDataModule)
-─────────────                            ──────────────────────────────────────────────
-FormulaInterpreterService  ──HTTP───────▶  POST /api/external/query        (lecture)
-Admin - explorateur schéma ──HTTP───────▶  GET  /api/external/schema       (introspection)
-Admin - "Événements"       ──HTTP───────▶  POST /api/external/watchers     (inscription)
+─                            
+FormulaInterpreterService  HTTP─▶  POST /api/external/query        (lecture)
+Admin - explorateur schéma HTTP─▶  GET  /api/external/schema       (introspection)
+Admin - "Événements"       HTTP─▶  POST /api/external/watchers     (inscription)
                                                     │
                                                     ▼ (en interne, propres droits PLaTon)
                                               trigger + outbox + relais PLaTon
                                                     │
-IngestionConsumerService   ◀──RabbitMQ────  publication (événement déjà nommé)
+IngestionConsumerService   ◀RabbitMQ  publication (événement déjà nommé)
 ```
 
 ---
@@ -120,14 +120,19 @@ stockés dans `indicator_event_rules` (table `indicators`) :
 ```
 
 Différence clé avec le mécanisme actuel : **le nom de l'événement est fixé au
-moment de l'inscription**, pas deviné après coup. En interne, PLaTon peut garder un
-vrai déclencheur SQL (le mécanisme lui-même ne change pas, juste qui l'exécute) :
+moment de l'inscription**, pas deviné après coup. Le relais lui-même (lire
+l'outbox, publier sur RabbitMQ) vit déjà côté PLaTon aujourd'hui, pas
+seulement dans cette proposition future (voir
+`docs/integration-platon-relay.md`) - ce qui changerait ici va plus loin :
 
-- table `platon_outbox_events` interne à PLaTon (Indicateurs n'y accède plus) ;
-- un petit relais équivalent à `IngestionRelayService`, mais **côté PLaTon** et
-  **sans étape de classification** (l'événement à publier est déjà nommé dans le
-  déclencheur créé à l'inscription) - juste lire l'outbox et publier tel quel sur
-  RabbitMQ.
+- table `platon_outbox_events` interne à PLaTon, mais Indicateurs n'y
+  accéderait plus du tout en écriture (`installTrigger`), contrairement à
+  aujourd'hui où le déclencheur est encore installé via une connexion admin
+  directe depuis Indicateurs ;
+- le relais republierait **sans étape de classification** (l'événement est
+  déjà nommé dans le déclencheur créé à l'inscription), alors qu'aujourd'hui
+  il republie un événement générique (`raw:<Table>`) que les consumers
+  côté Indicateurs doivent encore classifier (`EventClassifierService`).
 
 `DELETE /api/external/watchers/:id` retire la règle et réduit/supprime le
 déclencheur, même logique qu'aujourd'hui (§ "Supprimer" dans `ingestion.md`).
@@ -145,9 +150,10 @@ ci-dessus. Pas de JWT utilisateur.
 | Composant | Aujourd'hui | Après |
 |---|---|---|
 | `PlatonService` | requêtes SQL directes sur `platon_db` | client HTTP vers `POST /api/external/query` et `GET /api/external/schema` |
-| `EventRulesService.installTrigger()` | exécute `CREATE TRIGGER` via connexion admin | appelle `POST /api/external/watchers` |
-| `IngestionRelayService` | interroge `platon_outbox_events` toutes les 2s, classifie via `classify()` | **supprimé** - PLaTon publie déjà l'événement nommé sur RabbitMQ |
-| `IngestionConsumerService` | inchangé | inchangé - consomme toujours RabbitMQ |
+| `EventRulesService.installTrigger()` | exécute `CREATE TRIGGER` via connexion admin directe sur `platon_db` | appelle `POST /api/external/watchers` |
+| Relais outbox → RabbitMQ | déjà côté PLaTon (voir `docs/integration-platon-relay.md`), mais republie un événement générique `raw:<Table>` | événement déjà nommé à l'inscription, plus de préfixe `raw:` à interpréter |
+| `EventClassifierService` (consumers, côté Indicateurs) | interprète l'événement générique selon `IndicatorEventRule` | **supprimé** - PLaTon publie déjà l'événement nommé, rien à classifier |
+| `IngestionConsumerService` | consomme RabbitMQ, classifie puis traite | consomme RabbitMQ, traite directement (plus de classification) |
 | `IndicatorsService.computeView`/`computeViewIncremental` | inchangé | inchangé |
 | `IndicatorsGateway` (WebSocket) | inchangé | inchangé |
 | Config `.env` | `PLATON_DB_HOST/PORT/USERNAME/PASSWORD`, `PLATON_DB_ADMIN_USERNAME/PASSWORD` | remplacés par `PLATON_API_URL`, `PLATON_SERVICE_KEY` |

@@ -10,7 +10,7 @@ export default tseslint.config(
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
-  // eslintPluginPrettierRecommended,  // ← COMMENTEZ CETTE LIGNE
+  // eslintPluginPrettierRecommended, 
   {
     languageOptions: {
       globals: {
@@ -30,7 +30,7 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unsafe-argument': 'warn',
-      'prettier/prettier': 'off', // ← DÉSACTIVER COMPLÈTEMENT PRETTIER
+      'prettier/prettier': 'off', // DÉSACTIVER COMPLÈTEMENT PRETTIER
     },
   },
 );

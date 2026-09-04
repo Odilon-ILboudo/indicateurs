@@ -5,11 +5,11 @@ import { DataSource } from 'typeorm';
 export class PlatonService {
   private readonly logger = new Logger(PlatonService.name);
 
-  /** Colonnes jamais exposées au DSL, détectées par motif de nom plutôt que par table. */
+  // Colonnes jamais exposées au DSL, détectées par motif de nom plutôt que par table.
   private static readonly SENSITIVE_COLUMN_PATTERN =
     /password|passwd|secret|token|api[_-]?key|hash|salt|credential|email|phone|discord|ip_address/i;
 
-  /** Cache des colonnes "sûres" par table (évite une requête information_schema à chaque fetch/join). */
+  // Cache des colonnes "sûres" par table (évite une requête information_schema à chaque fetch/join).
   private readonly safeColumnsCache = new Map<string, string[]>();
 
   constructor(
@@ -17,9 +17,9 @@ export class PlatonService {
     private dataSource: DataSource,
   ) {}
 
-  /**
-   * Récupère les SessionData d'un utilisateur
-   */
+  /*
+  Récupère les SessionData d'un utilisateur
+  */
   async getUserSessionData(userId: string) {
     return this.dataSource.query(
       `SELECT
@@ -64,14 +64,14 @@ export class PlatonService {
       
       return result;
     } catch (error) {
-      this.logger.error(`❌ Erreur dans getUserSessionDataByActivity: ${error.message}`);
+      this.logger.error(`Erreur dans getUserSessionDataByActivity: ${error.message}`);
       throw error;
     }
   }
 
-  /**
-   * Récupère tous les utilisateurs d'une activité
-   */
+  /*
+  Récupère tous les utilisateurs d'une activité
+  */
   async getUsersByActivity(activityId: string) {
     return this.dataSource.query(
       `SELECT DISTINCT u.id, u.email, u.role, u.first_name, u.last_name
@@ -82,9 +82,9 @@ export class PlatonService {
     );
   }
 
-  /**
-   * Récupère les détails d'une activité
-   */
+  /*
+  Récupère les détails d'une activité
+  */
   async getActivityDetails(activityId: string) {
     const result = await this.dataSource.query(
       `SELECT a.id,
@@ -98,9 +98,9 @@ export class PlatonService {
     return result[0];
   }
 
-  /**
-   * Récupère un utilisateur par son ID (tous les champs sauf password)
-   */
+  /*
+  Récupère un utilisateur par son ID (tous les champs sauf password)
+  */
   async getUserById(userId: string) {
     const result = await this.dataSource.query(
       `SELECT 
@@ -124,9 +124,9 @@ export class PlatonService {
     return result[0];
   }
 
-  /**
-   * Récupère tous les étudiants d'un enseignant
-   */
+  /*
+  Récupère tous les étudiants d'un enseignant
+  */
   async getStudentsByTeacher(teacherId: string) {
     return this.dataSource.query(
       `SELECT u.id, u.email, u.first_name, u.last_name
@@ -138,9 +138,9 @@ export class PlatonService {
     );
   }
 
-  /**
-   * Récupère tous les étudiants d'un cours
-   */
+  /*
+  Récupère tous les étudiants d'un cours
+  */
   async getStudentsByCourse(courseId: string) {
     return this.dataSource.query(
       `SELECT u.id, u.email, u.first_name, u.last_name
@@ -151,9 +151,9 @@ export class PlatonService {
     );
   }
 
-  /**
-   * Récupère tous les IDs des utilisateurs (pour recalcule masse)
-   */
+  /*
+  Récupère tous les IDs des utilisateurs (pour recalcule masse)
+  */
   async getAllUserIds(): Promise<string[]> {
     const result = await this.dataSource.query(
       `SELECT id FROM "Users" WHERE active = true`,
@@ -174,9 +174,9 @@ export class PlatonService {
     return map;
   }
 
-  /**
-   * Récupère tous les IDs des enseignants
-   */
+  /*
+  Récupère tous les IDs des enseignants
+  */
   async getAllTeacherIds(): Promise<string[]> {
     const result = await this.dataSource.query(
       `SELECT id FROM "Users" WHERE role = 'teacher' AND active = true`,
@@ -184,9 +184,9 @@ export class PlatonService {
     return result.map((row: { id: string }) => row.id);
   }
 
-  /**
-   * Récupère tous les IDs des cours
-   */
+  /*
+  Récupère tous les IDs des cours
+  */
   async getAllCourseIds(): Promise<string[]> {
     const result = await this.dataSource.query(
       `SELECT id FROM "Courses"`,
@@ -210,9 +210,9 @@ export class PlatonService {
     return rows[0]?.course_id ?? null;
   }
 
-  /**
-   * Récupère toutes les activités
-   */
+  /*
+  Récupère toutes les activités
+  */
   async getAllActivities(): Promise<any[]> {
     return this.dataSource.query(
       `SELECT a.id,
@@ -223,10 +223,9 @@ export class PlatonService {
     );
   }
 
-  // ── Groupes de TP ─────────────────────────────────────────────────────────
+  // Groupes de TP
 
-  /** CourseGroupsMember.group_id (varchar) est lié à CourseGroups.group_id (varchar), on
-   *  filtre par CourseGroups.id (UUID) passé en paramètre. */
+  // CourseGroupsMember.group_id (varchar) est lié à CourseGroups.group_id (varchar), on filtre par CourseGroups.id (UUID) passé en paramètre.
   async getUserIdsByGroup(groupId: string): Promise<string[]> {
     const rows = await this.dataSource.query(
       `SELECT cgm.user_id
@@ -238,9 +237,9 @@ export class PlatonService {
     return rows.map((r: { user_id: string }) => r.user_id);
   }
 
-  /**
-   * Retourne les groupes de TP d'un enseignant (via owner_id sur Courses).
-   */
+  /*
+  Retourne les groupes de TP d'un enseignant (via owner_id sur Courses).
+  */
   async getGroupsForTeacher(teacherId: string): Promise<{
     id: string;
     name: string;
@@ -258,8 +257,7 @@ export class PlatonService {
     return rows;
   }
 
-  /** Équivalent de queryTable filtré au groupe de TP. Périmètre : activityId ou courseId,
-   *  exactement l'un des deux. */
+  // Équivalent de queryTable filtré au groupe de TP. Périmètre : activityId ou courseId, exactement l'un des deux.
   async queryTableForGroup(
     table: string,
     groupId: string,
@@ -309,9 +307,9 @@ export class PlatonService {
     );
   }
 
-  // ── Contexte enseignant ───────────────────────────────────────────────────
+  // Contexte enseignant
 
-  /** Recherche des utilisateurs (nom/prénom/username/email), pour la modale "Ajouter un membre" */
+  // Recherche des utilisateurs (nom/prénom/username/email), pour la modale "Ajouter un membre"
   async searchUsers(query: string, roles?: string[], limit = 10): Promise<{
     id: string;
     username: string;
@@ -352,7 +350,7 @@ export class PlatonService {
     }));
   }
 
-  /** Recherche parmi tous les cours, pas seulement ceux de l'utilisateur courant. */
+  // Recherche parmi tous les cours, pas seulement ceux de l'utilisateur courant.
   async searchCourses(query: string, limit = 10, offset = 0): Promise<{
     id: string;
     name: string;
@@ -363,7 +361,7 @@ export class PlatonService {
     );
   }
 
-  /** Titre : source->'variables'->>'title', sinon Resources.name, sinon fallback littéral. */
+  // Titre : source->'variables'->>'title', sinon Resources.name, sinon fallback littéral.
   async getActivitiesByCourse(courseId: string): Promise<{ id: string; name: string }[]> {
     return this.dataSource.query(
       `SELECT a.id,
@@ -380,7 +378,7 @@ export class PlatonService {
     );
   }
 
-  // ── Schéma dynamique ──────────────────────────────────────────────────────
+  //  Schéma dynamique
 
   async getSchemaWithRelations(): Promise<{
     tables: { name: string; columns: { name: string; type: string; nullable: boolean }[] }[];
@@ -449,8 +447,7 @@ export class PlatonService {
     return Array.from(map.entries()).map(([name, columns]) => ({ name, columns }));
   }
 
-  /** Valide qu'une table/colonne existe et est exposable, avant interpolation dans du SQL
-   *  dynamique (DDL de trigger notamment). */
+  // Valide qu'une table/colonne existe et est exposable, avant interpolation dans du SQL dynamique (DDL de trigger notamment).
   async assertValidTableColumn(table: string, column?: string | null): Promise<void> {
     const tables = await this.getAvailableTables();
     const t = tables.find(x => x.name === table);
@@ -460,8 +457,7 @@ export class PlatonService {
     }
   }
 
-  /** Colonnes de `table` autorisées dans le DSL, hors SENSITIVE_COLUMN_PATTERN. Mis en cache
-   *  par nom de table. */
+  // Colonnes de `table` autorisées dans le DSL, hors SENSITIVE_COLUMN_PATTERN. Mis en cache par nom de table.
   private async getSafeColumns(table: string): Promise<string[]> {
     const cached = this.safeColumnsCache.get(table);
     if (cached) return cached;
@@ -485,7 +481,7 @@ export class PlatonService {
     return columns;
   }
 
-  /** Clause SELECT explicite (colonnes sûres uniquement) pour remplacer `SELECT *`. */
+  // Clause SELECT explicite (colonnes sûres uniquement) pour remplacer `SELECT *`.
   private async buildSafeSelect(table: string): Promise<string> {
     const columns = await this.getSafeColumns(table);
     return columns.map(c => `"${c}"`).join(', ');

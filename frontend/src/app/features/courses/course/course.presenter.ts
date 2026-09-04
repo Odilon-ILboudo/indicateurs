@@ -112,7 +112,6 @@ export class CoursePresenter implements OnDestroy {
   }
 
   // Sections
-
   async listSections(): Promise<CourseSection[]> {
     const { course } = this.context.value
     if (!course) {
@@ -148,7 +147,6 @@ export class CoursePresenter implements OnDestroy {
   }
 
   // Activities
-
   async listActivities(filters?: ActivityFilters): Promise<Activity[]> {
     const { course } = this.context.value
     if (!course) {

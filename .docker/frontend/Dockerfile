@@ -1,4 +1,4 @@
-# ─── Build stage ────────────────────────────────────────────────────────────
+# Build stage
 FROM node:20-alpine AS builder
 
 WORKDIR /app
@@ -11,7 +11,7 @@ COPY frontend/ .
 RUN yarn ng build indicateurs --configuration production
 RUN yarn ng build indicateurs-embed --configuration production
 
-# ─── Nginx stage ─────────────────────────────────────────────────────────────
+# Nginx stage
 FROM nginx:1.25-alpine
 
 # Angular 17+ place les fichiers statiques dans browser/

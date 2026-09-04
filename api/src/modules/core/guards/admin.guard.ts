@@ -2,10 +2,10 @@ import { CanActivate, ExecutionContext, ForbiddenException, Inject, Injectable }
 import { DataSource } from 'typeorm';
 
 /**
- * Restreint une route aux utilisateurs dont le rôle global (table "Users" locale) est 'admin'.
- * S'appuie sur `request.user.id`, peuplé par AuthGuard - doit donc toujours être posé APRÈS :
- * `@UseGuards(AuthGuard, AdminGuard)`.
- */
+Restreint une route aux utilisateurs dont le rôle global (table "Users" locale) est 'admin'.
+S'appuie sur `request.user.id`, peuplé par AuthGuard et doit donc toujours être posé APRÈS :
+`@UseGuards(AuthGuard, AdminGuard)`.
+*/
 @Injectable()
 export class AdminGuard implements CanActivate {
   constructor(

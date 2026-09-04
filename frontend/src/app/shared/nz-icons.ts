@@ -1,8 +1,10 @@
-// Liste des icônes ng-zorro enregistrées - partagée entre le point d'entrée standalone
-// (app.config.ts) et le point d'entrée embarqué (embed/embed.config.ts) pour ne jamais
-// diverger entre les deux.
+/*
+Liste des icônes ng-zorro enregistrées - partagée entre le point d'entrée standalone
+(app.config.ts) et le point d'entrée embarqué (embed/embed.config.ts) pour ne jamais
+diverger entre les deux.
+*/
 import {
-  AimOutline, AlignLeftOutline, ApartmentOutline, ArrowDownOutline, ArrowLeftOutline, ArrowRightOutline,
+  AimOutline, AlignLeftOutline, ApartmentOutline, AppstoreOutline, ArrowDownOutline, ArrowLeftOutline, ArrowRightOutline,
   BarChartOutline, BellOutline, BugOutline, BulbOutline,
   BranchesOutline, CalendarOutline, CalculatorOutline, CaretDownOutline, CheckOutline, CheckCircleOutline,
   ClockCircleOutline, CloseCircleOutline, ClusterOutline, CodeOutline,
@@ -20,7 +22,7 @@ import {
 } from '@ant-design/icons-angular/icons';
 
 export const NZ_ICONS_LIST = [
-  AimOutline, AlignLeftOutline, ApartmentOutline, ArrowDownOutline, ArrowLeftOutline, ArrowRightOutline,
+  AimOutline, AlignLeftOutline, ApartmentOutline, AppstoreOutline, ArrowDownOutline, ArrowLeftOutline, ArrowRightOutline,
   BarChartOutline, BellOutline, BugOutline, BulbOutline,
   BranchesOutline, CalendarOutline, CalculatorOutline, CaretDownOutline, CheckOutline, CheckCircleOutline,
   ClockCircleOutline, CloseCircleOutline, ClusterOutline, CodeOutline,

@@ -1,0 +1,948 @@
+<div class="builder">
+
+  <nz-steps [nzCurrent]="step" nzSize="small" class="steps">
+    <nz-step nzTitle="Définition"  nzDescription="Nom et description"                    class="step-clickable" (click)="goToStep(0)"></nz-step>
+    <nz-step nzTitle="Contexte"    nzDescription="Contexte et visualisations"             class="step-clickable" (click)="goToStep(1)"></nz-step>
+    <nz-step nzTitle="Formules"    nzDescription="Pipeline et événements déclencheurs"    class="step-clickable" (click)="goToStep(2)"></nz-step>
+  </nz-steps>
+
+  <div class="indicator-header" *ngIf="def.name">
+    {{ isEditMode ? 'Édition : ' : 'Nouvel indicateur : ' }}{{ def.name }}
+    <span *ngIf="familyProgress"> - {{ familyProgress }}</span>
+  </div>
+
+  <nz-divider></nz-divider>
+
+  <!--  ÉTAPE 1  -->
+  <div *ngIf="step === 0" class="step-content">
+
+    <!-- Le choix "réutiliser/importer/à partir de zéro" se fait désormais avant l'ouverture du
+         wizard (modale de démarrage) - ce bandeau ne fait que rappeler d'où vient le contenu
+         pré-rempli le cas échéant. -->
+    <p class="section-hint" *ngIf="def.baseIndicatorId">
+      "{{ reuseAppliedName }}" copié comme point de départ (nom, description, contexte, seuils,
+      visualisations et pipeline) - tout reste modifiable librement dans les étapes suivantes.
+    </p>
+
+    <div class="wizard-section">
+      <div class="wizard-section-title"><span nz-icon nzType="file-text"></span> Informations générales</div>
+
+    <nz-form-item>
+      <nz-form-label [nzRequired]="true">Nom de l'indicateur <mat-icon class="info-icon" nz-tooltip="Nom unique affiché dans le tableau de bord et les listes. Doit être court et descriptif. Ex : 'Tentatives avant réussite'." nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
+      <nz-form-control>
+        <input #nameInput nz-input [(ngModel)]="def.name" placeholder="ex: Tentatives avant réussite"
+          (ngModelChange)="onNameInput($event)" />
+        <!-- Bandeau indicateurs similaires -->
+        <div *ngIf="similarSearching" class="similar-searching">
+          <nz-spin nzSimple [nzSize]="'small'"></nz-spin>
+          <span>Vérification des doublons…</span>
+        </div>
+        <div *ngIf="!similarSearching && similarIndicators.length > 0" class="similar-banner">
+          <div class="similar-banner-header">
+            <mat-icon class="similar-banner-icon">warning_amber</mat-icon>
+            <span>{{ similarIndicators.length }} indicateur{{ similarIndicators.length > 1 ? 's similaires existants' : ' similaire existant' }} - vérifiez avant de créer.</span>
+          </div>
+          <div class="similar-list">
+            <div *ngFor="let ind of similarIndicators" class="similar-item">
+              <div class="similar-item-info">
+                <mat-icon [style.color]="ind.visualizations?.[0]?.color || '#8c8c8c'" style="font-size:16px;width:16px;height:16px;line-height:1">{{ contextIcon(ind.contextType) }}</mat-icon>
+                <span class="similar-item-name">{{ ind.name }}</span>
+                <nz-tag [nzColor]="ind.isActive ? 'green' : 'default'" style="margin:0">{{ ind.isActive ? 'Actif' : 'Inactif' }}</nz-tag>
+              </div>
+              <button nz-button nzType="link" nzSize="small" class="similar-voir-btn" (click)="openPreview(ind)">
+                <mat-icon>visibility</mat-icon>Voir
+              </button>
+            </div>
+          </div>
+        </div>
+      </nz-form-control>
+    </nz-form-item>
+
+    <!-- Modal prévisualisation indicateur existant -->
+    <nz-modal
+      [(nzVisible)]="previewModalVisible"
+      [nzTitle]="previewIndicator?.name || ''"
+      [nzWidth]="560"
+      [nzFooter]="null"
+      (nzOnCancel)="previewModalVisible = false">
+      <ng-container *nzModalContent>
+        <ng-container *ngIf="previewIndicator as ind">
+          <div class="prev-card">
+
+            <!-- Description -->
+            <div class="prev-row">
+              <span class="prev-label">Description</span>
+              <p class="prev-value">{{ ind.description || '-' }}</p>
+            </div>
+
+            <!-- Métadonnées : 3 colonnes -->
+            <div class="prev-row prev-meta">
+              <div class="prev-meta-cell">
+                <span class="prev-label">Contexte</span>
+                <p class="prev-value">{{ ind.contextType }}</p>
+              </div>
+              <div class="prev-meta-cell prev-meta-sep">
+                <span class="prev-label">Famille</span>
+                <p class="prev-value">{{ ind.familyName || '-' }}</p>
+              </div>
+              <div class="prev-meta-cell prev-meta-sep">
+                <span class="prev-label">Statut</span>
+                <nz-tag [nzColor]="ind.isActive ? 'green' : 'default'" style="margin-top:2px">
+                  {{ ind.isActive ? 'Actif' : 'Inactif' }}
+                </nz-tag>
+              </div>
+            </div>
+
+            <!-- Aide à l'analyse -->
+            <div class="prev-row" *ngIf="ind.interpretationHint">
+              <span class="prev-label">Aide à l'analyse</span>
+              <p class="prev-value prev-hint">{{ ind.interpretationHint }}</p>
+            </div>
+
+            <!-- Visualisations -->
+            <div class="prev-row" *ngIf="ind.visualizations?.length">
+              <span class="prev-label">Visualisations</span>
+              <div class="prev-vizs">
+                <div *ngFor="let v of ind.visualizations" class="prev-viz-chip">
+                  <mat-icon [style.color]="v.color || '#8c8c8c'">{{ contextIcon(ind.contextType) }}</mat-icon>
+                  {{ v.label }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Événements déclencheurs -->
+            <div class="prev-row">
+              <span class="prev-label">Événements déclencheurs</span>
+              <div class="prev-tags">
+                <ng-container *ngIf="ind.requiredEvents?.length; else noEvt">
+                  <nz-tag *ngFor="let e of ind.requiredEvents" nzColor="blue">{{ e }}</nz-tag>
+                </ng-container>
+                <ng-template #noEvt>
+                  <span class="prev-empty">Aucun événement configuré</span>
+                </ng-template>
+              </div>
+            </div>
+
+            <!-- Seuils -->
+            <div class="prev-row prev-row--last" *ngIf="ind.thresholds?.good != null || ind.thresholds?.warning != null">
+              <span class="prev-label">Seuils de performance</span>
+              <div class="prev-thresholds">
+                <div *ngIf="ind.thresholds?.good != null" class="prev-threshold prev-threshold--good">
+                  <mat-icon>check_circle</mat-icon>
+                  <span>Bon <strong>≤ {{ ind.thresholds!.good }}</strong></span>
+                </div>
+                <div *ngIf="ind.thresholds?.warning != null" class="prev-threshold prev-threshold--warn">
+                  <mat-icon>warning</mat-icon>
+                  <span>Moyen <strong>≤ {{ ind.thresholds!.warning }}</strong></span>
+                </div>
+                <div class="prev-threshold prev-threshold--danger">
+                  <mat-icon>cancel</mat-icon>
+                  <span>Critique <strong>&gt; {{ ind.thresholds!.critical ?? ind.thresholds!.warning ?? ind.thresholds!.good }}</strong></span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </ng-container>
+      </ng-container>
+    </nz-modal>
+    <nz-form-item>
+      <nz-form-label>Description <mat-icon class="info-icon" nz-tooltip="Explication de ce que mesure cet indicateur, visible par les utilisateurs dans la page de sélection." nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
+      <nz-form-control>
+        <textarea nz-input [(ngModel)]="def.description" rows="3"
+          placeholder="Décrivez ce que mesure cet indicateur…"></textarea>
+      </nz-form-control>
+    </nz-form-item>
+    <nz-form-item>
+      <nz-form-label>Aide à l'analyse <mat-icon class="info-icon" nz-tooltip="Texte affiché dans la page de détail pour guider l'interprétation des résultats. Ex : 'Un résultat élevé indique des difficultés sur cet exercice.'" nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
+      <nz-form-control>
+        <textarea nz-input [(ngModel)]="def.interpretationHint" rows="3"
+          placeholder="Ex : Un résultat élevé signifie que les étudiants ont eu du mal. Regardez en priorité les ressources avec une note inférieure à 50."></textarea>
+      </nz-form-control>
+    </nz-form-item>
+
+    </div>
+  </div>
+
+  <!--  ÉTAPE 2  -->
+  <div *ngIf="step === 1" class="step-content">
+
+    <div class="wizard-section">
+      <div class="wizard-section-title"><span nz-icon nzType="aim"></span> Contexte</div>
+      <nz-form-item>
+        <nz-form-label [nzRequired]="true">Contexte <mat-icon class="info-icon" nz-tooltip="À qui s'adresse cet indicateur. Apprenant = tableau de bord personnel. Cours / Groupe = contexte enseignant. Activité = page statistiques d'une activité. Enseignant / Admin = tableau de bord propre à ces rôles." nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
+        <nz-form-control>
+          <nz-select [(ngModel)]="def.contextType" style="width:100%">
+            <nz-option nzValue="learner"  nzLabel="Apprenant (learner)"></nz-option>
+            <nz-option nzValue="group"    nzLabel="Groupe de TP (group)"></nz-option>
+            <nz-option nzValue="activity" nzLabel="Activité (activity)"></nz-option>
+            <nz-option nzValue="course"   nzLabel="Cours (course)"></nz-option>
+            <nz-option nzValue="teacher"  nzLabel="Enseignant (teacher)"></nz-option>
+            <nz-option nzValue="admin"    nzLabel="Admin"></nz-option>
+          </nz-select>
+        </nz-form-control>
+      </nz-form-item>
+    </div>
+
+    <div class="wizard-section">
+      <div class="wizard-section-title"><span nz-icon nzType="bar-chart"></span> Visualisations</div>
+
+    <div class="viz-list">
+      <div *ngFor="let v of vizList; let i = index" class="viz-row-card">
+
+        <div class="viz-row-header">
+          <span class="viz-index">{{ i + 1 }}</span>
+          <input nz-input [(ngModel)]="v.label" placeholder="Libellé de l'onglet"
+            class="viz-label-input"
+            nz-tooltip="Nom de l'onglet affiché sur la card et la page détail quand l'indicateur a plusieurs visualisations. Ex : 'Vue carte', 'Distribution'."
+            nzTooltipPlacement="top" />
+          <button nz-button nzType="text" nzDanger nzSize="small"
+            nz-tooltip="Supprimer" [disabled]="vizList.length <= 1"
+            (click)="removeViz(i)">
+            <span nz-icon nzType="delete"></span>
+          </button>
+        </div>
+
+        <div class="viz-fields">
+          <div class="viz-field viz-field-type">
+            <label>Type <mat-icon class="info-icon" nz-tooltip="Forme d'affichage. Carte = valeur. Barres = résultat {clé:valeur}. Histogramme = distribution [{bucket, count}]. Jauge = valeur avec plafond. Ligne = historique temporel." nzTooltipPlacement="top">info_outline</mat-icon></label>
+            <nz-select [(ngModel)]="v.type" style="width:100%" (ngModelChange)="onVizTypeChange(v)">
+              <nz-option nzValue="card"       nzLabel="Valeur"></nz-option>
+              <nz-option nzValue="gauge"      nzLabel="Jauge"></nz-option>
+              <nz-option nzValue="bar-chart"  nzLabel="Barres horizontales"></nz-option>
+              <nz-option nzValue="histogram"  nzLabel="Histogramme"></nz-option>
+              <nz-option nzValue="line-chart" nzLabel="Graphique ligne"></nz-option>
+            </nz-select>
+          </div>
+          <div class="viz-field viz-field-icon">
+            <label>Icône <mat-icon class="info-icon" nz-tooltip="Automatique selon le contexte de l'indicateur (choisi à la section « Contexte » ci-dessus) - pour rester reconnaissable d'un coup d'œil. Plus de choix manuel." nzTooltipPlacement="top">info_outline</mat-icon></label>
+            <div class="icon-preview">
+              <mat-icon>{{ contextIcon(def.contextType) }}</mat-icon>
+              <span>Automatique ({{ CONTEXT_LABELS[def.contextType] }})</span>
+            </div>
+          </div>
+          <div class="viz-field viz-field-color">
+            <label>Couleur <mat-icon class="info-icon" nz-tooltip="Couleur principale de la visualisation (barres, jauge, courbe)." nzTooltipPlacement="top">info_outline</mat-icon></label>
+            <nz-color-picker [(ngModel)]="v.color" [nzFormat]="'hex'"></nz-color-picker>
+          </div>
+          <div class="viz-field viz-field-unit">
+            <label>Unité <mat-icon class="info-icon" nz-tooltip="Suffixe affiché à côté de la valeur. Ex : 'tentatives', '%', 'min'. Laissez vide si pas d'unité." nzTooltipPlacement="top">info_outline</mat-icon></label>
+            <input nz-input [(ngModel)]="v.unit" placeholder="tentatives, %, …" />
+          </div>
+        </div>
+
+      </div>
+
+      <button nz-button nzType="dashed" style="width:100%;margin-top:8px" (click)="addViz()">
+        <span nz-icon nzType="plus"></span> Ajouter une visualisation
+      </button>
+    </div>
+
+    </div>
+
+    <!-- Seuil global (optionnel) -->
+    <div class="wizard-section">
+      <div class="wizard-section-title">
+        <span nz-icon nzType="dashboard"></span> Seuil de performance
+        <mat-icon class="info-icon"
+          nz-tooltip="Optionnel. Définit 3 zones colorées : ● Bon (vert) : valeur ≤ seuil Bon - ● Moyen (orange) : valeur entre Bon et Moyen - ● Critique (rouge) : valeur > seuil Moyen. Le seuil Critique est optionnel et sert de repère dans la légende - la carte est de toute façon rouge au-delà du seuil Moyen, que Critique soit renseigné ou non. Colore la valeur dans la carte et affiche la légende dans le panneau latéral."
+          nzTooltipPlacement="right">info_outline</mat-icon>
+      </div>
+      <div class="threshold-row">
+        <div class="threshold-item">
+          <label><span class="dot dot-green"></span> Bon ≤</label>
+          <nz-input-number
+            [ngModel]="def.thresholds?.good ?? null"
+            (ngModelChange)="onThresholdGoodChange($event)"
+            [nzMin]="0" nzSize="small" nzPlaceHolder="-">
+          </nz-input-number>
+        </div>
+        <div class="threshold-item">
+          <label><span class="dot dot-orange"></span> Moyen ≤</label>
+          <nz-input-number
+            [ngModel]="def.thresholds?.warning ?? null"
+            (ngModelChange)="onThresholdWarningChange($event)"
+            [nzMin]="0" nzSize="small" nzPlaceHolder="-">
+          </nz-input-number>
+        </div>
+        <div class="threshold-item">
+          <label><span class="dot dot-red"></span> Critique &gt;</label>
+          <nz-input-number
+            [ngModel]="def.thresholds?.critical ?? null"
+            (ngModelChange)="onThresholdCriticalChange($event)"
+            [nzMin]="0" nzSize="small" nzPlaceHolder="-">
+          </nz-input-number>
+        </div>
+        <button nz-button nzType="text" nzDanger *ngIf="def.thresholds" (click)="clearThresholds()" style="margin-left:8px">
+          <span nz-icon nzType="close-circle"></span> Supprimer le seuil
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!--  ÉTAPE 3  -->
+  <div *ngIf="step === 2" class="step-content">
+
+    <div class="wizard-section">
+      <div class="wizard-section-title"><span nz-icon nzType="deployment-unit"></span> Construction du pipeline</div>
+
+    <!-- Recettes / explorateur de schéma / toggle Visuel-Import : répartis sur toute la ligne -->
+    <div class="step3-toolbar">
+      <div class="step3-toolbar-group">
+        <button nz-button nzType="default" nzSize="small" (click)="openRecipesModal()">
+          <span nz-icon nzType="bulb"></span>
+          Pipelines
+        </button>
+        <button nz-button nzType="default" nzSize="small" (click)="openSchemaExplorer()">
+          <span nz-icon nzType="database"></span>
+          Explorer le schéma PLaTon
+        </button>
+      </div>
+      <div class="step3-toolbar-group">
+        <button nz-button nzSize="small"
+          [nzType]="!showImport ? 'primary' : 'default'"
+          (click)="enterVisualMode()">
+          <span nz-icon nzType="eye"></span> Visuel
+        </button>
+        <button nz-button nzSize="small"
+          [nzType]="showImport ? 'primary' : 'default'"
+          (click)="enterImportMode()">
+          <span nz-icon nzType="import"></span> Import
+        </button>
+      </div>
+    </div>
+
+    <!-- Import YAML/JSON -->
+    <ng-container *ngIf="showImport">
+      <div class="import-panel">
+        <div class="import-mode-toggle">
+          <button nz-button nzSize="small"
+            [nzType]="importMode === 'yaml' ? 'primary' : 'default'"
+            (click)="setImportMode('yaml')">YAML</button>
+          <button nz-button nzSize="small"
+            [nzType]="importMode === 'json' ? 'primary' : 'default'"
+            (click)="setImportMode('json')">JSON</button>
+          <button nz-button nzSize="small" nzType="default"
+            (click)="importDocsOpen = !importDocsOpen">
+            <span nz-icon nzType="info-circle"></span>
+            {{ importDocsOpen ? 'Masquer la référence ' + importMode.toUpperCase() : 'Référence ' + importMode.toUpperCase() }}
+          </button>
+          <button nz-button nzSize="small" nzType="default"
+            (click)="formatImportText()"
+            nz-tooltip="Réindente automatiquement le texte collé vers le mode actif ({{ importMode.toUpperCase() }}) - accepte du JSON ou du YAML en entrée, quel que soit le mode.">
+            <span nz-icon nzType="align-left"></span> Formater
+          </button>
+          <label class="import-file-btn">
+            <span nz-icon nzType="upload"></span> Fichier
+            <input type="file" style="display:none" accept=".yaml,.yml,.json"
+              (change)="onImportFileUpload($event)">
+          </label>
+        </div>
+        <div *ngIf="importDocsOpen" class="import-docs"><pre>{{ importDocsText }}</pre></div>
+        <textarea class="json-editor" [(ngModel)]="importText" rows="12" spellcheck="false" [placeholder]="importPlaceholder" (keydown)="onImportKeydown($event)"></textarea>
+        <div *ngIf="importError" class="parse-error">
+          <div class="parse-error-header">
+            <mat-icon class="parse-error-icon">error_outline</mat-icon>
+            <span class="parse-error-main">{{ importError.main }}</span>
+          </div>
+          <div *ngIf="importError.available?.length" class="parse-error-available">
+            <span class="parse-error-label">
+              {{ importError.availableLabel ?? 'Valeurs disponibles' }}
+              <span *ngIf="importError.wrongValue" class="parse-error-clickable-hint">(cliquer pour corriger)</span>
+              :
+            </span>
+            <div class="parse-error-tags">
+              <button *ngFor="let v of importError.available; let i = index"
+                [class.parse-error-tag]="true"
+                [class.parse-error-tag--clickable]="!!importError.wrongValue"
+                [disabled]="!importError.wrongValue"
+                (click)="applySuggestion(v)">{{ (importError.availableDisplay?.[i]) ?? v }}</button>
+            </div>
+          </div>
+        </div>
+        <div class="import-actions">
+          <button nz-button nzType="primary" nzSize="small" (click)="applyImport()">
+            <span nz-icon nzType="check"></span> Appliquer
+          </button>
+          <button nz-button nzSize="small" (click)="showImport = false; importError = null">Annuler</button>
+        </div>
+      </div>
+    </ng-container>
+
+    <!-- Visuel -->
+    <ng-container *ngIf="!showImport">
+      <div class="pipeline" cdkDropList (cdkDropListDropped)="drop($event)">
+
+        <div *ngIf="pipeline.length === 0" class="pipeline-empty">
+          Aucune étape - choisissez un pipeline prédéfini ou ajoutez manuellement.
+        </div>
+
+        <div *ngFor="let s of pipeline; let si = index; trackBy: trackStepById"
+          class="step-card" cdkDrag
+          [style.border-left-color]="getStepMeta(s.type).color">
+
+          <div class="drag-handle" cdkDragHandle nz-tooltip="Glisser pour réordonner">
+            <span nz-icon nzType="holder"></span>
+          </div>
+          <div *cdkDragPlaceholder class="drag-placeholder"></div>
+
+          <div class="step-body">
+            <div class="step-header">
+              <nz-tag [nzColor]="getStepMeta(s.type).color">
+                <span nz-icon [nzType]="getStepMeta(s.type).icon"></span>
+                {{ getStepMeta(s.type).label }}
+              </nz-tag>
+              <input nz-input [(ngModel)]="s.label" placeholder="Nom de l'étape"
+                class="step-label-input" size="28" />
+              <button nz-button nzType="text" nzDanger nzSize="small"
+                (click)="removeStep(si)">
+                <span nz-icon nzType="delete"></span>
+              </button>
+            </div>
+
+            <div class="step-params">
+              <ng-container *ngIf="s.type === 'fetch'">
+                <div class="param-row">
+                  <label>Table <mat-icon class="info-icon" nz-tooltip="Table PLaTon à interroger. 'SessionData' contient toutes les sessions d'exercices (user_id, activity_id, resource_id, grade, attempts, created_at)." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                  <nz-select [(ngModel)]="s.table" style="width:220px"
+                    nzPlaceHolder="Choisir une table" [nzLoading]="schemaLoading"
+                    (ngModelChange)="s.contextFields = []">
+                    <nz-option *ngFor="let t of platonSchema" [nzValue]="t.name" [nzLabel]="t.name"></nz-option>
+                  </nz-select>
+                </div>
+                <div class="param-row">
+                  <label>Requête groupe de TP <mat-icon class="info-icon" nz-tooltip="Activez pour filtrer automatiquement les lignes dont user_id appartient au groupe de TP sélectionné dans le contexte." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                  <nz-switch [(ngModel)]="s.useGroupContext"
+                    nzCheckedChildren="Groupe" nzUnCheckedChildren="Non"></nz-switch>
+                </div>
+                <div class="param-row">
+                  <label>Filtrer par contexte <mat-icon class="info-icon" nz-tooltip="Colonnes filtrées automatiquement selon le contexte courant. Seules user_id, activity_id et course_id sont supportées." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                  <nz-select [(ngModel)]="s.contextFields" nzMode="multiple" style="width:300px"
+                    nzPlaceHolder="Colonnes de filtre" [nzDisabled]="!s.table">
+                    <nz-option *ngFor="let f of contextFilterCols" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
+                  </nz-select>
+                </div>
+              </ng-container>
+              <ng-container *ngIf="s.type === 'join'">
+                <div class="param-row">
+                  <label>Table à joindre <mat-icon class="info-icon" nz-tooltip="Table PLaTon dont les colonnes seront fusionnées avec les données courantes." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                  <nz-select [(ngModel)]="s.joinTable" nzPlaceHolder="Choisir une table"
+                    [nzLoading]="schemaLoading" (ngModelChange)="s.joinRightKey = undefined">
+                    <nz-option *ngFor="let t of platonSchema" [nzValue]="t.name" [nzLabel]="t.name"></nz-option>
+                  </nz-select>
+                </div>
+                <div class="param-row">
+                  <label>Type de jointure <mat-icon class="info-icon" nz-tooltip="LEFT garde toutes les lignes courantes, INNER seulement les correspondances, RIGHT toutes les lignes jointes, FULL tout." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                  <nz-select [(ngModel)]="s.joinType" style="width:260px" nzPlaceHolder="LEFT (par défaut)">
+                    <nz-option nzValue="left"  nzLabel="LEFT - garder toutes les lignes courantes"></nz-option>
+                    <nz-option nzValue="inner" nzLabel="INNER - seulement les correspondances"></nz-option>
+                    <nz-option nzValue="right" nzLabel="RIGHT - garder toutes les lignes jointes"></nz-option>
+                    <nz-option nzValue="full"  nzLabel="FULL - garder toutes les lignes des deux côtés"></nz-option>
+                  </nz-select>
+                </div>
+                <div class="param-row">
+                  <label>Filtrer par contexte <mat-icon class="info-icon" nz-tooltip="Colonnes de la table jointe filtrées selon le contexte courant." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                  <nz-select [(ngModel)]="s.joinContextFields" nzMode="multiple"
+                    nzPlaceHolder="Colonnes de filtre (optionnel)" [nzDisabled]="!s.joinTable">
+                    <nz-option *ngFor="let f of contextFilterCols" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
+                  </nz-select>
+                </div>
+                <div class="param-row">
+                  <label>Clé left <mat-icon class="info-icon" nz-tooltip="Colonne de la table courante servant de clé de jointure." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                  <nz-select [(ngModel)]="s.joinLeftKey" nzPlaceHolder="Champ de la table left" nzAllowClear>
+                    <nz-option *ngFor="let f of activeColumns()" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
+                  </nz-select>
+                </div>
+                <div class="param-row">
+                  <label>Clé right <mat-icon class="info-icon" nz-tooltip="Colonne de la table à joindre correspondant à la clé left." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                  <nz-select [(ngModel)]="s.joinRightKey" nzPlaceHolder="Champ de la table right"
+                    nzAllowClear [nzDisabled]="!s.joinTable">
+                    <nz-option *ngFor="let f of columnsForTable(s.joinTable)" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
+                  </nz-select>
+                </div>
+              </ng-container>
+              <ng-container *ngIf="s.type === 'filter'">
+                <div class="param-row">
+                  <label>Champ <mat-icon class="info-icon" nz-tooltip="Colonne sur laquelle s'applique la condition de filtrage." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                  <nz-select [(ngModel)]="s.filterField" style="width:180px">
+                    <nz-option *ngFor="let f of activeColumns()" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
+                  </nz-select>
+                </div>
+                <div class="param-row">
+                  <label>Opérateur</label>
+                  <nz-select [(ngModel)]="s.filterOperator" style="width:120px">
+                    <nz-option nzValue="==" nzLabel="=="></nz-option>
+                    <nz-option nzValue="!=" nzLabel="!="></nz-option>
+                    <nz-option nzValue=">"  nzLabel=">"></nz-option>
+                    <nz-option nzValue="<"  nzLabel="<"></nz-option>
+                    <nz-option nzValue=">=" nzLabel=">="></nz-option>
+                    <nz-option nzValue="<=" nzLabel="<="></nz-option>
+                  </nz-select>
+                </div>
+                <div class="param-row">
+                  <label>Valeur</label>
+                  <input nz-input [(ngModel)]="s.filterValue" style="width:120px" />
+                </div>
+              </ng-container>
+              <ng-container *ngIf="s.type === 'groupBy'">
+                <div class="param-row">
+                  <label>Grouper par <mat-icon class="info-icon" nz-tooltip="Regroupe les lignes par valeur unique de cette colonne." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                  <nz-select [(ngModel)]="s.groupField" style="width:200px">
+                    <nz-option *ngFor="let f of activeColumns()" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
+                  </nz-select>
+                </div>
+              </ng-container>
+              <ng-container *ngIf="s.type === 'findFirst'">
+                <div class="param-row">
+                  <label>Condition (champ) <mat-icon class="info-icon" nz-tooltip="Optionnel. Filtre les lignes du groupe où ce champ correspond à la valeur attendue." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                  <nz-select [(ngModel)]="s.whereField" nzAllowClear style="width:180px">
+                    <nz-option *ngFor="let f of activeColumns()" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
+                  </nz-select>
+                </div>
+                <div class="param-row" *ngIf="s.whereField">
+                  <label>Valeur attendue</label>
+                  <input nz-input [(ngModel)]="s.whereValue" style="width:120px" />
+                </div>
+                <div class="param-row">
+                  <label>Trier par <mat-icon class="info-icon" nz-tooltip="Trie les lignes du groupe avant de prendre la première." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                  <nz-select [(ngModel)]="s.sortField" nzAllowClear style="width:180px">
+                    <nz-option *ngFor="let f of activeColumns()" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
+                  </nz-select>
+                </div>
+              </ng-container>
+              <ng-container *ngIf="s.type === 'extract'">
+                <div class="param-row">
+                  <label>Champ à extraire <mat-icon class="info-icon" nz-tooltip="Colonne dont la valeur est extraite de chaque ligne. Produit un tableau de nombres." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                  <nz-select [(ngModel)]="s.extractField" style="width:200px">
+                    <nz-option *ngFor="let f of activeColumns()" [nzValue]="f.value" [nzLabel]="f.label"></nz-option>
+                  </nz-select>
+                </div>
+              </ng-container>
+              <ng-container *ngIf="s.type === 'aggregate'">
+                <div class="param-row">
+                  <label>Fonction <mat-icon class="info-icon" nz-tooltip="avg = moyenne, sum = somme, count = nombre, min = minimum, max = maximum." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                  <nz-select [(ngModel)]="s.aggregateFn" style="width:200px">
+                    <nz-option nzValue="avg"   nzLabel="avg - Moyenne"></nz-option>
+                    <nz-option nzValue="sum"   nzLabel="sum - Somme"></nz-option>
+                    <nz-option nzValue="count" nzLabel="count - Nombre"></nz-option>
+                    <nz-option nzValue="min"   nzLabel="min - Minimum"></nz-option>
+                    <nz-option nzValue="max"   nzLabel="max - Maximum"></nz-option>
+                  </nz-select>
+                </div>
+              </ng-container>
+              <ng-container *ngIf="s.type === 'round'">
+                <div class="param-row">
+                  <label>Décimales</label>
+                  <nz-input-number [(ngModel)]="s.decimals" [nzMin]="0" [nzMax]="6" style="width:100px"></nz-input-number>
+                </div>
+              </ng-container>
+              <ng-container *ngIf="s.type === 'divide'">
+                <div class="param-row">
+                  <label>Diviser par <mat-icon class="info-icon" nz-tooltip="Ex : 60 pour convertir des secondes en minutes, 100 pour un pourcentage." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                  <nz-input-number [(ngModel)]="s.divideBy" [nzMin]="0.001" style="width:140px"></nz-input-number>
+                </div>
+              </ng-container>
+              <ng-container *ngIf="s.type === 'js'">
+                <div class="param-row param-row-col">
+                  <label>Code JavaScript (input = sortie précédente) <mat-icon class="info-icon" nz-tooltip="Exécuté dans un sandbox Node.js. 'input' contient la sortie de l'étape précédente." nzTooltipPlacement="right">info_outline</mat-icon></label>
+                  <textarea nz-input [(ngModel)]="s.jsCode" rows="6" class="code-textarea"
+                    placeholder="// return Array.isArray(input) ? input.length : 0;"></textarea>
+                </div>
+              </ng-container>
+            </div>
+          </div>
+        </div>
+
+        <div *ngIf="pipeline.length > 0" class="connector">
+          <span nz-icon nzType="arrow-down" style="color:#999"></span>
+        </div>
+
+        <div class="add-step-row">
+          <button nz-button nzType="dashed" style="width:100%" (click)="openPicker()">
+            <span nz-icon nzType="plus"></span> Ajouter une étape
+          </button>
+        </div>
+      </div>
+    </ng-container>
+
+    </div>
+
+    <!-- Preview - uniquement en mode Visuel, comme avant (section à part, pas imbriquée dans
+         "Construction du pipeline" pour que les deux restent des cartes indépendantes). -->
+    <ng-container *ngIf="!showImport">
+    <div class="wizard-section">
+      <div class="wizard-section-title"><span nz-icon nzType="experiment"></span> Tester cette formule</div>
+      <div class="preview-section">
+        <div class="preview-inputs">
+          <div class="preview-field">
+            <label>Cours <mat-icon class="info-icon" nz-tooltip="Cours dans lequel chercher les données de test (toutes ressources PLaTon, recherche par nom). Ne filtre la requête que si l'étape 'fetch' a coché 'course_id' dans ses colonnes de contexte - sinon cette sélection sert juste à faire apparaître les activités/groupes/utilisateurs ci-dessous." nzTooltipPlacement="top">info_outline</mat-icon></label>
+            <nz-select [(ngModel)]="previewCourseId" (ngModelChange)="onPreviewCourseChange($event)"
+              nzPlaceHolder="Tous les cours" nzShowSearch [nzServerSearch]="true"
+              (nzOnSearch)="onCourseSearch($event)" [nzDropdownRender]="courseLoadMoreTpl"
+              [nzLoading]="previewCoursesLoading" style="width:260px">
+              <nz-option *ngFor="let c of previewCourses" [nzValue]="c.id" [nzLabel]="c.name"></nz-option>
+            </nz-select>
+            <ng-template #courseLoadMoreTpl>
+              <div *ngIf="previewCoursesHasMore" class="course-load-more">
+                <nz-divider style="margin:4px 0"></nz-divider>
+                <button nz-button nzType="link" nzBlock nzSize="small"
+                  [nzLoading]="previewCoursesLoading"
+                  (click)="$event.stopPropagation(); loadMoreCourses()">
+                  Voir plus
+                </button>
+              </div>
+            </ng-template>
+          </div>
+          <div class="preview-field">
+            <label>Activité <mat-icon class="info-icon" nz-tooltip="Filtre sur l'activité, uniquement si l'étape 'fetch' a coché 'activity_id' dans ses colonnes de contexte. Laissé vide, ce filtre est simplement omis de la requête (pas d'erreur, pas de résultat vide - les données de toutes les activités remontent)." nzTooltipPlacement="top">info_outline</mat-icon></label>
+            <nz-select [(ngModel)]="previewCtx.activityId" nzPlaceHolder="Toutes"
+              nzShowSearch nzAllowClear [nzLoading]="previewActivitiesLoading"
+              [nzDisabled]="!previewCourseId" style="width:220px">
+              <nz-option *ngFor="let a of previewActivities" [nzValue]="a.id" [nzLabel]="a.name"></nz-option>
+            </nz-select>
+          </div>
+          <div class="preview-field">
+            <label>Groupe <mat-icon class="info-icon" nz-tooltip="Filtre sur le groupe de TP, uniquement si l'étape 'fetch' a coché 'group_id' dans ses colonnes de contexte - déclenche alors une requête différente (jointure vers les membres du groupe) qui exige aussi qu'une activité soit sélectionnée ci-dessus, sinon l'étape est ignorée." nzTooltipPlacement="top">info_outline</mat-icon></label>
+            <nz-select [(ngModel)]="previewCtx.groupId" nzPlaceHolder="Aucun"
+              nzShowSearch nzAllowClear [nzLoading]="previewGroupsLoading"
+              [nzDisabled]="!previewCourseId" style="width:200px">
+              <nz-option *ngFor="let g of previewGroups" [nzValue]="g.id" [nzLabel]="g.name"></nz-option>
+            </nz-select>
+          </div>
+          <div class="preview-field">
+            <label>Utilisateur <mat-icon class="info-icon" nz-tooltip="Filtre sur cet apprenant précis, uniquement si l'étape 'fetch' a coché 'user_id' dans ses colonnes de contexte. Laissé vide alors que 'user_id' est coché : le filtre est omis, la requête remonte les données de TOUS les utilisateurs (pas une erreur - à surveiller, le résultat peut sembler valide sans être celui attendu)." nzTooltipPlacement="top">info_outline</mat-icon></label>
+            <nz-select [(ngModel)]="previewCtx.userId" nzPlaceHolder="Aucun"
+              nzShowSearch nzAllowClear [nzLoading]="previewStudentsLoading"
+              [nzDisabled]="!previewCourseId" style="width:220px">
+              <nz-option *ngFor="let s of previewStudents" [nzValue]="s.id" [nzLabel]="s.name"></nz-option>
+            </nz-select>
+          </div>
+          <button nz-button nzType="primary" [nzLoading]="previewing" (click)="runPreview()">
+            <span nz-icon nzType="experiment"></span> Tester
+          </button>
+          <button nz-button nzType="default" [nzLoading]="debugging" (click)="runDebug()" style="margin-left:8px">
+            <span nz-icon nzType="bug"></span> Déboguer pas à pas
+          </button>
+        </div>
+        <div *ngIf="previewResult" class="preview-result">
+          Résultat : <strong>{{ previewResult }}</strong>
+        </div>
+        <div *ngIf="previewError" class="preview-error">{{ previewError }}</div>
+
+        <!-- Debug pas à pas -->
+        <div *ngIf="debugSteps.length" class="debug-panel">
+          <div class="debug-panel-title"><span nz-icon nzType="bug"></span> Résultats par étape</div>
+          <div class="debug-context">
+            <strong>Contexte utilisé :</strong>
+            userId={{ previewCtx.userId || '-' }} &nbsp;|&nbsp;
+            activityId={{ previewCtx.activityId || '-' }} &nbsp;|&nbsp;
+            groupId={{ previewCtx.groupId || '-' }} &nbsp;|&nbsp;
+            courseId={{ previewCourseId || '-' }}
+          </div>
+          <div *ngFor="let s of debugSteps" class="debug-step" [class.debug-step-error]="s.error">
+            <div class="debug-step-header">
+              <span class="debug-step-index">#{{ s.index + 1 }}</span>
+              <span class="debug-step-type" [style.background]="stepTypeColor(s.type)">{{ s.type }}</span>
+              <span class="debug-step-duration">{{ s.durationMs }} ms</span>
+              <span *ngIf="s.error" class="debug-step-error-badge">ERREUR</span>
+              <span *ngIf="!s.error && s.output !== null">
+                <ng-container *ngIf="isArray(s.output)">{{ s.output.length }} élément(s)</ng-container>
+                <ng-container *ngIf="!isArray(s.output) && isObject(s.output)">objet</ng-container>
+                <ng-container *ngIf="!isArray(s.output) && !isObject(s.output)">{{ s.output }}</ng-container>
+              </span>
+            </div>
+            <pre *ngIf="s.error" class="debug-step-body debug-step-body-error">{{ s.error }}</pre>
+            <ng-container *ngIf="!s.error && isArrayOfObjects(s.output)">
+              <div class="debug-table-wrap">
+                <table class="debug-table">
+                  <thead><tr><th *ngFor="let col of getTableCols(s.output)">{{ col }}</th></tr></thead>
+                  <tbody>
+                    <tr *ngFor="let row of getTableRows(s.output, '' + s.index)">
+                      <td *ngFor="let cell of row" [title]="cell">{{ cell }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div *ngIf="s.output.length > 5" class="debug-table-more">
+                <ng-container *ngIf="!debugExpanded.has('' + s.index)">
+                  {{ s.output.length - 5 }} ligne(s) masquée(s) -
+                  <a (click)="toggleExpandStep('' + s.index)">Afficher tout ({{ s.output.length }})</a>
+                </ng-container>
+                <ng-container *ngIf="debugExpanded.has('' + s.index)">
+                  {{ s.output.length }} lignes affichées -
+                  <a (click)="toggleExpandStep('' + s.index)">Réduire</a>
+                </ng-container>
+              </div>
+            </ng-container>
+            <pre *ngIf="!s.error && !isArrayOfObjects(s.output)" class="debug-step-body">{{ formatStepOutput(s.output) }}</pre>
+          </div>
+        </div>
+        <div *ngIf="debugError" class="preview-error">{{ debugError }}</div>
+      </div>
+    </div>
+    </ng-container>
+
+    <!-- Restriction de visibilité (optionnel, uniquement course/activity) -->
+    <ng-container *ngIf="def.contextType === 'course' || def.contextType === 'activity'">
+      <div class="wizard-section">
+        <div class="wizard-section-title">
+          <span nz-icon nzType="eye-invisible" style="color:#ff4d4f"></span>
+          <span style="color:#ff4d4f">Restreindre la visibilité</span>
+          <mat-icon class="info-icon"
+            nz-tooltip="Optionnel. Un indicateur de contexte Cours ou Activité est visible par tous les rôles par défaut. Si son résultat expose des données nominatives (ex. performance détaillée par étudiant), sélectionnez ici les seuls rôles autorisés à le voir - par exemple Enseignant + Admin, pour l'exclure des étudiants."
+            nzTooltipPlacement="right">info_outline</mat-icon>
+        </div>
+        <nz-select
+          [(ngModel)]="def.visibilityRoles"
+          nzMode="multiple"
+          nzPlaceHolder="Aucune restriction (visible par tous les rôles)"
+          style="width:100%">
+          <nz-option *ngFor="let r of visibilityRoleOptions" [nzValue]="r.value" [nzLabel]="r.label"></nz-option>
+        </nz-select>
+      </div>
+    </ng-container>
+
+    <div class="wizard-section">
+      <div class="wizard-section-title"><span nz-icon nzType="bell"></span> Événements déclencheurs</div>
+    <nz-form-item>
+      <nz-form-control>
+        <div style="display:flex;align-items:center;gap:10px">
+          <nz-switch [(ngModel)]="def.useTriggerEvents" (ngModelChange)="onUseTriggerEventsChange($event)"></nz-switch>
+          <span>Activer des événements déclencheurs</span>
+          <button nz-button nzType="link" nzSize="small" *ngIf="def.useTriggerEvents"
+            (click)="showEventHint = !showEventHint" style="margin-left:auto">
+            <span nz-icon nzType="question-circle"></span>
+            Comment configurer l'événement pour ce pipeline ?
+          </button>
+        </div>
+        <div style="margin-top:6px;font-size:12px;color:#999">
+          Activé : l'indicateur est recalculé en temps réel dès qu'un événement choisi survient.
+          Désactivé : l'indicateur est recalculé automatiquement chaque minute, sans événement précis.
+        </div>
+
+        <!-- Aide dynamique, propre au pipeline défini à l'étape ci-dessus (pas une modale : la
+             suggestion dépend d'un état qui change en direct avec le pipeline). Uniquement
+             pertinente si des événements déclencheurs sont effectivement utilisés. -->
+        <div class="event-hint-panel" *ngIf="def.useTriggerEvents && showEventHint">
+          <ng-container *ngIf="eventRuleHint() as hint; else noHintYet">
+            <p class="event-hint-intro">
+              Basé sur le pipeline défini ci-dessus - à vérifier/adapter dans "Autres" du
+              sélecteur d'événements, pas une configuration garantie.
+            </p>
+            <div class="event-hint-row">
+              <span class="event-hint-label">Table{{ hint.tables.length > 1 ? 's' : '' }} à surveiller</span>
+              <span class="event-hint-value">
+                <nz-tag *ngFor="let t of hint.tables">{{ t }}</nz-tag>
+              </span>
+            </div>
+            <div class="event-hint-row" *ngIf="hint.columns.length">
+              <span class="event-hint-label">Colonne(s) probablement pertinente(s)</span>
+              <span class="event-hint-value">
+                <nz-tag *ngFor="let c of hint.columns" nzColor="blue">{{ c }}</nz-tag>
+              </span>
+            </div>
+            <div class="event-hint-row event-hint-row--mapping">
+              <span class="event-hint-label">Mapping de contexte suggéré</span>
+              <div class="event-hint-mapping">
+                <div *ngFor="let m of hint.contextMapping" class="event-hint-mapping-row">
+                  <span>{{ m.label }}</span>
+                  <span [class.event-hint-mapping-missing]="!m.column">{{ m.column ?? 'non détecté - à choisir manuellement' }}</span>
+                </div>
+              </div>
+            </div>
+          </ng-container>
+          <ng-template #noHintYet>
+            <p class="event-hint-empty">
+              Ajoutez au moins une étape "Récupérer données" (fetch) au pipeline ci-dessus pour
+              voir une suggestion.
+            </p>
+          </ng-template>
+        </div>
+      </nz-form-control>
+    </nz-form-item>
+    <nz-form-item *ngIf="def.useTriggerEvents">
+      <nz-form-label [nzRequired]="true">Événements <mat-icon class="info-icon" nz-tooltip="Événements PLaTon qui déclenchent l'ingestion de nouvelles données. L'indicateur est recalculé automatiquement quand ces événements surviennent." nzTooltipPlacement="right">info_outline</mat-icon></nz-form-label>
+      <nz-form-control>
+        <nz-select [(ngModel)]="def.requiredEvents" (ngModelChange)="onRequiredEventsChange($event)" nzMode="multiple"
+          nzPlaceHolder="Sélectionner un ou plusieurs événements configurés" style="width:100%">
+          <nz-option *ngFor="let evt of availableEventTypes"
+            [nzValue]="evt.name" [nzLabel]="evt.name + ' - ' + evt.label">
+          </nz-option>
+          <nz-option [nzValue]="OTHER_EVENT_OPTION" nzLabel="Autres (configurer un nouvel événement...)"></nz-option>
+        </nz-select>
+      </nz-form-control>
+    </nz-form-item>
+
+    </div>
+  </div>
+
+  <!--  Overlay sélection d'étape  -->
+  <div *ngIf="showStepPicker" class="picker-overlay" (click)="showStepPicker = false">
+    <div class="picker-panel" (click)="$event.stopPropagation()">
+      <div class="picker-header">
+        <strong>Choisir une étape</strong>
+        <button nz-button nzType="text" nzSize="small" (click)="showStepPicker = false">✕</button>
+      </div>
+      <div class="step-picker">
+        <div *ngFor="let meta of stepCatalog" class="step-picker-item" (click)="addStep(meta.type)">
+          <nz-tag [nzColor]="meta.color" style="margin:0">
+            <span nz-icon [nzType]="meta.icon"></span>
+          </nz-tag>
+          <div class="step-picker-text">
+            <strong>{{ meta.label }}</strong>
+            <span>{{ meta.desc }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!--  Navigation  -->
+  <nz-divider></nz-divider>
+  <div class="nav-actions">
+    <button nz-button (click)="cancel()">Annuler</button>
+    <div class="nav-right">
+      <button nz-button *ngIf="step > 0" (click)="step = step - 1">
+        <span nz-icon nzType="left"></span> Précédent
+      </button>
+      <button nz-button *ngIf="step < 2" [nzLoading]="saving" [disabled]="!def.name.trim()" (click)="submit()"
+        nz-tooltip="Enregistre l'indicateur tel quel, incomplet. Il n'apparaîtra pas aux utilisateurs tant qu'il n'est pas activé.">
+        <span nz-icon nzType="save"></span> Sauvegarder le brouillon
+      </button>
+      <button nz-button nzType="primary" *ngIf="step < 2" (click)="nextStep()" [disabled]="!canProceed()">
+        Suivant <span nz-icon nzType="right"></span>
+      </button>
+      <button nz-button nzType="primary" *ngIf="step === 2"
+        [nzLoading]="saving" (click)="submit()">
+        <span nz-icon nzType="save"></span>
+        {{ isEditMode ? 'Enregistrer' : "Créer l'indicateur" }}
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!--  Modal pipelines prédéfinis : grille ou détail d'un pipeline (vue interne, jamais une
+     seconde modale par-dessus celle-ci) ─ -->
+<ng-template #recipesModalTpl>
+
+  <nz-tabset *ngIf="!selectedRecipe" [(nzSelectedIndex)]="recipesActiveTab" nzSize="small">
+    <nz-tab nzTitle="Prédéfinis">
+      <div class="recipes-grid">
+        <div class="recipe-card" *ngFor="let r of recipes" (click)="applyRecipeAndClose(r)">
+          <div class="recipe-card-title">
+            <span class="recipe-card-title-text">
+              <span nz-icon nzType="bulb" style="font-size:14px"></span>
+              {{ r.name }}
+            </span>
+            <button nz-button nzType="text" nzSize="small" class="recipe-card-eye"
+              (click)="showRecipeDetail(r); $event.stopPropagation()" nz-tooltip="Voir le détail">
+              <span nz-icon nzType="eye"></span>
+            </button>
+          </div>
+          <div class="recipe-card-body">{{ r.desc }}</div>
+        </div>
+      </div>
+    </nz-tab>
+
+    <nz-tab nzTitle="Depuis les indicateurs existants">
+      <div class="recipes-grid" *ngIf="existingPipelines.length; else noExisting">
+        <div class="recipe-card" *ngFor="let r of existingPipelines" (click)="applyRecipeAndClose(r)">
+          <div class="recipe-card-title">
+            <span class="recipe-card-title-text">
+              <span nz-icon nzType="deployment-unit" style="font-size:14px"></span>
+              {{ r.name }}
+            </span>
+            <button nz-button nzType="text" nzSize="small" class="recipe-card-eye"
+              (click)="showRecipeDetail(r); $event.stopPropagation()" nz-tooltip="Voir le détail">
+              <span nz-icon nzType="eye"></span>
+            </button>
+          </div>
+          <div class="recipe-card-body">{{ r.desc }}</div>
+        </div>
+      </div>
+      <ng-template #noExisting>
+        <p class="section-hint">Aucun indicateur actif avec un pipeline pour l'instant.</p>
+      </ng-template>
+    </nz-tab>
+  </nz-tabset>
+
+  <!-- Vue détail - pas de bouton "Retour" séparé : le X de la modale sert de retour ici
+       (voir openRecipesModal(), nzOnCancel), et referme réellement la modale seulement
+       depuis la vue grille. -->
+  <div *ngIf="selectedRecipe as r">
+    <div class="recipe-detail">
+
+      <!-- Colonne gauche : contexte (objectif / utilisation / adaptation) pour les recettes
+           prédéfinies, ou simple liste "utilisé par" pour un pipeline issu d'indicateurs
+           existants (pas de texte curaté disponible dans ce cas). -->
+      <div class="recipe-detail-info">
+        <ng-container *ngIf="r.detail; else usedByBlock">
+          <div class="recipe-detail-section recipe-detail-section--objectif">
+            <div class="recipe-detail-section-title">
+              <span nz-icon nzType="aim"></span> Objectif
+            </div>
+            <p>{{ r.detail.objectif }}</p>
+          </div>
+
+          <div class="recipe-detail-section recipe-detail-section--utilisation">
+            <div class="recipe-detail-section-title">
+              <span nz-icon nzType="play-circle"></span> Utilisation
+            </div>
+            <p>{{ r.detail.utilisation }}</p>
+          </div>
+
+          <div class="recipe-detail-section recipe-detail-section--adapter">
+            <div class="recipe-detail-section-title">
+              <span nz-icon nzType="tool"></span> Comment adapter
+            </div>
+            <p>{{ r.detail.adapter }}</p>
+          </div>
+        </ng-container>
+        <ng-template #usedByBlock>
+          <div class="recipe-detail-section recipe-detail-section--objectif">
+            <div class="recipe-detail-section-title">
+              <span nz-icon nzType="deployment-unit"></span> Utilisé par
+            </div>
+            <p *ngFor="let name of r.usedBy">{{ name }}</p>
+          </div>
+        </ng-template>
+      </div>
+
+      <!-- Colonne droite : pipeline -->
+      <div class="recipe-detail-pipeline">
+        <div class="recipe-detail-pipeline-title">
+          Pipeline <span class="recipe-detail-pipeline-count">{{ r.pipeline.length }} étape{{ r.pipeline.length > 1 ? 's' : '' }}</span>
+        </div>
+        <div class="recipe-detail-steps">
+          <div class="recipe-detail-step" *ngFor="let s of r.pipeline; let i = index; let last = last">
+            <div class="recipe-detail-step-num">{{ i + 1 }}</div>
+            <div class="recipe-detail-step-body">
+              <span class="recipe-detail-step-type" [style.background]="stepTypeColor(s.type)">{{ s.type }}</span>
+              <span class="recipe-detail-step-label">{{ s.label }}</span>
+
+              <pre class="recipe-detail-step-code" *ngIf="s.type === 'js'">{{ s.jsCode }}</pre>
+
+              <div class="recipe-detail-step-info" *ngIf="s.type !== 'js'">
+                <div class="recipe-detail-step-info-row" *ngFor="let d of stepDetails(s)">
+                  <span class="recipe-detail-step-info-label">{{ d.label }} :</span>
+                  <span class="recipe-detail-step-info-value">{{ d.value }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="recipe-detail-step-connector" *ngIf="!last"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="recipe-detail-actions">
+      <button nz-button nzType="primary" (click)="applyRecipeAndClose(r)">
+        <span nz-icon nzType="check"></span> Utiliser ce pipeline
+      </button>
+    </div>
+  </div>
+
+</ng-template>
+

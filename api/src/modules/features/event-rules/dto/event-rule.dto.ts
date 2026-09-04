@@ -39,8 +39,9 @@ export class EventRuleContextMappingDto {
   @IsOptional() @IsString() sessionId?: string;
 }
 
-/** `eventTypeId` XOR `newEventType` : la règle métier (l'un des deux requis) reste vérifiée dans
- *  EventRulesService.create() - déjà correcte, pas dupliquée ici. */
+/* `eventTypeId` XOR `newEventType` : la règle métier (l'un des deux requis) reste vérifiée dans
+ EventRulesService.create().
+*/
 export class CreateEventRuleDto {
   @IsOptional() @IsString() eventTypeId?: string;
 

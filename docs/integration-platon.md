@@ -14,6 +14,12 @@ connecte à l'API, respecte la séparation admin/non-admin sans modification du
 code métier. Ce qui suit reste donc à faire, mais s'appuie sur du code qui
 fonctionne réellement, pas sur un plan non vérifié.
 
+**Tâche distincte, non couverte ici** : le relais d'événements
+(`platon_outbox_events` → RabbitMQ), nécessaire pour que les indicateurs se
+mettent à jour en temps réel, vit lui aussi désormais côté PLaTon - voir
+[`docs/integration-platon-relay.md`](./integration-platon-relay.md) pour ce
+second ajout, indépendant de l'onglet "Indicateurs" décrit ici.
+
 ## Principe
 
 Indicateurs expose un second point d'entrée de build - en plus de son
@@ -33,7 +39,7 @@ sur une même page - voir le test empirique correspondant).
 Fichier : `apps/web/src/app/widgets/sidebar/sidebar.component.ts`, dans
 `ngOnInit()`, à côté des autres liens conditionnels (`isTeacherRole`,
 `UserRoles.admin`). Deux liens plutôt qu'un seul, décision explicite validée
-sur le simulateur (voir `integration-indicateurs.md` §14bis) : pas de
+sur le simulateur (voir `integration-indicateurs.md` §"Points d'entrée sidebar") : pas de
 sélecteur de page à l'intérieur du widget, chaque lien mène directement à
 la bonne page via `initial-view` (§6bis) :
 
@@ -221,7 +227,7 @@ leur propre section). Sans `context-type`, le widget démarre simplement
 sur le tableau de bord comme avant - aucune régression pour une
 intégration qui ne fournirait pas ces attributs.
 
-Testé dans le simulateur (voir `integration-indicateurs.md` §14) : clic réel
+Testé dans le simulateur (voir `integration-indicateurs.md` §"Accès aux indicateurs scopés...") : clic réel
 depuis une page d'activité/cours factice jusqu'à la bonne vue d'indicateurs,
 avec panneau de groupe et bouton de comparaison fonctionnels.
 
@@ -234,9 +240,9 @@ au widget, rien à fournir côté PLaTon pour que ce lien fonctionne.
 Complète le lien "Gérer mes indicateurs" du §1 : sans lui, `<indicateurs-app>`
 démarre toujours sur le tableau de bord (cartes personnelles). Avec
 `initial-view="indicators"`, il démarre directement sur la page d'activation -
-pas de sélecteur intermédiaire à l'intérieur du widget (essayé puis retiré,
-voir `integration-indicateurs.md` §14bis : redondant une fois la sidebar
-PLaTon en place).
+pas de sélecteur intermédiaire à l'intérieur du widget, la sidebar PLaTon
+jouant déjà ce rôle (voir `integration-indicateurs.md`
+§"Points d'entrée sidebar").
 
 ```html
 <indicateurs-app
@@ -261,32 +267,30 @@ n'importe quel lien de sidebar.
   (voir §3) ; `initial-view` (§6bis) et `context-*` (§6) optionnels. Le
   routage interne
   (tableau de bord ↔ liste ↔ détail) reste entièrement gardé par Indicateurs
-  lui-même - **pas** en hash routing contrairement à ce qui était prévu au
-  départ : trouvé en testant dans une vraie app Angular (pas seulement une
-  page statique), `withHashLocation()` écrit dans `window.location` et
-  écrasait l'URL de la page hôte. Remplacé par une `LocationStrategy`
-  purement interne (voir `integration-indicateurs.md` §11) : le routage du
-  widget ne touche jamais l'URL visible de PLaTon, dans un sens comme dans
-  l'autre - zéro risque de collision, mais aussi zéro deep-link direct vers
-  une vue précise du widget depuis l'extérieur (voir Ouvert).
+  lui-même, via une `LocationStrategy` purement interne plutôt qu'en hash
+  routing (voir `integration-indicateurs.md` §"Routage interne isolé") : le routage du widget ne
+  touche jamais l'URL visible de PLaTon, dans un sens comme dans l'autre -
+  zéro risque de collision, mais aussi zéro deep-link direct vers une vue
+  précise du widget depuis l'extérieur (voir Ouvert).
 
-## Décisions actées (2026-08-28)
+## Décisions actées
 
 - **Code côté PLaTon** : reste à l'état de spec dans ce document, non
   implémenté. Décision explicite - Indicateurs ne modifie pas le dépôt
   PLaTon ; c'est à l'équipe PLaTon de reprendre les 6 éléments ci-dessus
   quand elle sera prête.
-- **Jamais testé contre le PLaTon complet et continu** - accepté comme
-  limite de fait, pas comme question ouverte : PLaTon réel (Nx, API NestJS,
-  ~20 libs `@platon/feature/*`) a été démarré une fois en local pour valider
-  le principe (voir `integration-indicateurs.md` §12), mais est trop lourd
-  pour tourner durablement sur toutes les machines de dev. Remplacé par un
-  simulateur léger qui reproduit fidèlement ce qui compte pour ce test (mêmes
-  versions, vrais fichiers CSS, vraie config de routeur) mais pas les ~20
-  autres libs `@platon/feature/*` chargées simultanément, ni le vrai CSP, ni
-  la vraie authentification CAS. **Cette dernière validation en conditions
-  réelles complètes reste la responsabilité de l'équipe PLaTon**, une fois
-  les 6 éléments ci-dessus implémentés de leur côté.
+- **Pas testé contre le PLaTon complet et continu** - accepté comme limite de
+  fait, pas comme question ouverte : PLaTon réel (Nx, API NestJS, ~20 libs
+  `@platon/feature/*`) est trop lourd pour tourner durablement sur toutes les
+  machines de dev. Le test s'appuie donc sur un simulateur léger qui
+  reproduit fidèlement ce qui compte pour ce test (mêmes versions, vrais
+  fichiers CSS, vraie config de routeur, fidélité validée en démarrant une
+  fois le vrai PLaTon en local - voir `integration-indicateurs.md`
+  §"Simulateur de test en conditions réelles PLaTon") mais
+  pas les ~20 autres libs `@platon/feature/*` chargées simultanément, ni le
+  vrai CSP, ni la vraie authentification CAS. **Cette dernière validation en
+  conditions réelles complètes reste la responsabilité de l'équipe PLaTon**,
+  une fois les 6 éléments ci-dessus implémentés de leur côté.
 - **Où héberger le script** `main.js` : servi directement par le serveur
   d'Indicateurs (son propre domaine, chemin `/embed/`), pas copié/proxifié
   par PLaTon. Choix indépendant du LMS hôte : Indicateurs n'est pas destiné

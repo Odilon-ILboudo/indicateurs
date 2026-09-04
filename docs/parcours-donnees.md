@@ -40,6 +40,15 @@ toute la chaîne de fichiers sans avoir à grep le projet.
 - Deux connexions TypeORM : `'platon'` (lecture seule, tables PLaTon en
   `PascalCase` type `"Users"`, `"Courses"`...) et `'indicators'`
   (lecture/écriture, tables `snake_case` type `indicator_values`).
+- **`activity-aware`** / **`course-aware`** : propriétés d'une formule
+  d'indicateur, détectées par `isActivityAware()`/`isCourseAware()`
+  (`indicators/formula-resolution.util.ts`) - une étape `fetch`/`join` du
+  pipeline déclare `activity_id` (resp. `course_id`) dans `contextFields`.
+  Ne concerne que les indicateurs personnels (`learner`/`teacher`/`admin`) :
+  `activity-aware` veut dire que la valeur est propre à une activité précise
+  (jamais affichée comme valeur globale) ; `course-aware`, qu'elle agrège
+  tout le cours. Une formule peut être ni l'un ni l'autre (valeur globale
+  par utilisateur, pas de scope), l'un, l'autre, ou les deux à la fois.
 
 ---
 
@@ -68,7 +77,7 @@ pages. `apiUrl = ${environment.apiUrl}/indicators`,
 | `getExecutionLogs(id, limit=50)` | `GET {apiUrl}/:id/logs?limit=` | E.5 |
 | `getPlatonSchema()` | `GET {apiUrl}/schema` | E.2, E.6 |
 | `computeView(id, contextType, contextId, activityId?, vizId?, courseId?)` | `POST {apiUrl}/:id/compute-view` | B.2, C, F |
-| `searchCourses(query, offset?)` | `GET {apiUrl}/courses/search?q=&offset=` | E.2 (remplace l'ancien `getTeacherContext`, retiré) |
+| `searchCourses(query, offset?)` | `GET {apiUrl}/courses/search?q=&offset=` | E.2 |
 | `getCourseActivities(courseId)` | `GET {apiUrl}/course/:courseId/activities` | E.2 |
 | `getCourseStudents(courseId)` | `GET {apiUrl}/course/:courseId/students` | E.2 |
 | `getSnapshots(id, scope)` | `GET {apiUrl}/:id/snapshots?activityId=` ou `?courseId=` | F |
@@ -129,9 +138,8 @@ l'activité concernée :
 
 - Page cours (`courses/course/dashboard/dashboard.page.ts`, alimentée par
   `CoursePresenter.contextChange`) : indicateurs `course` de ce cours, plus
-  (sur la même page, depuis la fusion de l'ancien onglet "Mes statistiques")
-  indicateurs personnels course-aware et indicateurs `group` scopés au cours
-  entier.
+  (sur la même page) indicateurs personnels course-aware et indicateurs
+  `group` scopés au cours entier.
 - Page activité (`courses/course/activity/activity.page.ts`, alimentée par
   `ActivityPresenter.contextChange`) : indicateurs personnels activity-aware +
   indicateurs `activity` + indicateurs `group` scopés à l'activité.
@@ -246,8 +254,7 @@ parent (voir F pour `from: 'activity'` / `from: 'group-snapshot'`).
      déduit de `from`, contrairement aux branches ci-dessus), car il dépend
      de l'indicateur cliqué.
    - `'course-personal'` : même principe, depuis les cartes personnelles de
-     la page cours (`dashboard.page.ts`, fusionnées depuis l'ancien onglet
-     "Mes statistiques").
+     la page cours (`dashboard.page.ts`).
    - Appelle `loadIndicator(id)`.
 2. `loadIndicator(id)` :
    - `indicatorService.loadIndicators()` → **`GET /api/indicators`**
@@ -974,38 +981,35 @@ pour le schéma complet, les commandes de test et les IDs de référence.
 
 ### I.1 Trigger PostgreSQL → `platon_outbox_events`
 
-Chemin historique : déclenché automatiquement par
-`trg_platon_outbox_session_data` sur `AFTER INSERT OR UPDATE OF grade` sur
-`SessionData` (BDD PLaTon). Écrit une ligne dans `platon_outbox_events` :
-`event_type = 'exercise.answered'`, `payload` (userId, sessionId, activityId,
-courseId, grade, attempts).
+Tous les déclencheurs sont installés depuis l'admin (voir E.7), aucun codé en
+dur - `platon-outbox.sql` ne crée que la table `platon_outbox_events`, jamais
+de trigger. Un trigger générique `trg_platon_outbox_generic_<table>` (fonction
+partagée `fn_platon_outbox_generic()`) écrit `event_type = 'raw:<Table>'`,
+`payload = {table, op, new, old}` - à classifier en I.3. `exercice.completed`
+(réponse à un exercice) est un cas d'usage comme les autres, recréable de la
+même façon (table `SessionData`, colonne `attempts_at_success`).
 
-Chemin dynamique (voir E.7) : un trigger générique
-`trg_platon_outbox_generic_<table>` (fonction partagée
-`fn_platon_outbox_generic()`), installé depuis l'admin, écrit
-`event_type = 'raw:<Table>'`, `payload = {table, op, new, old}` - à
-classifier en I.2.
+### I.2 Relais → RabbitMQ (côté LMS hôte, pas Indicateurs)
 
-### I.2 `IngestionRelayService` → RabbitMQ
-
-`api/src/modules/features/ingestion-relay/ingestion-relay.service.ts`
-
-Cron `*/2 * * * * *` :
-1. `SELECT * FROM platon_outbox_events WHERE id > last_id` (BDD PLaTon, lecture seule).
-2. Si `event_type` commence par `raw:` → `classify(payload)` : évalue chaque
-   `IndicatorEventRule` active (cache 30s, `RULE_CACHE_TTL_MS`) contre
-   `payload.table`/`payload.op`/condition/mapping contexte → 0..N événements
-   métier résolus (voir E.7 pour la création/installation des règles).
-   Sinon, publie tel quel (chemin historique, inchangé).
-3. Publie chaque événement résolu dans RabbitMQ exchange `platon.events`
-   (topic), routing key = `event_type` métier.
-4. Avance `ingestion_cursors.last_id` (BDD indicators).
+Ne vit plus dans ce dépôt - voir
+[`integration-platon-relay.md`](integration-platon-relay.md) pour le fichier
+prêt à copier et le guide d'installation côté PLaTon. Republie chaque ligne
+de l'outbox **telle quelle**, sans l'interpréter (`SELECT ... WHERE id >
+last_id`, toutes les 2s, curseur `indicateurs_outbox_cursor` dans la base
+PLaTon elle-même).
 
 ### I.3 Consumers RabbitMQ
 
 `api/src/modules/features/ingestion/ingestion-consumer.service.ts`
 
-Deux consumers, routing key `'#'` (reçoit tous les types d'événements) :
+Deux consumers, routing key `'#'` (reçoit tous les types d'événements).
+**Classifient d'abord** (`resolveEvents()`) : si `type` commence par `raw:` →
+`EventClassifierService.classify(payload)` (`event-rules/event-classifier.service.ts`)
+évalue chaque `IndicatorEventRule` active (cache 30s, `RULE_CACHE_TTL_MS`)
+contre `payload.table`/`payload.op`/condition/mapping contexte → 0..N
+événements métier résolus (voir E.7 pour la création/installation des
+règles) ; sinon, traité tel quel comme événement déjà résolu (chemin
+supporté mais inutilisé aujourd'hui).
 
 #### Consumer `indicators.learner` → `onLearnerEvent`
 

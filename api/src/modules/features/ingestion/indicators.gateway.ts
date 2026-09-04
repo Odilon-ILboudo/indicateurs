@@ -44,7 +44,10 @@ export class IndicatorsGateway implements OnGatewayConnection, OnGatewayDisconne
     this.logger.log(`Client déconnecté: ${client.id} (total: ${this.connectedClients})`);
   }
 
-  // Écoute tous les événements indicator.*.updated émis par IngestionService
+  /*
+  Écoute l'événement 'indicator.updated' (match exact). Émis par les méthodes emitUpdated() de
+  IngestionService et IndicatorsService, à chaque fois qu'un indicateur est recalculé.
+  */
   @OnEvent('indicator.updated')
   handleIndicatorUpdated(payload: IndicatorUpdatePayload) {
     if (this.connectedClients === 0) return;

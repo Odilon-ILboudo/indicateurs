@@ -27,8 +27,10 @@ import { DatabaseModule } from './database/database.module';
         password: configService.get('indicatorsDatabase.password'),
         database: configService.get('indicatorsDatabase.database'),
         synchronize: configService.get('indicatorsDatabase.synchronize'),
-        // Les migrations sont lancées par un service Docker dédié (voir
-        // docker-compose.prod.yml, service "migrate"), jamais par l'app elle-même.
+        /*
+        Les migrations sont lancées par un service Docker dédié (voir
+        docker-compose.prod.yml, service "migrate")
+        */
         migrationsRun: false,
         logging: configService.get('indicatorsDatabase.logging'),
         entities: [__dirname + '/../../**/*.entity{.ts,.js}'],

@@ -39,11 +39,11 @@ export interface IncrementalShape {
   postSteps: FormulaStep[];
   filterSteps: FormulaStep[];
   joinSteps: FormulaStep[];
-  /** Vrai si la shape contient des joins → nécessite un SQL ciblé (1 ligne) dans le chemin incrémental. */
+  // Vrai si la shape contient des joins : nécessite un SQL ciblé (1 ligne) dans le chemin incrémental
   needsTargetedFetch: boolean;
-  /** Présent si le pipeline contient un groupBy → stocke groupRowValues ou groupCandidateRows. */
+  // Présent si le pipeline contient un groupBy : stocke groupRowValues ou groupCandidateRows
   groupByField?: string;
-  /** Présent si le pipeline contient un findFirst → stocke candidateRows ou groupCandidateRows. */
+  // Présent si le pipeline contient un findFirst : stocke candidateRows ou groupCandidateRows
   findFirst?: { sortField?: string; whereField?: string; whereValue?: any };
 }
 
@@ -57,7 +57,7 @@ export class FormulaInterpreterService {
     private readonly logRepo: Repository<IndicatorExecutionLog>,
   ) {}
 
-  /** Exécute le pipeline étape par étape et retourne le snapshot de chaque étape (pour debug). */
+  // Exécute le pipeline étape par étape et retourne le snapshot de chaque étape (pour debug)
   async interpretWithSteps(
     formula: FormulaDefinition,
     context: FormulaContext,
@@ -75,9 +75,10 @@ export class FormulaInterpreterService {
         const truncated = Array.isArray(current) && current.length > 200;
         const debugOutput = truncated ? current.slice(0, 200) : current;
         steps.push({ index: i, type: step.type, durationMs: Date.now() - t0, output: debugOutput, truncated });
-        // Plafonner les données intermédiaires à 5000 lignes entre les étapes :
-        // évite l'explosion mémoire serveur sur les jointures, tout en restant
-        // 10× au-dessus de l'ancien fetchLimit=500 (qui causait des résultats incorrects).
+        /*
+        Plafonner les données intermédiaires à 5000 lignes entre les étapes :
+        évite l'explosion mémoire serveur sur les jointures.
+        */
         if (Array.isArray(current) && current.length > 5000) {
           current = current.slice(0, 5000);
         }
@@ -89,11 +90,11 @@ export class FormulaInterpreterService {
     return { steps };
   }
 
-  /**
-   * Exécute un pipeline DSL et retourne le résultat brut.
-   * number → valeur scalaire (card/gauge/line-chart), object → { clé: valeur } (bar-chart),
-   * array → [{ bucket, count }] (histogram). Enregistre un log dans indicator_execution_logs.
-   */
+  /*
+  Exécute un pipeline DSL et retourne le résultat brut.
+  number : valeur scalaire (card/gauge/line-chart), object - { clé: valeur } (bar-chart),
+  array : [{ bucket, count }] (histogram). Enregistre un log dans indicator_execution_logs.
+  */
   async interpret(formula: FormulaDefinition, context: FormulaContext): Promise<any> {
     if (!formula?.pipeline?.length) return 0;
 
@@ -136,19 +137,19 @@ export class FormulaInterpreterService {
     return result;
   }
 
-  /**
-   * Détecte si une formule est éligible au calcul incrémental (delta).
-   * Formes acceptées :
-   *   fetch(SessionData, contextFields ∋ user_id)
-   *   [join]*
-   *   [filter]*
-   *   [groupBy(groupField)]   ← optionnel - active le chemin groupRowValues
-   *   extract(field)
-   *   aggregate(avg|sum|count|min|max)
-   *   [round|divide]*
-   *
-   * Retourne null pour tout pipeline contenant findFirst ou js.
-   */
+  /*
+  Détecte si une formule est éligible au calcul incrémental (delta).
+  Formes acceptées :
+    fetch(SessionData, contextFields ∋ user_id)
+    [join]*
+    [filter]*
+    [groupBy(groupField)]   ← optionnel - active le chemin groupRowValues
+    extract(field)
+    aggregate(avg|sum|count|min|max)
+    [round|divide]*
+
+  Retourne null pour tout pipeline contenant findFirst ou js.
+  */
   getIncrementalShape(formula: FormulaDefinition): IncrementalShape | null {
     const pipeline = formula?.pipeline ?? [];
     if (pipeline.length < 3) return null;
@@ -209,7 +210,7 @@ export class FormulaInterpreterService {
     };
   }
 
-  /** Applique la chaîne aggregate/round/divide/js sur un tableau de valeurs numériques déjà extraites. */
+  // Applique la chaîne aggregate/round/divide/js sur un tableau de valeurs numériques déjà extraites
   async applyPostSteps(values: number[], postSteps: FormulaStep[]): Promise<number> {
     let current: any = values;
     for (const step of postSteps) {
@@ -223,8 +224,9 @@ export class FormulaInterpreterService {
     return typeof current === 'number' ? current : 0;
   }
 
-  /** Calcul complet pour une formule incrémentable : fetch + joins/filtres, map sessionId →
-   *  valeur, puis aggregate/round/divide. Utilisé au premier événement et en fallback. */
+  /* Calcul complet pour une formule incrémentable : fetch + joins/filtres, map sessionId -
+   valeur, puis aggregate/round/divide. Utilisé au premier événement et en fallback.
+  */
   async computeWithRowMap(
     formula: FormulaDefinition,
     context: FormulaContext,
@@ -248,7 +250,7 @@ export class FormulaInterpreterService {
     return { result: await this.applyPostSteps(Object.values(rowValues), shape.postSteps), rowValues };
   }
 
-  /** Équivalent de computeWithRowMap avec groupBy : map groupKey → { sessionId → valeur }. */
+  // Équivalent de computeWithRowMap avec groupBy : map groupKey - { sessionId - valeur }
   async computeWithGroupRowMap(
     formula: FormulaDefinition,
     context: FormulaContext,
@@ -277,11 +279,11 @@ export class FormulaInterpreterService {
     return { result: await this.applyPostSteps(allValues, shape.postSteps), groupRowValues };
   }
 
-  /**
-   * Calcul complet pour findFirst semi-incrémental.
-   * Construit candidateRows (sans groupBy) ou groupCandidateRows (avec groupBy).
-   * Chaque entrée stocke : sortValue, extractedValue, passes (condition whereField).
-   */
+  /*
+  Calcul complet pour findFirst semi-incrémental.
+  Construit candidateRows (sans groupBy) ou groupCandidateRows (avec groupBy).
+  Chaque entrée stocke : sortValue, extractedValue, passes (condition whereField).
+  */
   async computeWithCandidateRows(
     formula: FormulaDefinition,
     context: FormulaContext,
@@ -330,13 +332,13 @@ export class FormulaInterpreterService {
     }
   }
 
-  /** Calcule le résultat depuis candidateRows plat (findFirst sans groupBy). O(n) scan. */
+  // Calcule le résultat depuis candidateRows plat (findFirst sans groupBy)
   async computeResultFromCandidates(candidateRows: CandidateRowsMap, shape: IncrementalShape): Promise<number> {
     const winner = this.findCandidateWinner(candidateRows, shape.findFirst?.sortField);
     return winner !== null ? this.applyPostSteps([winner], shape.postSteps) : 0;
   }
 
-  /** Calcule le résultat depuis groupCandidateRows (findFirst avec groupBy). O(n) total. */
+  // Calcule le résultat depuis groupCandidateRows (findFirst avec groupBy)
   async computeResultFromGroupCandidates(groupCandidateRows: GroupCandidateRowsMap, shape: IncrementalShape): Promise<number> {
     const winners: number[] = [];
     for (const entries of Object.values(groupCandidateRows)) {
@@ -346,10 +348,10 @@ export class FormulaInterpreterService {
     return this.applyPostSteps(winners, shape.postSteps);
   }
 
-  /**
-   * Évalue un seul filtre DSL sur une ligne (row). Retourne true si la ligne passe le filtre.
-   * Utilisé dans le chemin incrémental pour éviter un SQL complet.
-   */
+  /*
+  Évalue un seul filtre DSL sur une ligne (row). Retourne true si la ligne passe le filtre.
+  Utilisé dans le chemin incrémental pour éviter un SQL complet.
+  */
   evaluateFilterRow(params: Record<string, any>, row: Record<string, any>): boolean {
     const { field, operator, value } = params;
     const rowVal = row[field];
@@ -365,11 +367,11 @@ export class FormulaInterpreterService {
     }
   }
 
-  /**
-   * Fetch ciblé pour le chemin incrémental avec join : récupère 1 seule ligne SessionData
-   * par sessionId, puis applique les joins de la shape en mémoire.
-   * Retourne null si la session n'existe pas en BDD.
-   */
+  /*
+  Fetch ciblé pour le chemin incrémental avec join : récupère 1 seule ligne SessionData
+  par sessionId, puis applique les joins de la shape en mémoire.
+  Retourne null si la session n'existe pas en BDD.
+  */
   async fetchSingleSessionRow(
     sessionId: string,
     context: FormulaContext,
@@ -403,9 +405,9 @@ export class FormulaInterpreterService {
     }
   }
 
-  // ── Étapes ───────────────────────────────────────────────────────────────
+  // Étapes
 
-  // Rétro-compatibilité : anciens noms DSL → noms réels de tables PLaTon
+  // Rétro-compatibilité : anciens noms DSL - noms réels de tables PLaTon
   private static readonly LEGACY_TABLE_MAP: Record<string, string> = {
     sessions:   'SessionData',
     activities: 'Activities',
@@ -423,8 +425,10 @@ export class FormulaInterpreterService {
     const rawTable: string = params['table'] ?? '';
     const table = FormulaInterpreterService.LEGACY_TABLE_MAP[rawTable] ?? rawTable;
 
-    // group_id déclenche une jointure vers CourseGroupsMember/CourseGroups, scopée par
-    // activityId ou courseId - l'un ou l'autre, jamais aucun.
+    /*
+    group_id déclenche une jointure vers CourseGroupsMember/CourseGroups, scopée par
+    activityId ou courseId; l'un ou l'autre, jamais aucun.
+    */
     const wantsGroup = (contextFields as string[]).includes('group_id');
     if (wantsGroup && context.groupId) {
       const scope = context.activityId
@@ -457,15 +461,15 @@ export class FormulaInterpreterService {
     return this.platonService.queryTable(table, filters, limit);
   }
 
-  /**
-   * Joint les lignes en entrée (table gauche) avec une seconde table PLaTon (table droite).
-   * Params : table, contextFields (optionnel), leftKey, rightKey, joinType (optionnel, défaut 'left')
-   *   - 'left'  : toutes les lignes gauches, fusionnées si correspondance trouvée
-   *   - 'inner' : uniquement les lignes gauches avec une correspondance
-   *   - 'right' : toutes les lignes droites, fusionnées si correspondance trouvée
-   *   - 'full'  : union de 'left' et 'right'
-   * En cas de fusion, les champs gauches sont prioritaires (écrasent les champs droits en cas de conflit de nom).
-   */
+  /*
+  Joint les lignes en entrée (table gauche) avec une seconde table PLaTon (table droite).
+  Params : table, contextFields (optionnel), leftKey, rightKey, joinType (optionnel, défaut 'left')
+    - 'left'  : toutes les lignes gauches, fusionnées si correspondance trouvée
+    - 'inner' : uniquement les lignes gauches avec une correspondance
+    - 'right' : toutes les lignes droites, fusionnées si correspondance trouvée
+    - 'full'  : union de 'left' et 'right'
+  En cas de fusion, les champs gauches sont prioritaires (écrasent les champs droits en cas de conflit de nom).
+  */
   private async executeJoin(params: Record<string, any>, input: any, context: FormulaContext): Promise<any[]> {
     const joinType: 'left' | 'inner' | 'right' | 'full' = params['joinType'] ?? 'left';
     const includesRight = joinType === 'right' || joinType === 'full';
@@ -493,7 +497,7 @@ export class FormulaInterpreterService {
 
     const rightRows = await this.platonService.queryTable(table, filters);
 
-    // Index la table droite par la valeur de rightKey pour éviter O(n²)
+    // Index la table droite par la valeur de rightKey
     const rightIndex = new Map<string, any[]>();
     for (const row of rightRows) {
       const key = String(row[rightKey] ?? '__null__');
@@ -550,9 +554,7 @@ export class FormulaInterpreterService {
     });
   }
 
-  /**
-   * groupBy reçoit des lignes plates et retourne un tableau de groupes (any[][]).
-   */
+  // groupBy reçoit des lignes plates et retourne un tableau de groupes (any[][]).
   private executeGroupBy(params: Record<string, any>, rows: any[]): any[][] {
     if (!Array.isArray(rows)) return [];
     const { groupField } = params;
@@ -567,10 +569,10 @@ export class FormulaInterpreterService {
     return Array.from(map.values());
   }
 
-  /**
-   * findFirst accepte des groupes (any[][]) ou des lignes plates (any[]).
-   * Retourne une ligne par groupe (ou une ligne depuis un tableau plat).
-   */
+  /*
+  findFirst accepte des groupes (any[][]) ou des lignes plates (any[]).
+  Retourne une ligne par groupe (ou une ligne depuis un tableau plat).
+  */
   private executeFindFirst(params: Record<string, any>, input: any[]): any[] {
     const { whereField, whereValue, sortField } = params;
     const groups: any[][] = this.isGroups(input) ? input : [input];
@@ -594,10 +596,10 @@ export class FormulaInterpreterService {
     return results;
   }
 
-  /**
-   * extract accepte des lignes plates ou des groupes.
-   * Retourne un tableau de nombres.
-   */
+  /*
+  extract accepte des lignes plates ou des groupes.
+  Retourne un tableau de nombres.
+  */
   private executeExtract(params: Record<string, any>, input: any): number[] {
     const { extractField } = params;
     const rows: any[] = this.isGroups(input) ? input.flat() : (Array.isArray(input) ? input : []);
@@ -632,12 +634,12 @@ export class FormulaInterpreterService {
     return by !== 0 ? value / by : 0;
   }
 
-  /**
-   * Patterns interdits dans le code JS des formules.
-   * Bloque les vecteurs d'évasion connus du module `vm` Node.js :
-   * accès à `process`, chargement de modules (`require`/`import`),
-   * constructeur Function (échappement classique), Buffer, variables système.
-   */
+  /*
+  Patterns interdits dans le code JS des formules.
+  Bloque les vecteurs d'évasion connus du module `vm` Node.js :
+  accès à `process`, chargement de modules (`require`/`import`),
+  constructeur Function (échappement classique), Buffer, variables système.
+  */
   private static readonly JS_FORBIDDEN_PATTERNS: { pattern: RegExp; label: string }[] = [
     { pattern: /\bprocess\b/,                          label: '"process" (accès système interdit)' },
     { pattern: /\brequire\s*\(/,                       label: '"require()" (import de module interdit)' },
@@ -654,10 +656,10 @@ export class FormulaInterpreterService {
     { pattern: /\bfs\b\.\w+\s*\(/,                     label: '"fs.*" (système de fichiers interdit)' },
   ];
 
-  /**
-   * Vérifie que le code JS ne contient aucun pattern dangereux.
-   * Lève une erreur explicite si un pattern interdit est détecté.
-   */
+  /*
+  Vérifie que le code JS ne contient aucun pattern dangereux.
+  Lève une erreur explicite si un pattern interdit est détecté.
+  */
   private validateJsCode(code: string): void {
     for (const { pattern, label } of FormulaInterpreterService.JS_FORBIDDEN_PATTERNS) {
       if (pattern.test(code)) {
@@ -666,12 +668,12 @@ export class FormulaInterpreterService {
     }
   }
 
-  /**
-   * Exécute du code JS dans un vrai isolate V8 (isolated-vm).
-   * L'isolate est un processus V8 complètement séparé : process, require,
-   * fs, Buffer, global - rien de Node.js n'est accessible par défaut.
-   * L'analyse statique reste en place comme filet de sécurité complémentaire.
-   */
+  /*
+  Exécute du code JS dans un vrai isolate V8 (isolated-vm).
+  L'isolate est un processus V8 complètement séparé : process, require,
+  fs, Buffer, global, rien de Node.js n'est accessible par défaut.
+  L'analyse statique reste en place comme filet de sécurité complémentaire.
+  */
   private async executeJs(params: Record<string, any>, input: any): Promise<any> {
     const { code } = params;
     if (!code?.trim()) return input;
@@ -689,8 +691,10 @@ export class FormulaInterpreterService {
       const script = await isolate.compileScript(
         `(function(input) { ${code} })(input)`,
       );
-      // copy: true transfère automatiquement le résultat hors de l'isolate.
-      // Sans cette option, les objets et tableaux retournent undefined.
+      /*
+      copy: true transfère automatiquement le résultat hors de l'isolate.
+      Sans cette option, les objets et tableaux retournent undefined.
+      */
       return await script.run(context, { timeout: 2000, copy: true });
     } catch (err) {
       const error = err as Error;
@@ -704,9 +708,9 @@ export class FormulaInterpreterService {
     }
   }
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
+  // Helpers
 
-  /** Trouve le gagnant dans un CandidateRowsMap : tri ascending par sortField, premier qui passe la condition. */
+  // Trouve le gagnant dans un CandidateRowsMap : tri ascending par sortField, premier qui passe la condition
   private findCandidateWinner(entries: CandidateRowsMap, sortField?: string): number | null {
     const passing = Object.values(entries).filter(e => e.passes);
     if (!passing.length) return null;
@@ -716,7 +720,7 @@ export class FormulaInterpreterService {
     return passing[0].extractedValue;
   }
 
-  /** Vérifie si la donnée est un tableau de groupes (any[][]) */
+  // Vérifie si la donnée est un tableau de groupes (any[][])
   private isGroups(data: any): data is any[][] {
     return Array.isArray(data) && data.length > 0 && Array.isArray(data[0]);
   }

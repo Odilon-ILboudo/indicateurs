@@ -41,9 +41,11 @@ export class AuthentificationPage implements OnInit {
   protected connecting = false
   protected error = false
 
-  // Formulaire de connexion locale (compte de test créé directement en base) - jamais affiché
-  // en prod, voir le template (*ngIf="!isProduction"). Replié par défaut : chaque option
-  // (CAS / compte local) ne s'ouvre qu'au clic sur son propre bouton.
+  /*
+  Formulaire de connexion locale (compte de test créé directement en base) - jamais affiché
+  en prod, voir le template (*ngIf="!isProduction"). Replié par défaut : chaque option
+  (CAS / compte local) ne s'ouvre qu'au clic sur son propre bouton.
+  */
   protected readonly isProduction = environment.production
   protected showLocalForm = false
   protected localUsername = ''

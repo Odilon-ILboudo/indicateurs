@@ -9,12 +9,12 @@ SessionData (PLaTon DB)
        │ trigger PostgreSQL
        ▼
 platon_outbox_events
-       │ relay NestJS (toutes les 2s)
+       │ relais NestJS (toutes les 2s, côté LMS hôte - voir étape 2)
        ▼
 RabbitMQ : exchange platon.events (topic)
-   │  routing key = event_type (dynamique, ex: "exercise.answered")
-   ├── queue indicators.learner   → onLearnerEvent   (contextType = 'learner')
-   └── queue indicators.aggregate → onAggregateEvent (contextType ≠ 'learner')
+   │  routing key = event_type (dynamique, ex: "exercice.completed")
+   ├ queue indicators.learner   → onLearnerEvent   (contextType = 'learner')
+   └ queue indicators.aggregate → onAggregateEvent (contextType ≠ 'learner')
        │ consumers NestJS
        ▼
 indicator_values (indicators DB)
@@ -50,7 +50,7 @@ RABBITMQ_URI=amqp://indicateurs:<mot-de-passe>@localhost:5672
 
 ---
 
-## Étape 1 - Trigger PostgreSQL (PLaTon DB)
+## Étape 1 - Table outbox (PLaTon DB)
 
 ### Installation (à exécuter une seule fois sur la BDD PLaTon)
 
@@ -61,34 +61,41 @@ PGPASSWORD=test psql -h localhost -p 5432 -U platon -d platon \
 
 ### Ce que le script crée
 
-**Table `platon_outbox_events`** - reçoit un enregistrement à chaque réponse :
+**Uniquement la table `platon_outbox_events`** - reçoit un enregistrement à
+chaque événement produit par un déclencheur installé (voir étape 1bis) :
 
 | Colonne      | Type        | Description                                              |
 |--------------|-------------|-----------------------------------------------------------|
 | `id`         | BIGSERIAL   | Clé primaire auto-incrémentée                              |
-| `event_type` | VARCHAR     | Toujours `exercise.answered`                               |
-| `payload`    | JSONB       | userId, sessionId, activityId, courseId, grade, attempts, timestamp |
+| `event_type` | VARCHAR     | `raw:<Table>` (déclencheur générique installé via l'admin) |
+| `payload`    | JSONB       | Dépend du déclencheur - voir étape 1bis                    |
 | `created_at` | TIMESTAMPTZ | Horodatage automatique                                     |
 
-**Trigger `trg_platon_outbox_session_data`** - se déclenche sur `SessionData` après `INSERT OR UPDATE OF grade`.
+**Aucun déclencheur n'est créé par ce script**, par choix délibéré : tous les
+déclencheurs, y compris pour `exercise.answered`, se créent depuis
+l'administration Indicateurs (étape 1bis) - jamais codés en dur dans une
+migration SQL manuelle, pour que la logique reste entièrement pilotable
+sans redéploiement.
 
-### Vérifier que le trigger est en place
+### Vérifier qu'un déclencheur est en place
 
 ```bash
 PGPASSWORD=test psql -h localhost -p 5432 -U platon -d platon -c \
-  "SELECT trigger_name FROM information_schema.triggers
-   WHERE event_object_table = 'SessionData';"
+  "SELECT trigger_name, event_object_table FROM information_schema.triggers
+   WHERE trigger_name LIKE 'trg_platon_outbox_generic_%';"
 ```
+
+(Vide tant qu'aucune règle n'a été installée depuis l'admin - normal juste
+après l'exécution du script ci-dessus.)
 
 ---
 
 ## Étape 1bis - Déclencheurs dynamiques (no-redeploy réel)
 
-Le trigger de l'étape 1 est câblé en dur : il ne produit **que** `exercise.answered`,
-sur `SessionData.grade`. Pour ajouter un nouvel événement (une autre table, une
-autre colonne, une autre condition) sans toucher au code, il existe un second
-mécanisme, entièrement piloté depuis l'admin (**Indicateurs → "Événements &
-déclencheurs"**).
+Tous les déclencheurs se créent depuis l'admin (**Indicateurs → "Événements &
+déclencheurs"**), sans exception - aucun n'est câblé en dur dans le code ou
+dans une migration SQL. Pour ajouter un nouvel événement (nouvelle table,
+nouvelle colonne, nouvelle condition), rien à toucher côté code.
 
 ### Principe
 
@@ -97,15 +104,20 @@ Table PLaTon (INSERT/UPDATE)
        │ trigger générique installé via l'admin (fn_platon_outbox_generic)
        ▼
 platon_outbox_events   (event_type = 'raw:<Table>', payload = {table, op, new, old})
-       │ IngestionRelayService.relay()
+       │ OutboxRelayService.relay() - côté LMS hôte, republie tel quel (étape 2)
        ▼
-  event_type commence par 'raw:' ?
+RabbitMQ (message reçu par les deux consumers Indicateurs)
+       │ EventClassifierService.classify(), dans chaque consumer (étape 3)
+       ▼
+  type commence par 'raw:' ?
        │
-       ├─ NON → republié tel quel (chemin historique, ex. exercise.answered)
+       ├─ NON → traité tel quel comme événement déjà résolu (supporté mais
+       │        inutilisé aujourd'hui - tous les déclencheurs installés
+       │        depuis l'admin produisent 'raw:*')
        │
        └─ OUI → classify() : évalue chaque IndicatorEventRule active
                 (table, colonne surveillée, condition, mapping contexte)
-                → 0..N messages RabbitMQ, un par règle qui matche
+                → 0..N événements métier, un par règle qui matche
 ```
 
 `indicator_event_rules` (table, base `indicators`) porte une règle par
@@ -165,45 +177,32 @@ tables PLaTon. Deux options :
   l'installation tente la connexion applicative habituelle et affiche le SQL
   en repli si les droits manquent (message d'erreur explicite dans la modale).
 
-### Événement historique `exercise.answered`
+### Exemple : recréer `exercise.answered`
 
-Le trigger `trg_platon_outbox_session_data` (étape 1 ci-dessus) tourne de
-façon autonome, indépendamment de tout `IndicatorEventRule` - rien dans ce
-mécanisme n'y touche. Aucune règle ne le référence par défaut :
-`exercise.answered` n'apparaît dans le sélecteur "configuré" du wizard
-d'indicateur qu'une fois qu'une règle équivalente est créée via "Nouvelle
-règle" (table `SessionData`, colonne `grade`, condition `always`, mapping
-`user_id`/`course_id`/`activity_id`/`id`) puis installée.
+Cas d'usage central du projet (réponse à un exercice) - pas de traitement
+spécial, une règle comme les autres : table `SessionData`, colonne surveillée
+`grade`, condition `always`, mapping contexte `user_id`/`course_id`/
+`activity_id`/`id`, type d'événement `exercise.answered`. `exercise.answered`
+n'apparaît dans le sélecteur "configuré" du wizard d'indicateur qu'une fois
+cette règle créée **et** installée - avant ça, aucun indicateur qui en
+dépend ne peut être configuré.
 
 ---
 
-## Étape 2 - Relay NestJS (Outbox → RabbitMQ)
+## Étape 2 - Relais (Outbox → RabbitMQ) - côté LMS hôte, pas Indicateurs
 
-**Fichier :** `api/src/modules/features/ingestion-relay/ingestion-relay.service.ts`
+**Ce relais ne vit pas dans ce dépôt** : il tourne côté LMS hôte (PLaTon), lit
+sa propre base, et publie vers RabbitMQ (hébergé par Indicateurs), sans jamais
+avoir besoin d'accéder à la base Indicateurs. Fichier prêt à copier et guide
+complet : [`integration-platon-relay.md`](./integration-platon-relay.md).
 
-Le relay s'exécute toutes les **2 secondes** via un `@Cron`. Il :
-1. Lit `platon_outbox_events` où `id > last_id` (lecture seule sur PLaTon DB)
-2. Si `event_type` commence par `raw:` (trigger générique, voir étape 1bis) →
-   `classify()` détermine le(s) `event_type` métier réel(s) via les règles
-   actives. Sinon, injecte simplement le champ `type` depuis la colonne
-   `event_type` dans le payload (chemin historique, inchangé).
-3. Publie chaque événement dans RabbitMQ
-4. Met à jour le curseur `ingestion_cursors.last_id` dans la BDD indicators
+Le relais republie chaque ligne de `platon_outbox_events` **telle quelle**,
+sans l'interpréter (voir §"Principe" du guide ci-dessus) - la classification
+des événements génériques (`raw:<Table>`) se fait dans les consumers, étape 3
+ci-dessous.
 
-**Curseur de position** - table `ingestion_cursors` (indicators DB) :
-
-| Colonne       | Description                                   |
-|---------------|-----------------------------------------------|
-| `stream_name` | `platon_outbox` (clé primaire)               |
-| `last_id`     | Dernier id traité - garantit zéro perte       |
-| `updated_at`  | Mis à jour à chaque batch                     |
-
-### Vérifier la position du curseur
-
-```bash
-PGPASSWORD=test psql -h localhost -p 5432 -U platon -d indicators -c \
-  "SELECT * FROM ingestion_cursors;"
-```
+Le curseur de position (`indicateurs_outbox_cursor`) vit côté LMS hôte, dans
+sa propre base.
 
 ---
 
@@ -211,7 +210,12 @@ PGPASSWORD=test psql -h localhost -p 5432 -U platon -d indicators -c \
 
 **Fichier :** `api/src/modules/features/ingestion/ingestion-consumer.service.ts`
 
-Deux consumers avec routing key `'#'` (reçoivent tous les types d'événements) :
+Deux consumers avec routing key `'#'` (reçoivent tous les types d'événements).
+**Chacun classifie d'abord le message reçu** (`resolveEvents()`) : si
+`type` commence par `raw:` (déclencheur générique installé depuis l'admin),
+délègue à `EventClassifierService.classify()` (`event-rules/`) pour obtenir
+0..N événements métier réels avant de les traiter un par un ; sinon, traite le message reçu
+directement comme un événement métier déjà résolu.
 
 ### Consumer `indicators.learner`
 
@@ -220,8 +224,10 @@ Deux consumers avec routing key `'#'` (reçoivent tous les types d'événements)
   `IndicatorsService.computeViewIncremental()` (calcul différentiel si le
   pipeline s'y prête, recalcul complet sinon - voir `calcul-differentiel.md`).
   `courseId` n'est résolu via PLaTon que si la formule en a réellement besoin
-  (`isCourseAware`) ; `computeViewIncremental` choisit lui-même `activityId`
-  ou `courseId` selon ce que la formule déclare.
+  (`isCourseAware` - voir définition d'`activity-aware`/`course-aware` dans
+  [`parcours-donnees.md` §0](./parcours-donnees.md#0-conventions)) ;
+  `computeViewIncremental` choisit lui-même `activityId` ou `courseId` selon
+  ce que la formule déclare.
 - **Résultat :** met à jour `indicator_values` pour `(indicatorId, learner, userId)` + émet WS
 
 ### Consumer `indicators.aggregate`
@@ -248,7 +254,32 @@ sur un recalcul complet que si le pipeline n'est pas reconnu automatiquement
 
 **Fichier :** `api/src/modules/features/ingestion/indicators.gateway.ts`
 
-Après chaque mise à jour d'une valeur, `IngestionService` émet l'événement `indicator.updated` via `EventEmitter2`. Le gateway le capte avec `@OnEvent('indicator.updated')` et le broadcaste à tous les clients connectés via socket.io sur le namespace `/indicators`.
+`'indicator.updated'` n'est **pas** un des événements métier de l'étape 1bis
+(`exercise.answered` et compagnie, configurables en admin, potentiellement
+des dizaines). C'est un signal interne à ce dépôt, un seul nom, toujours le
+même, qui ne veut dire qu'une chose : *"un indicateur vient d'être recalculé,
+sa valeur a peut-être changé"* - peu importe quel événement métier (ou quel
+recalcul périodique sans déclencheur) en est la cause.
+
+```
+exercise.answered, activity.completed, ... (autant que voulu, définis en admin)
+       │
+       ▼
+requiredEvents matché → indicateur recalculé
+       │
+       ▼
+emitUpdated() - IngestionService (étape 3) ou IndicatorsService (refresh de snapshots/vues)
+       │
+       ▼
+eventEmitter.emit('indicator.updated', ...)   ← toujours ce même nom, pas de wildcard
+       │
+       ▼
+IndicatorsGateway @OnEvent('indicator.updated') → broadcast socket.io (namespace /indicators)
+```
+
+Ajouter un nouveau type d'événement métier en admin ne touche jamais ce
+fichier : la gateway ne connaît pas le vocabulaire métier, seulement ce
+signal générique unique.
 
 **Côté Angular** - `IndicatorSocketService` :
 - Se connecte automatiquement au montage du premier `IndicatorCardComponent`
@@ -272,39 +303,50 @@ cd indicateurs/api && yarn start
 cd indicateurs/frontend && ng serve
 ```
 
-### Test 1 - Écriture directe dans l'outbox (bypass trigger)
+### Test 1 - Publication directe sur RabbitMQ (bypass outbox ET relais)
 
-Utile pour tester le relay et les consumers sans modifier PLaTon :
+Le relais tournant côté LMS hôte (étape 2), le tester en local ici n'a pas de
+sens direct. Pour tester uniquement les consumers + la
+classification (étape 3), publier un événement générique directement sur
+l'exchange, via l'API HTTP de gestion de RabbitMQ (identifiants dans `.env`,
+UI sur `http://localhost:15672`) - simule exactement ce que le relais
+publierait pour une ligne `raw:SessionData` :
 
 ```bash
-PGPASSWORD=test psql -h localhost -p 5432 -U platon -d platon -c "
-INSERT INTO platon_outbox_events (event_type, payload)
-VALUES ('exercise.answered', jsonb_build_object(
-  'userId',     'e901cddd-0e08-4a3d-8aad-4d2c49f39fdd',
-  'sessionId',  '3fd495b1-4ffd-4d6b-86cb-6c99caa77e17',
-  'activityId', '53100bc2-e4a7-470b-95ea-bcf65a5d0f2d',
-  'courseId',   '02055cfb-eb0a-41c0-86f6-601feef99598',
-  'grade',      100,
-  'attempts',   6
-));"
+curl -u "$RABBITMQ_USER:$RABBITMQ_PASSWORD" -X POST \
+  http://localhost:15672/api/exchanges/%2f/platon.events/publish \
+  -H "Content-Type: application/json" -d '{
+    "properties": {},
+    "routing_key": "raw:SessionData",
+    "payload_encoding": "string",
+    "payload": "{\"type\":\"raw:SessionData\",\"table\":\"SessionData\",\"op\":\"UPDATE\",\"new\":{\"id\":\"3fd495b1-4ffd-4d6b-86cb-6c99caa77e17\",\"user_id\":\"e901cddd-0e08-4a3d-8aad-4d2c49f39fdd\",\"activity_id\":\"53100bc2-e4a7-470b-95ea-bcf65a5d0f2d\",\"course_id\":\"02055cfb-eb0a-41c0-86f6-601feef99598\",\"attempts_at_success\":6},\"old\":{\"attempts_at_success\":5}}"
+  }'
 ```
 
-### Test 2 - Déclenchement via trigger (simulation réaliste)
+`table`/colonnes à adapter à une règle réellement active et installée (voir
+`SELECT * FROM indicator_event_rules` en base `indicators`) - `attempts_at_success`
+correspond à la règle "Exercice complet" (`exercice.completed`) installée par
+défaut pour ce guide (§0).
 
-Met à jour une session réelle → le trigger écrit dans l'outbox automatiquement.  
-⚠️ Il faut inclure `grade = grade` pour que le trigger `UPDATE OF grade` se déclenche même si seul `attempts` change :
+### Test 2 - Déclenchement via trigger (simulation réaliste, bout en bout)
+
+Nécessite le relais réellement démarré (côté LMS hôte, voir
+`integration-platon-relay.md`) - sans lui, l'événement s'accumule dans
+`platon_outbox_events` mais n'atteint jamais RabbitMQ. Met à jour une session
+réelle → le trigger générique installé depuis l'admin écrit dans l'outbox
+automatiquement :
 
 ```bash
 # Exercice 1 : [Projet 2025] Activité de tests
 PGPASSWORD=test psql -h localhost -p 5432 -U platon -d platon -c "
 UPDATE \"SessionData\"
-SET attempts = attempts + 1, grade = grade
+SET attempts_at_success = attempts_at_success + 1
 WHERE id = '3fd495b1-4ffd-4d6b-86cb-6c99caa77e17';"
 
 # Exercice 2 : [Projet 2025] Compteur Allocations
 PGPASSWORD=test psql -h localhost -p 5432 -U platon -d platon -c "
 UPDATE \"SessionData\"
-SET attempts = attempts + 1, grade = grade
+SET attempts_at_success = attempts_at_success + 1
 WHERE id = '2871a397-cf72-49c8-b8c1-1ce7d8cb9b9d';"
 ```
 
@@ -326,9 +368,9 @@ PGPASSWORD=test psql -h localhost -p 5432 -U platon -d platon -c \
   "SELECT id, event_type, payload->>'attempts' AS attempts, created_at
    FROM platon_outbox_events ORDER BY id DESC LIMIT 5;"
 
-# Vérifier que le curseur a avancé
-PGPASSWORD=test psql -h localhost -p 5432 -U platon -d indicators -c \
-  "SELECT * FROM ingestion_cursors;"
+# Vérifier que le curseur a avancé (BDD PLaTon, voir étape 2)
+PGPASSWORD=test psql -h localhost -p 5432 -U platon -d platon -c \
+  "SELECT * FROM indicateurs_outbox_cursor;"
 
 # Vérifier la valeur calculée de l'indicateur
 PGPASSWORD=test psql -h localhost -p 5432 -U platon -d indicators -c \
@@ -343,18 +385,20 @@ PGPASSWORD=test psql -h localhost -p 5432 -U platon -d indicators -c \
 
 ## Lecture des logs NestJS
 
-Lors du traitement d'un événement, les logs suivants apparaissent dans l'ordre :
+Lors du traitement d'un événement, les logs apparaissent dans deux applications
+distinctes : le relais tourne côté LMS hôte (ses logs à lui, hors de ce dépôt),
+les consumers côté Indicateurs :
 
 ```
-# Relay - lit l'outbox et publie
-[IngestionRelayService]    DEBUG Relay : 1 événement(s) publiés (cursor → 7)
+# Relay - côté LMS hôte (PLaTon), logs distincts de ceux d'Indicateurs
+[OutboxRelayService]        DEBUG Relay : 1 événement(s) publié(s) (curseur → 7)
 
-# 2 consumers reçoivent en parallèle
+# 2 consumers reçoivent en parallèle, côté Indicateurs
 [IngestionConsumerService]  LOG [learner]    ← événement reçu user=e901cddd... session=3fd495b1...
 [IngestionConsumerService]  LOG [aggregate]  ← événement reçu activity=53100bc2...
 
-# Consumer learner - formule exécutée
-[IngestionService]          LOG [learner] 4 indicateur(s) à traiter event="exercise.answered"
+# Consumer learner - classification puis formule exécutée
+[IngestionService]          LOG [learner] 4 indicateur(s) à traiter event="exercice.completed"
 [FormulaInterpreterService] DEBUG Étape [fetch] → 2 éléments
 [FormulaInterpreterService] DEBUG Étape [aggregate] → 8
 [IngestionService]          LOG [indicator] ✓ mis à jour "Tentatives avant réussite - Apprenant"
@@ -373,9 +417,9 @@ Lors du traitement d'un événement, les logs suivants apparaissent dans l'ordre
 
 Le pattern Outbox garantit zéro perte d'événement :
 
-- **Si NestJS s'arrête** : les événements s'accumulent dans `platon_outbox_events`. Au redémarrage, le relay reprend depuis `ingestion_cursors.last_id`.
-- **Si RabbitMQ s'arrête** : le relay ne peut pas publier → il s'arrête au premier message en erreur sans avancer le curseur. À la reconnexion de RabbitMQ, le relay retraite les événements non-publiés.
-- **Si un consumer échoue** : RabbitMQ requeue le message. Le message sera retraité au prochain cycle.
+- **Si le relais (côté LMS hôte) s'arrête** : les événements s'accumulent dans `platon_outbox_events`. Au redémarrage, il reprend depuis `indicateurs_outbox_cursor.last_id`.
+- **Si RabbitMQ s'arrête** : le relais ne peut pas publier → il s'arrête au premier message en erreur sans avancer le curseur. À la reconnexion de RabbitMQ, il retraite les événements non-publiés.
+- **Si un consumer (côté Indicateurs) échoue** : RabbitMQ requeue le message. Le message sera retraité au prochain cycle.
 - **Idempotence** : si le même événement est traité deux fois, la valeur est recalculée depuis les données PLaTon → le résultat est identique.
 
 ---

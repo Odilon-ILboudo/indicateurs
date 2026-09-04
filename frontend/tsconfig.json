@@ -43,18 +43,12 @@
       "@platon/core/browser": ["./src/platon-stubs/core-browser.ts"],
       "@platon/feature/course/common": ["./src/platon-stubs/course-common.ts"],
       "@platon/feature/course/browser": ["./src/platon-stubs/course-browser.ts"],
-      "@platon/feature/resource/common": ["./src/platon-stubs/resource-common.ts"],
-      "@platon/feature/resource/browser": ["./src/platon-stubs/resource-browser.ts"],
       "@platon/shared/ui": ["./src/platon-stubs/shared-ui.ts"],
       "@platon/feature/result/browser": ["./src/platon-stubs/feature-result-browser.ts"],
       "@platon/feature/result/common": ["./src/platon-stubs/feature-result-common.ts"],
-      "@platon/feature/compiler": ["./src/platon-stubs/feature-compiler.ts"],
       "@cisstech/nge/directives": ["./src/platon-stubs/nge-directives.ts"],
       "@cisstech/nge/pipes": ["./src/platon-stubs/nge-pipes.ts"],
-      "@cisstech/nge/ui/icon": ["./src/platon-stubs/nge-ui-icon.ts"],
       "@cisstech/nge/ui/list": ["./src/platon-stubs/resource-browser/nge-ui-list/list.ts"],
-      "@cisstech/nge/markdown": ["./src/platon-stubs/nge-markdown.ts"],
-      "@cisstech/nge/services": ["./src/platon-stubs/nge-services.ts"],
       "@platon/feature/peer/browser": ["./src/platon-stubs/feature-peer-browser.ts"]
     }
   },

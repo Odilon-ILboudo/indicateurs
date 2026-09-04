@@ -42,66 +42,6 @@ export class IngestionService implements OnModuleInit {
     this.logger.log(`IngestionService initialized with ${this.indicatorCache.size} indicators`);
   }
 
-  /** Point d'entrée HTTP/legacy (hors RabbitMQ), délègue au même routage que les consumers. */
-  async ingestEvent(event: RawEvent): Promise<void> {
-    const startTime = Date.now();
-
-    try {
-      if (!this.isValidEvent(event)) {
-        this.logger.warn(`Invalid event received: ${JSON.stringify(event)}`);
-        return;
-      }
-
-      const affectedIndicators = await this.findAffectedIndicators(event);
-
-      if (affectedIndicators.length === 0) {
-        this.logger.debug(`No indicators found for event type: ${event.type}`);
-        return;
-      }
-
-      const hasLearner = affectedIndicators.some(ind => ind.contextType === 'learner');
-      const aggregateIndicators = affectedIndicators.filter(ind => ind.contextType !== 'learner');
-
-      await Promise.allSettled([
-        ...(hasLearner ? [this.ingestForContext(event, 'learner')] : []),
-        ...aggregateIndicators.map(ind => this.processAggregateIndicator(ind, event)),
-      ]);
-
-      this.eventEmitter.emit('ingestion.event.processed', {
-        eventType: event.type,
-        indicatorsCount: affectedIndicators.length,
-        processingTime: Date.now() - startTime,
-      });
-
-    } catch (error) {
-      const err = error as Error;
-      this.logger.error(`Failed to ingest event: ${err.message}`, err.stack);
-      this.eventEmitter.emit('ingestion.event.error', {
-        eventType: event.type,
-        error: err.message,
-        timestamp: new Date(),
-      });
-      throw error;
-    }
-  }
-
-  async ingestBatch(events: RawEvent[]): Promise<{ total: number; processed: number; failed: number }> {
-    let processed = 0;
-    let failed = 0;
-
-    for (const event of events) {
-      try {
-        await this.ingestEvent(event);
-        processed++;
-      } catch (error) {
-        failed++;
-        this.logger.error(`Failed to process batch event: ${(error as Error).message}`);
-      }
-    }
-
-    return { total: events.length, processed, failed };
-  }
-
   private async findAffectedIndicators(event: RawEvent): Promise<IndicatorDefinition[]> {
     await this.refreshIndicatorCache();
     
@@ -158,16 +98,17 @@ export class IngestionService implements OnModuleInit {
     return true;
   }
 
-  // ── API publique pour les consumers RabbitMQ ─────────────────────────────
+  // API publique pour les consumers RabbitMQ
 
-  /** Retourne les indicateurs affectés par cet événement (exposé pour le consumer de groupe). */
+  // Retourne les indicateurs affectés par cet événement (exposé pour le consumer de groupe)
   async getAffectedIndicators(event: RawEvent) {
     return this.findAffectedIndicators(event);
   }
 
-  /** Traite un événement pour les indicateurs d'un contextType donné, utilisé par les
-   *  consumers RabbitMQ. Routage basé sur l'éligibilité du pipeline (computeViewIncremental),
-   *  jamais sur le périmètre : c'est elle qui décide s'il faut recalculer entièrement ou non. */
+  /* Traite un événement pour les indicateurs d'un contextType donné, utilisé par les
+   consumers RabbitMQ. Routage basé sur l'éligibilité du pipeline (computeViewIncremental),
+   jamais sur le périmètre : c'est elle qui décide s'il faut recalculer entièrement ou non.
+  */
   async ingestForContext(event: RawEvent, contextType: string): Promise<void> {
     if (!this.isValidEvent(event)) return;
 
@@ -184,9 +125,11 @@ export class IngestionService implements OnModuleInit {
 
     for (const indicator of filtered) {
       if (contextType === 'learner') {
-        // courseId n'est résolu (requête PLaTon) que si la formule en a réellement besoin -
-        // computeViewIncremental choisit ensuite lui-même activityId ou courseId, ou aucun des
-        // deux, selon ce que LA FORMULE déclare (isActivityAware/isCourseAware).
+        /*
+        courseId n'est résolu (requête PLaTon) que si la formule en a réellement besoin -
+        computeViewIncremental choisit ensuite lui-même activityId ou courseId, ou aucun des
+        deux, selon ce que LA FORMULE déclare (isActivityAware/isCourseAware).
+        */
         const formula = resolveFormula(indicator);
         let courseId: string | undefined;
         if (formula && isCourseAware(formula)) {
@@ -209,8 +152,9 @@ export class IngestionService implements OnModuleInit {
     }
   }
 
-  /** Traite un indicateur non-learner, dispatch selon contextType. Chaque branche tente le
-   *  calcul différentiel et ne retombe sur un recalcul complet que si nécessaire. */
+  /* Traite un indicateur non-learner, dispatch selon contextType. Chaque branche tente le
+   calcul différentiel et ne retombe sur un recalcul complet que si nécessaire.
+  */
   async processAggregateIndicator(indicator: IndicatorDefinition, event: RawEvent): Promise<void> {
     const deltaEvent: DeltaEvent = { sessionId: event.sessionId, payload: event.payload };
 
@@ -242,9 +186,11 @@ export class IngestionService implements OnModuleInit {
         if (!event.activityId) return;
 
         if (isCourseAware(resolveFormula(indicator))) {
-          // Groupe scopé à tout le cours (toutes activités confondues) : la ligne en
-          // cache est identifiée par courseId, pas par activityId, un rafraîchissement
-          // dédié est nécessaire (voir refreshCourseGroupViews).
+          /*
+          Groupe scopé à tout le cours (toutes activités confondues) : la ligne en
+          cache est identifiée par courseId, pas par activityId, un rafraîchissement
+          dédié est nécessaire (voir refreshCourseGroupViews).
+          */
           const courseId = event.courseId ?? await this.platonService.getCourseIdForActivity(event.activityId)
             .catch(e => { this.logger.warn(`[group] getCourseIdForActivity échoué: ${e.message}`); return null; });
           if (!courseId) return;
@@ -272,8 +218,10 @@ export class IngestionService implements OnModuleInit {
         const teacherId = await this.platonService.getTeacherByCourse(event.courseId)
           .catch(e => { this.logger.warn(`[teacher] getTeacherByCourse échoué: ${e.message}`); return null; });
         if (!teacherId) return;
-        // computeViewIncremental choisit lui-même activityId ou courseId selon ce que la formule
-        // déclare (isActivityAware/isCourseAware) - les deux peuvent être transmis sans risque.
+        /*
+        computeViewIncremental choisit lui-même activityId ou courseId selon ce que la formule
+        déclare (isActivityAware/isCourseAware) - les deux peuvent être transmis sans risque.
+        */
         const result = await this.indicatorsService
           .computeViewIncremental(indicator.id, 'teacher', teacherId, event.activityId, undefined, deltaEvent, event.courseId)
           .catch(e => { this.logger.warn(`[teacher] computeViewIncremental échoué ind=${indicator.id}: ${e.message}`); return null; });
@@ -283,8 +231,10 @@ export class IngestionService implements OnModuleInit {
         break;
       }
 
-      // admin et tout contextType futur : rafraîchit les valeurs déjà en cache (différentiel si
-      // le pipeline s'y prête, recalcul complet sinon - voir refreshCachedContextValues)
+      /*
+      admin et tout contextType futur : rafraîchit les valeurs déjà en cache (différentiel si
+      le pipeline s'y prête, recalcul complet sinon - voir refreshCachedContextValues)
+      */
       default: {
         await this.indicatorsService
           .refreshCachedContextValues(indicator.id, indicator.contextType, deltaEvent)

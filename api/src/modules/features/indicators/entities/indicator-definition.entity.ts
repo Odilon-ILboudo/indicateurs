@@ -9,7 +9,7 @@ export interface FormulaDefinition {
   pipeline: { id: string; type: string; label?: string; params: Record<string, any> }[];
 }
 
-/** Une visualisation au sein d’un indicateur (1 indicateur peut en avoir plusieurs). */
+// Une visualisation au sein d’un indicateur (1 indicateur peut en avoir plusieurs).
 export interface IndicatorVisualization {
   id: string;
   label: string;
@@ -31,59 +31,63 @@ export class IndicatorDefinition {
   @Column({ nullable: true, type: 'text' })
   description: string;
 
-  /** Contexte unique pour cet indicateur (Option B : 1 indicateur = 1 contexte). */
+  // Contexte unique pour cet indicateur (Option B : 1 indicateur = 1 contexte)
   @Column({ type: 'varchar', nullable: true })
   contextType: ContextType;
 
-  /** Regroupement nominal de plusieurs indicateurs créés ensemble sous une même famille. */
+  // Regroupement nominal de plusieurs indicateurs créés ensemble sous une même famille.
   @Column({ type: 'varchar', length: 255, nullable: true })
   familyName: string | null;
 
-  /** Indicateur source d'une réutilisation - traçabilité seulement, aucun lien vivant. */
+  // Indicateur source d'une réutilisation - traçabilité seulement, aucun lien vivant
   @Column({ type: 'varchar', nullable: true })
   baseIndicatorId: string | null;
 
   @Column({ type: 'jsonb' })
   requiredEvents: string[];
 
-  /** Tableau de visualisations (min. 1). Chacune peut avoir sa propre formule. */
+  // Tableau de visualisations (min. 1). Chacune peut avoir sa propre formule
   @Column({ type: 'jsonb', nullable: true })
   visualizations: IndicatorVisualization[];
 
   @Column({ default: true })
   isActive: boolean;
 
-  /** Complétude réelle du formulaire, indépendante de `isActive` (interrupteur manuel de
-   *  publication, toujours false à la création). Reflète l'enregistrement via le bouton final
-   *  du wizard, plutôt que "Sauvegarder le brouillon". */
+  /* Complétude réelle du formulaire, indépendante de `isActive` (interrupteur manuel de
+   publication, toujours false à la création). Reflète l'enregistrement via le bouton final
+   du wizard, plutôt que "Sauvegarder le brouillon".
+  */
   @Column({ default: false })
   isComplete: boolean;
 
-  /** Ligne technique qui ne représente aucun indicateur réel, sert à faire exister une famille
-   *  vide. Toujours isActive=false, jamais affichée aux utilisateurs finaux, supprimée
-   *  automatiquement dès qu'un premier vrai indicateur rejoint la famille. */
+  /* Ligne technique qui ne représente aucun indicateur réel, sert à faire exister une famille
+   vide. Toujours isActive=false, jamais affichée aux utilisateurs finaux, supprimée
+   automatiquement dès qu'un premier vrai indicateur rejoint la famille.
+  */
   @Column({ default: false })
   isFamilyPlaceholder: boolean;
 
   @Column({ default: 0 })
   usageCount: number;
 
-  /** Formule partagée utilisée par les visualisations sans formule propre. */
+  // Formule partagée utilisée par les visualisations sans formule propre
   @Column({ type: 'jsonb', nullable: true })
   formula: FormulaDefinition | null;
 
-  /** Seuils de performance partagés par toutes les visualisations (optionnel).
-   *  `critical` est une borne purement documentaire (légende) : au-delà de
-   *  `warning`, la carte est de toute façon rouge, avec ou sans `critical`. */
+  /* Seuils de performance partagés par toutes les visualisations (optionnel).
+   `critical` est une borne purement documentaire (légende) : au-delà de
+   `warning`, la carte est de toute façon rouge, avec ou sans `critical`.
+  */
   @Column({ type: 'jsonb', nullable: true })
   thresholds: { good?: number; warning?: number; critical?: number } | null;
 
-  /** Aide à l'analyse : texte libre expliquant comment interpréter les résultats (optionnel). */
+  // Aide à l'analyse : texte libre expliquant comment interpréter les résultats (optionnel). */
   @Column({ type: 'text', nullable: true })
   interpretationHint: string | null;
 
-  /** Restreint la visibilité à des rôles précis, en override de la règle par défaut du
-   *  contextType - utile pour un résultat nominatif (ex. performance par étudiant). */
+  /* Restreint la visibilité à des rôles précis, en override de la règle par défaut du
+   contextType - utile pour un résultat nominatif (ex. performance par étudiant).
+  */
   @Column({ type: 'jsonb', nullable: true })
   visibilityRoles: string[] | null;
 

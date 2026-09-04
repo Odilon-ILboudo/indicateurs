@@ -31,7 +31,7 @@ export class IndicatorValue {
   metadata: {
     count?: number;           // Nombre d'éléments pris en compte
     lastUpdate?: Date;        // Dernière mise à jour
-    history?: Array<{         // Historique des valeurs
+    history?: Array<{         // Historique des valeurs, utilisé par le graphique en courbe
       value: number;
       timestamp: Date;
     }>;
@@ -45,7 +45,6 @@ export class IndicatorValue {
   updatedAt: Date;
 }
 
-/** Ajoute la nouvelle valeur à l'historique existant, utilisé par calculateTrend. */
 export function buildValueMetadata(
   previous: IndicatorValue['metadata'] | null | undefined,
   value: number,

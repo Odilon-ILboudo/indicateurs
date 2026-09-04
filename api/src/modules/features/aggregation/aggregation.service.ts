@@ -20,9 +20,10 @@ export class AggregationService implements OnModuleInit {
     private readonly config: ConfigService,
   ) {}
 
-  /** Enregistrement dynamique (plutôt que @Cron statique) pour que la fréquence soit lue depuis
-   *  la config (TRIGGERLESS_RECALC_CRON, voir configuration.ts) - un décorateur @Cron ne peut
-   *  pas lire le ConfigService, ses arguments sont évalués à la définition de la classe. */
+  /* Enregistrement dynamique (plutôt que @Cron statique) pour que la fréquence soit lue depuis
+   la config (TRIGGERLESS_RECALC_CRON, voir configuration.ts). Un décorateur @Cron ne peut
+   pas lire le ConfigService, ses arguments sont évalués à la définition de la classe.
+  */
   onModuleInit(): void {
     const expression = this.config.get<string>('aggregation.triggerlessRecalcCron') || CronExpression.EVERY_MINUTE;
     const job = new CronJob(expression, () => this.recalculateTriggerlessIndicators());
@@ -31,8 +32,9 @@ export class AggregationService implements OnModuleInit {
     this.logger.log(`Recalcul périodique (sans déclencheur) programmé : "${expression}"`);
   }
 
-  /** Indicateurs actifs sans événement déclencheur : pas de mise à jour temps réel possible,
-   *  donc recalcul périodique. Fréquence configurable, voir onModuleInit(). */
+  /* Indicateurs actifs sans événement déclencheur : pas de mise à jour temps réel possible,
+   donc recalcul périodique. Fréquence configurable, voir onModuleInit().
+  */
   async recalculateTriggerlessIndicators() {
     if (this.isRecalculatingTriggerless) return;
     this.isRecalculatingTriggerless = true;

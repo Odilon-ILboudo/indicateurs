@@ -6,12 +6,12 @@ export type IndicatorDisplayRow =
   | { kind: 'member'; indicator: IndicatorDefinition; familyName: string };
 
 /**
- * Construit une liste d'affichage groupée par famille à partir d'une liste d'indicateurs déjà
- * filtrée/triée : les membres d'une même famille sont regroupés sous une ligne d'en-tête
- * repliable (positionnée à la 1ère occurrence du nom de famille), et n'apparaissent que si
- * cette famille figure dans `expandedFamilies`. Les indicateurs sans famille restent à leur
- * place, mêlés aux familles.
- */
+Construit une liste d'affichage groupée par famille à partir d'une liste d'indicateurs déjà
+filtrée/triée : les membres d'une même famille sont regroupés sous une ligne d'en-tête
+repliable (positionnée à la 1ère occurrence du nom de famille), et n'apparaissent que si
+cette famille figure dans `expandedFamilies`. Les indicateurs sans famille restent à leur
+place, mêlés aux familles.
+*/
 export function buildIndicatorDisplayRows(
   indicators: IndicatorDefinition[],
   expandedFamilies: ReadonlySet<string>,
@@ -27,8 +27,10 @@ export function buildIndicatorDisplayRows(
         familyIndex.set(ind.familyName, idx);
         rows.push({ kind: 'family', familyName: ind.familyName, members: [], expanded: expandedFamilies.has(ind.familyName) });
       }
-      // Une ligne "placeholder" fait exister la famille (via familyIndex ci-dessus) mais ne
-      // représente aucun indicateur réel - elle ne doit jamais apparaître comme membre.
+      /*
+      Une ligne "placeholder" fait exister la famille (via familyIndex ci-dessus) mais ne
+      représente aucun indicateur réel - elle ne doit jamais apparaître comme membre.
+      */
       if (!ind.isFamilyPlaceholder) {
         (rows[idx] as { kind: 'family'; members: IndicatorDefinition[] }).members.push(ind);
       }

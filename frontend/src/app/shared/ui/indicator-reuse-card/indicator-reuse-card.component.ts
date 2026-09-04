@@ -5,7 +5,8 @@ import { NzTagModule } from 'ng-zorro-antd/tag';
 import { IndicatorDefinition, contextIcon } from '../../../core/models/indicator.model';
 
 /** Carte statique d'aperçu (nom + description + pipeline en chips), utilisée dans la galerie
- *  de réutilisation - contrairement à IndicatorCardComponent, aucune valeur calculée. */
+ de réutilisation - contrairement à IndicatorCardComponent, aucune valeur calculée.
+*/
 @Component({
   selector: 'ui-indicator-reuse-card',
   standalone: true,

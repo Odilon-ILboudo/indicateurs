@@ -2,16 +2,16 @@ import { Injectable } from '@angular/core';
 import { LocationChangeEvent, LocationChangeListener, LocationStrategy } from '@angular/common';
 
 /**
- * LocationStrategy purement interne, qui n'écrit jamais dans window.location/history.
- *
- * Nécessaire en mode embarqué : toute stratégie standard (Hash ou Path) écrit dans
- * window.location, le même objet URL que le routeur de la page hôte (PLaTon) - le widget
- * écraserait silencieusement son URL dès son initialisation.
- *
- * Contrepartie assumée : pas de deep-link direct vers une vue précise du widget, pas de
- * bouton précédent/suivant du navigateur pour naviguer dedans. PLaTon garde la main sur l'URL
- * visible.
- */
+LocationStrategy purement interne, qui n'écrit jamais dans window.location/history.
+
+Nécessaire en mode embarqué : toute stratégie standard (Hash ou Path) écrit dans
+window.location, le même objet URL que le routeur de la page hôte (PLaTon) - le widget
+écraserait silencieusement son URL dès son initialisation.
+
+Contrepartie assumée : pas de deep-link direct vers une vue précise du widget, pas de
+bouton précédent/suivant du navigateur pour naviguer dedans. PLaTon garde la main sur l'URL
+visible.
+*/
 @Injectable()
 export class MemoryLocationStrategy extends LocationStrategy {
   private stack: string[] = [''];

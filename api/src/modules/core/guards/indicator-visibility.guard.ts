@@ -5,10 +5,9 @@ import { IndicatorDefinition } from '../../features/indicators/entities/indicato
 import { canRoleSeeIndicator } from '../../features/indicators/indicator-visibility.util';
 
 /**
- * Vérifie que le rôle RÉEL de l'utilisateur (table "Users" locale, jamais envoyé par le client)
- * est autorisé à voir/activer/calculer l'indicateur ciblé par la route. Lit l'ID depuis `:id`
- * ou `:indicatorId`. Toujours posé APRÈS AuthGuard.
- */
+Vérifie que le rôle réel de l'utilisateur est autorisé à voir/activer/calculer l'indicateur ciblé par la route. Lit l'ID depuis `:id`
+ou `:indicatorId`. Toujours posé APRÈS AuthGuard.
+*/
 @Injectable()
 export class IndicatorVisibilityGuard implements CanActivate {
   constructor(
@@ -29,8 +28,10 @@ export class IndicatorVisibilityGuard implements CanActivate {
     const indicator = indicatorId
       ? await this.indicatorModel.findOne({ where: { id: indicatorId } })
       : null;
-    // Indicateur introuvable : laisse le contrôleur/service renvoyer le 404 approprié plutôt
-    // que de le masquer derrière un 403 trompeur.
+    /*
+    Indicateur introuvable : laisse le contrôleur/service renvoyer le 404 approprié plutôt
+    que de le masquer derrière un 403 trompeur.
+    */
     if (!indicator) return true;
 
     const rows: { role: string }[] = await this.platonDataSource.query(

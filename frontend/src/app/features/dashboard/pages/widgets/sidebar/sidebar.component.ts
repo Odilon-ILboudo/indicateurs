@@ -46,9 +46,11 @@ export class SidebarComponent implements OnInit {
       const authUser = await this.authProvider.current()
       if (!authUser) return;
 
-      // Le rôle dans authProvider vient de PLaTon production (token OAuth).
-      // On interroge le backend indicateurs qui lit la DB locale PLaTon,
-      // source de vérité pour le rôle en développement.
+      /*
+      Le rôle dans authProvider vient de PLaTon production (token OAuth).
+      On interroge le backend indicateurs qui lit la DB locale PLaTon,
+      source de vérité pour le rôle en développement.
+      */
       let role = authUser.role as User['role'];
       try {
         const response = await firstValueFrom(this.userService.getUserById(authUser.id));
@@ -78,7 +80,6 @@ export class SidebarComponent implements OnInit {
       { url: 'overview', icon: 'dashboard', title: 'Tableau de bord' },
       { url: 'indicators', icon: 'analytics', title: 'Indicateurs' },
       { url: 'courses', icon: 'local_library', title: 'Cours' },
-      { url: 'resources', icon: 'work', title: 'Espace de travail' },
     );
   }
 

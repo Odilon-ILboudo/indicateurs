@@ -1,7 +1,8 @@
 export type IndicatorScope = 'learner' | 'teacher' | 'admin' | 'course' | 'activity' | 'group';
 
-/** Icône Material fixe par contexte, pas de choix libre - identifie à qui s'adresse
- *  l'indicateur d'un coup d'œil. Pas de couleur ici, elle reste personnalisable. */
+/* Icône Material fixe par contexte, pas de choix libre - identifie à qui s'adresse
+ l'indicateur d'un coup d'œil. Pas de couleur ici, elle reste personnalisable.
+*/
 export const CONTEXT_ICONS: Record<IndicatorScope, string> = {
   learner:  'person',
   teacher:  'co_present',
@@ -27,7 +28,7 @@ export interface IndicatorFormula {
   }[];
 }
 
-/** Une visualisation au sein d’un indicateur. */
+// Une visualisation au sein d’un indicateur.
 export interface IndicatorVisualization {
   id: string;
   label: string;
@@ -43,8 +44,9 @@ export interface ViewResult {
   metadata: Record<string, any>;
 }
 
-/** `critical` est une borne purement documentaire (légende) : au-delà de
- *  `warning`, la carte est de toute façon rouge, avec ou sans `critical`. */
+/* `critical` est une borne purement documentaire (légende) : au-delà de
+ `warning`, la carte est de toute façon rouge, avec ou sans `critical`.
+*/
 export interface IndicatorThresholds {
   good?: number;
   warning?: number;
@@ -56,30 +58,34 @@ export interface IndicatorDefinition {
   name: string;
   description: string;
   contextType: IndicatorScope;
-  /** Regroupement nominal de plusieurs indicateurs créés ensemble sous une même famille. */
+  // Regroupement nominal de plusieurs indicateurs créés ensemble sous une même famille.
   familyName?: string | null;
   formula?: IndicatorFormula | null;
   requiredEvents: string[];
-  /** Tableau de visualisations (min. 1). La première est la vue "carte" par défaut. */
+  // Tableau de visualisations (min. 1). La première est la vue "carte" par défaut.
   visualizations: IndicatorVisualization[];
-  /** Seuils de performance partagés par toutes les visualisations (optionnel). */
+  // Seuils de performance partagés par toutes les visualisations (optionnel)
   thresholds?: IndicatorThresholds | null;
-  /** Aide à l'analyse : texte libre expliquant comment interpréter les résultats (optionnel). */
+  // Aide à l'analyse : texte libre expliquant comment interpréter les résultats (optionnel)
   interpretationHint?: string | null;
-  /** Restreint la visibilité de cet indicateur à des rôles précis, en override de la règle
-   *  par défaut du contextType (optionnel). */
+  /* Restreint la visibilité de cet indicateur à des rôles précis, en override de la règle
+   par défaut du contextType (optionnel).
+  */
   visibilityRoles?: string[] | null;
-  /** Indicateur à partir duquel celui-ci a été créé (traçabilité uniquement, aucun lien
-   *  vivant après la création). */
+  /* Indicateur à partir duquel celui-ci a été créé (traçabilité uniquement, aucun lien
+   vivant après la création).
+  */
   baseIndicatorId?: string | null;
-  /** Ligne technique représentant une famille vide (pas d'indicateur réel pour l'instant) -
-   *  jamais visible des utilisateurs finaux, uniquement dans la gestion admin. */
+  /* Ligne technique représentant une famille vide (pas d'indicateur réel pour l'instant) -
+   jamais visible des utilisateurs finaux, uniquement dans la gestion admin.
+  */
   isFamilyPlaceholder?: boolean;
   usageCount?: number;
   isActive: boolean;
-  /** Complétude réelle du formulaire (nom, contexte, ≥1 visualisation, pipeline valide),
-   *  indépendante de `isActive` qui reste un interrupteur manuel de publication. Fixée à la
-   *  sauvegarde par indicator-builder.component.ts#submit() selon le bouton utilisé. */
+  /* Complétude réelle du formulaire (nom, contexte, ≥1 visualisation, pipeline valide),
+   indépendante de `isActive` qui reste un interrupteur manuel de publication. Fixée à la
+   sauvegarde par indicator-builder.component.ts#submit() selon le bouton utilisé.
+  */
   isComplete: boolean;
   metadata?: Record<string, any>;
 }
@@ -87,7 +93,6 @@ export interface IndicatorDefinition {
 export interface IndicatorValue {
   value: number;
   timestamp: Date;
-  trend?: 'up' | 'down' | 'stable';
   metadata?: {
     lastUpdate?: Date;
     unit?: string;
@@ -100,9 +105,11 @@ export interface DashboardContext {
   scopeId: string;
   userId: string;
   activityId?: string;
-  // Pour scope='group' course-aware uniquement (voir isCourseAware côté backend) :
-  // agrège toutes les activités du cours plutôt qu'une seule. Mutuellement exclusif
-  // avec activityId pour ce scope.
+  /*
+  Pour scope='group' course-aware uniquement (voir isCourseAware côté backend) :
+  agrège toutes les activités du cours plutôt qu'une seule. Mutuellement exclusif
+  avec activityId pour ce scope.
+  */
   courseId?: string;
   groupId?: string;
   academicYear?: string;
@@ -124,7 +131,6 @@ export interface IndicatorSnapshot {
   indicatorId: string;
   contextType: string;
   contextId: string;
-  // Exactement l'un des deux, jamais les deux (voir isCourseAware côté backend).
   activityId: string | null;
   courseId: string | null;
   title: string;
@@ -173,8 +179,7 @@ export interface IndicatorFeedbacksResult {
   averageRating: number;
 }
 
-// ── Événements & déclencheurs dynamiques ────────────────────────────────────
-
+// Événements & déclencheurs dynamiques
 export interface EventTypeOption {
   id: string;
   name: string;
@@ -234,14 +239,14 @@ export interface InstallTriggerResult {
   sql: string;
 }
 
-// ── Figer un indicateur sur un cours/activité (pins enseignant) ─────────────
-
+// Figer un indicateur sur un cours/activité (pins enseignant)
 export type IndicatorPinContextType = 'course' | 'activity';
 
-/** Un enseignant fige un indicateur existant sur un cours/une activité précis :
- *  tous les membres l'ont alors actif et non désactivable, avec des seuils
- *  propres à ce contexte. Totalement indépendant des préférences perso
- *  (`user_indicator_preferences`) : aucune écriture croisée entre les deux. */
+/* Un enseignant fige un indicateur existant sur un cours/une activité précis :
+ tous les membres l'ont alors actif et non désactivable, avec des seuils
+ propres à ce contexte. Totalement indépendant des préférences perso
+ (`user_indicator_preferences`) : aucune écriture croisée entre les deux.
+*/
 export interface IndicatorPin {
   id: string;
   indicatorId: string;

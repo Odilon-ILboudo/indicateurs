@@ -1,4 +1,3 @@
-// web/src/app/pages/dashboard/dashboard.routes.ts
 import { Routes } from '@angular/router';
 import { DashboardPage } from './dashboard.page';
 import { IndicatorDetailComponent } from '../../shared/ui';
@@ -40,10 +39,6 @@ export default [
       {
         path: 'courses',
         loadChildren: () => import('../../features/courses/courses.routes'),
-      },
-      {
-        path: 'resources',
-        loadChildren: () => import('../../features/resources/resources.routes'),
       },
     ],
   },

@@ -30,8 +30,9 @@ export type NewIndicatorChoiceResult =
 type ChoiceView = 'menu' | 'reuse' | 'reuse-preview' | 'import';
 
 /** Première étape avant le wizard de création : zéro, réutiliser, ou importer. Jamais de modale
- *  ouverte par-dessus une autre (règle du projet) : les étapes intermédiaires (galerie, aperçu,
- *  import) sont des vues internes de cette modale, pas des modales imbriquées. */
+ ouverte par-dessus une autre (règle du projet) : les étapes intermédiaires (galerie, aperçu,
+ import) sont des vues internes de cette modale, pas des modales imbriquées.
+*/
 @Component({
   selector: 'ui-new-indicator-choice-modal',
   standalone: true,
@@ -43,7 +44,7 @@ type ChoiceView = 'menu' | 'reuse' | 'reuse-preview' | 'import';
   template: `
     <div class="choice-modal">
 
-      <!-- ── Menu principal ─────────────────────────────────────────────── -->
+      <!--  Menu principal ─ -->
       <div class="choice-menu" *ngIf="view === 'menu'">
         <button class="choice-card" (click)="chooseBlank()">
           <mat-icon>add_circle_outline</mat-icon>
@@ -68,7 +69,7 @@ type ChoiceView = 'menu' | 'reuse' | 'reuse-preview' | 'import';
         </button>
       </div>
 
-      <!-- ── Réutiliser : galerie ───────────────────────────────────────── -->
+      <!--  Réutiliser : galerie ─ -->
       <div class="choice-panel" *ngIf="view === 'reuse'">
         <div class="choice-panel-header">
           <button nz-button nzType="text" nzSize="small" (click)="setView('menu')">
@@ -88,7 +89,7 @@ type ChoiceView = 'menu' | 'reuse' | 'reuse-preview' | 'import';
         </ng-template>
       </div>
 
-      <!-- ── Réutiliser : prévisualisation avant application ────────────── -->
+      <!--  Réutiliser : prévisualisation avant application  -->
       <div class="choice-panel" *ngIf="view === 'reuse-preview' && reuseSource as source">
         <div class="choice-panel-header">
           <button nz-button nzType="text" nzSize="small" (click)="setView('reuse')">
@@ -127,7 +128,7 @@ type ChoiceView = 'menu' | 'reuse' | 'reuse-preview' | 'import';
         </div>
       </div>
 
-      <!-- ── Import YAML/JSON ───────────────────────────────────────────── -->
+      <!--  Import YAML/JSON ─ -->
       <div class="choice-panel" *ngIf="view === 'import'">
         <div class="choice-panel-header">
           <h3>Importer un indicateur (YAML/JSON)</h3>
@@ -279,8 +280,10 @@ export class NewIndicatorChoiceModalComponent implements OnInit {
   private platonSchema: PlatonTableSchema[] = [];
 
   ngOnInit(): void {
-    // Nécessaire pour valider les noms de tables/colonnes d'un import avant de fermer cette
-    // modale - sans quoi une erreur de ce type ne serait détectée qu'à l'ouverture du wizard.
+    /*
+    Nécessaire pour valider les noms de tables/colonnes d'un import avant de fermer cette
+    modale - sans quoi une erreur de ce type ne serait détectée qu'à l'ouverture du wizard.
+    */
     this.indicatorSvc.getPlatonSchema().subscribe({
       next: s => { this.platonSchema = s; },
       error: () => { this.platonSchema = []; },
@@ -288,7 +291,8 @@ export class NewIndicatorChoiceModalComponent implements OnInit {
   }
 
   /** Le menu de choix initial reste réduit au minimum ; la modale ne s'agrandit que pour les
-   *  vues qui en ont vraiment besoin (galerie de réutilisation, éditeur d'import). */
+   vues qui en ont vraiment besoin (galerie de réutilisation, éditeur d'import).
+  */
   setView(v: ChoiceView): void {
     this.view = v;
     this.modalRef.updateConfig(
@@ -308,7 +312,7 @@ export class NewIndicatorChoiceModalComponent implements OnInit {
     this.modalRef.close({ mode: 'blank' } as NewIndicatorChoiceResult);
   }
 
-  /** Pas de modale imbriquée : la prévisualisation devient une vue de cette même modale. */
+  // Pas de modale imbriquée : la prévisualisation devient une vue de cette même modale.
   onSelectReuseSource(source: IndicatorDefinition): void {
     this.reuseSource = source;
     const fetchStep: any = source.formula?.pipeline?.find((s: any) => s.type === 'fetch');
@@ -334,7 +338,8 @@ export class NewIndicatorChoiceModalComponent implements OnInit {
   }
 
   /** Valide entièrement le texte (clés obligatoires, types, tables/colonnes réelles...) avant
-   *  de fermer la modale - en cas d'erreur, elle reste affichée ici, le wizard ne s'ouvre pas. */
+   de fermer la modale - en cas d'erreur, elle reste affichée ici, le wizard ne s'ouvre pas.
+  */
   chooseImport(): void {
     if (!this.importText.trim()) return;
     this.importError = null;
@@ -359,8 +364,9 @@ export class NewIndicatorChoiceModalComponent implements OnInit {
   }
 
   /** Réindente le texte collé, strictement dans le langage du mode actif - ne convertit jamais
-   *  d'un format à l'autre (même contrôle strict que parseIndicatorImport, voir looksLikeJson).
-   *  N'écrase le texte que si le parsing réussit - laisse le texte fautif intact sinon. */
+   d'un format à l'autre (même contrôle strict que parseIndicatorImport, voir looksLikeJson).
+   N'écrase le texte que si le parsing réussit - laisse le texte fautif intact sinon.
+  */
   formatImportText(): void {
     if (this.importMode === 'json') {
       try {

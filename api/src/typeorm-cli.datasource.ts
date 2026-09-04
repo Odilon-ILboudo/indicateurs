@@ -1,6 +1,8 @@
-// DataSource utilisé uniquement par le CLI TypeORM (migration:generate/run/revert),
-// via ts-node - jamais importé par l'application NestJS elle-même (voir core.module.ts
-// pour la connexion 'indicators' réellement utilisée à l'exécution).
+/*
+DataSource utilisé uniquement par le CLI TypeORM (migration:generate/run/revert),
+via ts-node - jamais importé par l'application NestJS elle-même (voir core.module.ts
+pour la connexion 'indicators' réellement utilisée à l'exécution).
+*/
 import 'dotenv/config'
 import { DataSource } from 'typeorm'
 

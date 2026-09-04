@@ -16,13 +16,15 @@ export interface PinIndicatorModalData {
   contextType: IndicatorPinContextType;
   contextId: string;
   /** Présent si l'indicateur est déjà figé sur cette ressource - bascule la modale en mode
-   *  édition (seuils pré-remplis avec CE pin, pas les seuils par défaut de l'indicateur) et
-   *  affiche le bouton "Défiger". */
+   édition (seuils pré-remplis avec CE pin, pas les seuils par défaut de l'indicateur) et
+   affiche le bouton "Défiger".
+  */
   existingPin?: IndicatorPin | null;
 }
 
 /** Figer un indicateur sur un cours/une activité précis, ou modifier/retirer un pin déjà posé
- *  (mode édition si `data.existingPin` est fourni). N'écrit jamais dans les préférences perso. */
+ (mode édition si `data.existingPin` est fourni). N'écrit jamais dans les préférences perso.
+*/
 @Component({
   selector: 'ui-pin-indicator-modal',
   standalone: true,
@@ -102,9 +104,11 @@ export class PinIndicatorModalComponent implements OnInit {
   protected readonly isEditMode = !!this.data.existingPin;
 
   ngOnInit(): void {
-    // En édition, on repart des seuils du pin déjà posé (pas des seuils par défaut de
-    // l'indicateur) - sinon rouvrir la modale écraserait silencieusement une personnalisation
-    // déjà faite pour cette ressource.
+    /*
+    En édition, on repart des seuils du pin déjà posé (pas des seuils par défaut de
+    l'indicateur) - sinon rouvrir la modale écraserait silencieusement une personnalisation
+    déjà faite pour cette ressource.
+    */
     const source = this.data.existingPin?.thresholdsOverride ?? this.data.indicator.thresholds;
     this.thresholds = {
       good: source?.good ?? null,

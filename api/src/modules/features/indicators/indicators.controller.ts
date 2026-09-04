@@ -24,7 +24,7 @@ export class IndicatorsController {
     private readonly pinsService: IndicatorPinsService,
   ) {}
 
-  // ── Lecture ──────────────────────────────────────────────────────────────
+  // Lecture
 
   @Get()
   async getAllIndicators() {
@@ -37,7 +37,7 @@ export class IndicatorsController {
     return this.indicatorsService.findAllForAdmin();
   }
 
-  /** Recherche d'indicateurs similaires par nom/description (pour la détection de doublons). */
+  // Recherche d'indicateurs similaires par nom/description (pour la détection de doublons)
   @Get('search')
   async searchSimilar(
     @Query('q') q: string,
@@ -47,7 +47,7 @@ export class IndicatorsController {
     return this.indicatorsService.searchSimilar(q, excludeId);
   }
 
-  /** Retourne les tables PLaTon disponibles et leurs colonnes pour le builder. */
+  // Retourne les tables PLaTon disponibles et leurs colonnes pour le builder
   @Get('schema')
   async getPlatonSchema() {
     return this.indicatorsService.getPlatonSchema();
@@ -58,27 +58,28 @@ export class IndicatorsController {
     return this.indicatorsService.getFullSchema();
   }
 
-  /** Recherche des cours par nom (toutes ressources, pas seulement celles de l'utilisateur
-   *  courant) pour le sélecteur de contexte du test de formule - 10 résultats par page,
-   *  `offset` pour charger la suite (pagination "charger plus" côté front). */
+  /* Recherche des cours par nom (toutes ressources, pas seulement celles de l'utilisateur
+   courant) pour le sélecteur de contexte du test de formule - 10 résultats par page,
+   `offset` pour charger la suite (pagination "charger plus" côté front).
+  */
   @Get('courses/search')
   async searchCourses(@Query('q') q?: string, @Query('offset') offset?: string) {
     return this.indicatorsService.searchCourses(q ?? '', offset ? parseInt(offset, 10) : 0);
   }
 
-  /** Retourne les activités actives d'un cours. */
+  // Retourne les activités actives d'un cours
   @Get('course/:courseId/activities')
   async getCourseActivities(@Param('courseId') courseId: string) {
     return this.indicatorsService.getCourseActivities(courseId);
   }
 
-  /** Retourne les étudiants d'un cours (pour le sélecteur de test de formule). */
+  // Retourne les étudiants d'un cours (pour le sélecteur de test de formule)
   @Get('course/:courseId/students')
   async getCourseStudents(@Param('courseId') courseId: string) {
     return this.indicatorsService.getCourseStudents(courseId);
   }
 
-  /** Liste les indicateurs figés (pins enseignant) sur un cours/une activité précis. */
+  // Liste les indicateurs figés (pins enseignant) sur un cours/une activité précis
   @Get('pins')
   @UseGuards(AuthGuard)
   async listPins(
@@ -91,8 +92,9 @@ export class IndicatorsController {
     return this.pinsService.listPins(contextType, contextId);
   }
 
-  /** Nombre de pins par indicateur (tous cours/activités confondus) - pour le label "N pins"
-   *  affiché dans la liste admin des indicateurs. */
+  /* Nombre de pins par indicateur (tous cours/activités confondus) pour le label "N pins"
+   affiché dans la liste admin des indicateurs.
+  */
   @Get('pins/counts')
   @UseGuards(AuthGuard)
   async countPinsByIndicator() {
@@ -133,7 +135,7 @@ export class IndicatorsController {
     return this.indicatorsService.getExecutionLogs(id, +limit);
   }
 
-  // ── Écriture ─────────────────────────────────────────────────────────────
+  // Écriture
 
   @Post()
   @UseGuards(AuthGuard, AdminGuard)
@@ -141,13 +143,13 @@ export class IndicatorsController {
     return this.indicatorsService.create(definition);
   }
 
-  /**
-   * Calcule la formule d'un indicateur pour un contexte donné et persiste le résultat.
-   * POST /api/indicators/:id/compute-view
-   * Body: { contextType, contextId, activityId?, courseId? }
-   * `courseId` : uniquement pertinent pour un indicateur `group` course-aware (voir
-   * isCourseAware()) - ignoré pour tous les autres contextType.
-   */
+  /*
+  Calcule la formule d'un indicateur pour un contexte donné et persiste le résultat.
+  POST /api/indicators/:id/compute-view
+  Body: { contextType, contextId, activityId?, courseId? }
+  `courseId` : uniquement pertinent pour un indicateur `group` course-aware (voir
+  isCourseAware()); ignoré pour tous les autres contextType.
+  */
   @Post(':id/compute-view')
   @UseGuards(AuthGuard, IndicatorVisibilityGuard)
   async computeView(
@@ -162,12 +164,12 @@ export class IndicatorsController {
     );
   }
 
-  /**
-   * Prévisualise le résultat brut d'un pipeline DSL sans persister.
-   * Supporte les contextes learner et group.
-   * POST /api/indicators/preview
-   * Body: { formula, context: { userId?, groupId?, activityId?, courseId? } }
-   */
+  /*
+  Prévisualise le résultat brut d'un pipeline DSL sans persister.
+  Supporte les contextes learner et group.
+  POST /api/indicators/preview
+  Body: { formula, context: { userId?, groupId?, activityId?, courseId? } }
+  */
   @Post('preview')
   async previewFormula(
     @Body() body: {
@@ -213,9 +215,9 @@ export class IndicatorsController {
     return { success: true };
   }
 
-  // ── Snapshots (comparaison groupes côte à côte) ──────────────────────────
+  // Snapshots (comparaison groupes côte à côte)
 
-  /** Liste les snapshots d'un indicateur pour une activité ou un cours donné (l'un ou l'autre). */
+  // Liste les snapshots d'un indicateur pour une activité ou un cours donné (l'un ou l'autre)
   @Get(':id/snapshots')
   @UseGuards(AuthGuard, IndicatorVisibilityGuard)
   async getSnapshots(
@@ -227,7 +229,7 @@ export class IndicatorsController {
     return this.indicatorsService.getSnapshots(id, activityId ? { activityId } : { courseId: courseId! });
   }
 
-  /** Crée un snapshot (groupe + activité OU groupe + cours). Retourne 409 si déjà existant. */
+  // Crée un snapshot (groupe + activité OU groupe + cours). Retourne 409 si déjà existant
   @Post(':id/snapshots')
   @UseGuards(AuthGuard, IndicatorVisibilityGuard)
   async createSnapshot(
@@ -240,7 +242,7 @@ export class IndicatorsController {
     return this.indicatorsService.createSnapshot(id, { ...body, contextType: body.contextType ?? 'group' });
   }
 
-  /** Met à jour le titre d'un snapshot. */
+  // Met à jour le titre d'un snapshot
   @Patch(':id/snapshots/:snapshotId')
   async updateSnapshotTitle(
     @Param('id') id: string,
@@ -251,7 +253,7 @@ export class IndicatorsController {
     return this.indicatorsService.updateSnapshotTitle(id, snapshotId, body.title.trim());
   }
 
-  /** Supprime un snapshot. */
+  // Supprime un snapshot
   @Delete(':id/snapshots/:snapshotId')
   async deleteSnapshot(
     @Param('id') id: string,
@@ -261,9 +263,9 @@ export class IndicatorsController {
     return { success: true };
   }
 
-  // ── Notifications ─────────────────────────────────────────────────────────
+  // Notifications
 
-  /** Envoie une notification liée à un indicateur. */
+  // Envoie une notification liée à un indicateur
   @Post(':id/notify')
   @UseGuards(AuthGuard, AdminGuard)
   async sendNotification(
@@ -273,9 +275,11 @@ export class IndicatorsController {
     return this.indicatorsService.sendNotification(id, body.title, body.message);
   }
 
-  // ── Pins (figer un indicateur sur un cours/activité) ────────────────────────
-  // Pas d'AdminGuard : le contrôle fin (admin OU enseignant avec droit d'écriture
-  // sur le cours) est fait dans IndicatorPinsService#assertCanManagePins.
+  /*
+  Pins (figer un indicateur sur un cours/activité)
+  Pas d'AdminGuard : le contrôle fin (admin OU enseignant avec droit d'écriture
+  sur le cours) est fait dans IndicatorPinsService#assertCanManagePins.
+  */
 
   @Post(':id/pins')
   @UseGuards(AuthGuard)
@@ -305,15 +309,15 @@ export class IndicatorsController {
     return { success: true };
   }
 
-  /** Liste toutes les notifications (onglet utilisateur à venir). */
+  // Liste toutes les notifications (onglet utilisateur à venir)
   @Get('notifications/all')
   async getNotifications() {
     return this.indicatorsService.getNotifications();
   }
 
-  // ── Feedbacks ──────────────────────────────────────────────────────────────
+  // Feedbacks
 
-  /** Soumet (ou met à jour) un retour d'expérience pour un indicateur. */
+  // Soumet (ou met à jour) un retour d'expérience pour un indicateur
   @Post(':id/feedback')
   async submitFeedback(
     @Param('id') id: string,
@@ -322,13 +326,13 @@ export class IndicatorsController {
     return this.indicatorsService.submitFeedback(id, body.userId, body.rating, body.comment);
   }
 
-  /** Liste tous les retours d'expérience d'un indicateur (admin). */
+  // Liste tous les retours d'expérience d'un indicateur (admin)
   @Get(':id/feedback')
   async getFeedbacks(@Param('id') id: string) {
     return this.indicatorsService.getFeedbacks(id);
   }
 
-  /** Supprime un retour d'expérience (admin). */
+  // Supprime un retour d'expérience (admin)
   @Delete(':id/feedback/:feedbackId')
   @UseGuards(AuthGuard, AdminGuard)
   async deleteFeedback(

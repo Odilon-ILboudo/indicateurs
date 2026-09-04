@@ -28,11 +28,11 @@ export class UserIndicatorPreference {
     color?: string;
   };
 
-  /** Visualisation active choisie par l'utilisateur pour cet indicateur. */
+  // Visualisation active choisie par l'utilisateur pour cet indicateur.
   @Column({ name: 'active_viz_id', type: 'varchar', length: 255, nullable: true })
   activeVizId: string | null;
 
-  /** Visualisations que l'utilisateur souhaite voir pour cet indicateur. `null` = toutes (valeur par défaut). */
+  // Visualisations que l'utilisateur souhaite voir pour cet indicateur. `null` = toutes (valeur par défaut)
   @Column({ name: 'enabled_viz_ids', type: 'jsonb', nullable: true })
   enabledVizIds: string[] | null;
 

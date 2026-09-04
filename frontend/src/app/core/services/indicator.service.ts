@@ -13,13 +13,13 @@ export class IndicatorService {
   private indicatorsCache$ = new BehaviorSubject<IndicatorDefinition[] | null>(null);
   private indicatorsLoaded = false;
 
-  /** Cache in-memory des préférences viz : indicatorId → vizId (chargé depuis la BDD au démarrage). */
+  // Cache in-memory des préférences viz : indicatorId - vizId (chargé depuis la BDD au démarrage).
   private readonly vizPreferencesCache = new Map<string, string>();
 
-  /** Cache in-memory des visualisations activées par l'utilisateur : indicatorId → vizIds[] (absent = toutes activées). */
+  // Cache in-memory des visualisations activées par l'utilisateur : indicatorId -vizIds[] (absent = toutes activées).
   private readonly vizVisibilityCache = new Map<string, string[]>();
 
-  // ── Lecture ──────────────────────────────────────────────────────────────
+  // Lecture
 
   loadIndicators(): Observable<IndicatorDefinition[]> {
     if (this.indicatorsLoaded && this.indicatorsCache$.value) {
@@ -76,7 +76,7 @@ export class IndicatorService {
     );
   }
 
-  // ── Écriture ─────────────────────────────────────────────────────────────
+  // Écriture
 
   createIndicator(data: Partial<IndicatorDefinition> & { formula?: any }): Observable<IndicatorDefinition> {
     this.invalidateCache();
@@ -117,7 +117,7 @@ export class IndicatorService {
     );
   }
 
-  // ── DSL preview ──────────────────────────────────────────────────────────
+  // DSL preview
 
   previewFormulaRaw(
     formula: any,
@@ -133,7 +133,7 @@ export class IndicatorService {
     return this.http.post<{ steps: StepDebugResult[] }>(`${this.apiUrl}/preview-steps`, { formula, context });
   }
 
-  // ── Logs ──────────────────────────────────────────────────────────────────
+  // Logs
 
   getExecutionLogs(indicatorId: string, limit = 50): Observable<any[]> {
     return this.http.get<any[]>(`${this.apiUrl}/${indicatorId}/logs?limit=${limit}`);
@@ -152,15 +152,15 @@ export class IndicatorService {
     return this.http.get<any>(`${this.apiUrl}/schema/full`);
   }
 
-  // ── Calcul de vue ─────────────────────────────────────────────────────────
+  // Calcul de vue
 
-  /**
-   * Calcule la formule d'un indicateur pour un contexte donné et persiste le résultat.
-   * - learner  : contextId = userId
-   * - group    : contextId = groupId, activityId OU courseId (voir isCourseAware)
-   * - course   : contextId = courseId, activityId requis
-   * - activity : contextId = activityId
-   */
+  /*
+  Calcule la formule d'un indicateur pour un contexte donné et persiste le résultat.
+  - learner  : contextId = userId
+  - group    : contextId = groupId, activityId OU courseId (voir isCourseAware)
+  - course   : contextId = courseId, activityId requis
+  - activity : contextId = activityId
+  */
   computeView(
     indicatorId: string,
     contextType: string,
@@ -178,9 +178,10 @@ export class IndicatorService {
     });
   }
 
-  /** Recherche des cours par nom (toutes ressources PLaTon, pas seulement celles de
-   *  l'utilisateur courant) - 10 résultats par page côté backend. `query` vide renvoie les
-   *  premiers cours par ordre alphabétique. `offset` pour charger la page suivante. */
+  /* Recherche des cours par nom (toutes ressources PLaTon, pas seulement celles de
+   l'utilisateur courant) - 10 résultats par page côté backend. `query` vide renvoie les
+   premiers cours par ordre alphabétique. `offset` pour charger la page suivante.
+  */
   searchCourses(query: string, offset = 0): Observable<TeacherCourse[]> {
     return this.http.get<TeacherCourse[]>(`${this.apiUrl}/courses/search?q=${encodeURIComponent(query)}&offset=${offset}`);
   }
@@ -189,13 +190,16 @@ export class IndicatorService {
     return this.http.get<CourseActivity[]>(`${this.apiUrl}/course/${courseId}/activities`);
   }
 
-  /** Groupes de TP du cours - endpoint déjà utilisé pour la gestion des membres (courses.service.ts
-   *  côté API), réutilisé ici plutôt que de dépendre du cache de recherche de cours (qui peut ne
-   *  plus contenir le cours sélectionné une fois la liste rechargée). */
+  /* Groupes de TP du cours - endpoint déjà utilisé pour la gestion des membres (courses.service.ts
+   côté API), réutilisé ici plutôt que de dépendre du cache de recherche de cours (qui peut ne
+   plus contenir le cours sélectionné une fois la liste rechargée).
+  */
   getCourseGroups(courseId: string): Observable<{ id: string; name: string }[]> {
-    // "id" ici = CourseGroups.id (même champ que renvoyait déjà PlatonService#searchCourses
-    // pour ses groupes en cache) - pas group_id, un identifiant différent.
-    // L'endpoint renvoie { resources, total } (comme searchMembers) - pas un tableau brut.
+    /*
+    "id" ici = CourseGroups.id (même champ que renvoyait déjà PlatonService#searchCourses
+    pour ses groupes en cache) - pas group_id, un identifiant différent.
+    L'endpoint renvoie { resources, total } (comme searchMembers) - pas un tableau brut.
+    */
     return this.http.get<{ resources: { id: string; groupId: string; courseId: string; name: string }[]; total: number }>(
       `${environment.apiUrl}/v1/courses/${courseId}/groups`,
     ).pipe(
@@ -211,7 +215,7 @@ export class IndicatorService {
     );
   }
 
-  // ── Snapshots ─────────────────────────────────────────────────────────────
+  // Snapshots
 
   getSnapshots(indicatorId: string, scope: { activityId: string } | { courseId: string }): Observable<IndicatorSnapshot[]> {
     const [key, value] = Object.entries(scope)[0];
@@ -238,9 +242,11 @@ export class IndicatorService {
     return this.http.delete<void>(`${this.apiUrl}/${indicatorId}/snapshots/${snapshotId}`);
   }
 
-  // ── Pins (figer un indicateur sur un cours/activité) ─────────────────────
-  // Totalement indépendant des préférences perso (ci-dessous) : aucune écriture
-  // croisée entre les deux, cf. IndicatorPinsService côté backend.
+  /*
+  Pins (figer un indicateur sur un cours/activité)
+  Totalement indépendant des préférences perso (ci-dessous) : aucune écriture
+  croisée entre les deux, cf. IndicatorPinsService côté backend.
+  */
 
   listPins(contextType: IndicatorPinContextType, contextId: string): Observable<IndicatorPin[]> {
     return this.http.get<IndicatorPin[]>(
@@ -248,7 +254,7 @@ export class IndicatorService {
     );
   }
 
-  /** Nombre de pins par indicateur (tous cours/activités confondus), pour le label admin. */
+  // Nombre de pins par indicateur (tous cours/activités confondus), pour le label admin.
   countPinsByIndicator(): Observable<Record<string, number>> {
     return this.http.get<Record<string, number>>(`${this.apiUrl}/pins/counts`);
   }
@@ -268,14 +274,14 @@ export class IndicatorService {
     );
   }
 
-  // ── Préférences viz (persistées en BDD via user-preferences) ─────────────
+  //  Préférences viz (persistées en BDD via user-preferences) ─
 
-  /** Lit la visualisation active depuis le cache in-memory (chargé au démarrage via getUserPreferences). */
+  //Lit la visualisation active depuis le cache in-memory (chargé au démarrage via getUserPreferences)
   getVizPreference(indicatorId: string): string | null {
     return this.vizPreferencesCache.get(indicatorId) ?? null;
   }
 
-  /** Persiste la visualisation choisie en BDD et met à jour le cache local. */
+  // Persiste la visualisation choisie en BDD et met à jour le cache local.
   setVizPreference(userId: string, indicatorId: string, vizId: string): void {
     this.vizPreferencesCache.set(indicatorId, vizId);
     this.http.patch(
@@ -284,18 +290,18 @@ export class IndicatorService {
     ).subscribe();
   }
 
-  /** Visualisations que l'utilisateur a choisi d'afficher pour cet indicateur. `null` = toutes (réglage par défaut). */
+  // Visualisations que l'utilisateur a choisi d'afficher pour cet indicateur. `null` = toutes (réglage par défaut). */
   getEnabledVizIds(indicatorId: string): string[] | null {
     return this.vizVisibilityCache.get(indicatorId) ?? null;
   }
 
-  /** Indique si une visualisation donnée doit être affichée à l'utilisateur (toutes le sont par défaut). */
+  // Indique si une visualisation donnée doit être affichée à l'utilisateur (toutes le sont par défaut).
   isVizEnabled(indicatorId: string, vizId: string): boolean {
     const enabled = this.vizVisibilityCache.get(indicatorId);
     return !enabled || enabled.includes(vizId);
   }
 
-  /** Persiste la liste des visualisations activées en BDD et met à jour le cache local. `null` réinitialise au défaut (toutes). */
+  // Persiste la liste des visualisations activées en BDD et met à jour le cache local. `null` réinitialise au défaut (toutes).
   setEnabledVizIds(userId: string, indicatorId: string, vizIds: string[] | null): void {
     if (vizIds) {
       this.vizVisibilityCache.set(indicatorId, vizIds);
@@ -308,7 +314,7 @@ export class IndicatorService {
     ).subscribe();
   }
 
-  /** Met à jour les préférences de l'utilisateur pour un indicateur (couleur personnalisée, visualisation active, etc.). */
+  // Met à jour les préférences de l'utilisateur pour un indicateur (couleur personnalisée, visualisation active, etc.).
   updateUserPreference(userId: string, indicatorId: string, data: {
     displayPreferences?: { color?: string; icon?: string };
     activeVizId?: string;
@@ -327,7 +333,7 @@ export class IndicatorService {
     this.indicatorsCache$.next(null);
   }
 
-  // ── Feedbacks ──────────────────────────────────────────────────────────────
+  // Feedbacks
 
   submitFeedback(indicatorId: string, userId: string, rating: number, comment?: string): Observable<IndicatorFeedback> {
     return this.http.post<IndicatorFeedback>(
@@ -348,7 +354,7 @@ export class IndicatorService {
     );
   }
 
-  // ── Notifications ─────────────────────────────────────────────────────────
+  // Notifications
 
   searchSimilar(q: string, excludeId?: string): Observable<IndicatorDefinition[]> {
     const params = excludeId ? `?q=${encodeURIComponent(q)}&excludeId=${encodeURIComponent(excludeId)}` : `?q=${encodeURIComponent(q)}`;
@@ -366,7 +372,7 @@ export class IndicatorService {
     return this.http.get<IndicatorNotification[]>(`${this.apiUrl}/notifications/all`);
   }
 
-  // ── Types d'événements ────────────────────────────────────────────────────
+  // Types d'événements
 
   getEventTypes(configuredOnly = false): Observable<EventTypeOption[]> {
     const q = configuredOnly ? '?configured=true' : '';
@@ -377,7 +383,7 @@ export class IndicatorService {
     return this.http.post<EventTypeOption>(`${environment.apiUrl}/event-types`, body);
   }
 
-  // ── Règles de déclenchement dynamiques ──────────────────────────────────
+  // Règles de déclenchement dynamiques
 
   getEventRules(): Observable<EventRule[]> {
     return this.http.get<EventRule[]>(`${environment.apiUrl}/event-rules`);

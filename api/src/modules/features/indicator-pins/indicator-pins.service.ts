@@ -16,8 +16,8 @@ export class IndicatorPinsService {
     return this.pinRepository.find({ where: { contextType, contextId } });
   }
 
-  /** Nombre de pins par indicateur, tous cours/activités confondus - pour le label affiché
-   *  dans l'admin ("N pins"), sans avoir à lister chaque cours/activité concerné. */
+  // Nombre de pins par indicateur, tous cours/activités confondus pour le label affiché dans l'admin ("N pins").
+
   async countPinsByIndicator(): Promise<Record<string, number>> {
     const rows: { indicatorId: string; count: string }[] = await this.pinRepository
       .createQueryBuilder('pin')
@@ -55,8 +55,9 @@ export class IndicatorPinsService {
     await this.pinRepository.delete({ indicatorId, contextType, contextId });
   }
 
-  /** Réplique CoursesService#hasActivityWritePermission : admin global ou membre "teacher"
-   *  du cours - n'importe lequel, pas seulement celui qui a créé le pin. */
+  /* Réplique CoursesService#hasActivityWritePermission : admin global ou membre "teacher"
+   du cours, n'importe lequel, pas seulement celui qui a créé le pin.
+  */
   private async assertCanManagePins(
     userId: string,
     contextType: IndicatorPinContextType,

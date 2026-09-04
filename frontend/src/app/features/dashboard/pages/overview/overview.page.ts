@@ -1,4 +1,3 @@
-// web/src/app/pages/dashboard/overview/overview.page.ts
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { RouterModule } from '@angular/router';
@@ -55,9 +54,11 @@ export class OverviewPage implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadActiveIndicators();
-    // Le rôle réel se charge de façon asynchrone et arrive après la construction de cette page :
-    // on s'abonne à role$ plutôt que de lire le rôle une seule fois, sinon les indicateurs
-    // teacher/admin restent invisibles jusqu'à la prochaine navigation.
+    /*
+    Le rôle réel se charge de façon asynchrone et arrive après la construction de cette page :
+    on s'abonne à role$ plutôt que de lire le rôle une seule fois, sinon les indicateurs
+    teacher/admin restent invisibles jusqu'à la prochaine navigation.
+    */
     this.subscriptions.push(
       this.roleService.role$.subscribe(() => {
         this.context = this.buildDefaultContext();
@@ -86,9 +87,11 @@ export class OverviewPage implements OnInit, OnDestroy {
         this.indicators = indicators.filter(ind =>
           ind.contextType === this.context.scope &&
           this.roleService.canSeeIndicatorContext(ind.contextType, ind.visibilityRoles) &&
-          // Un indicateur learner/teacher/admin activity-aware ou course-aware n'a pas de valeur
-          // "globale" : il ne s'affiche que sur la page de l'activité/du cours concerné, jamais
-          // ici (voir isActivityAware()/isCourseAware()).
+          /*
+          Un indicateur learner/teacher/admin activity-aware ou course-aware n'a pas de valeur
+          "globale" : il ne s'affiche que sur la page de l'activité/du cours concerné, jamais
+          ici (voir isActivityAware()/isCourseAware()).
+          */
           !((ind.contextType === 'learner' || ind.contextType === 'teacher' || ind.contextType === 'admin') &&
             (isActivityAware(ind.formula) || isCourseAware(ind.formula))));
         this.loading = false;

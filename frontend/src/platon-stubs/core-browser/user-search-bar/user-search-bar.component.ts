@@ -72,51 +72,51 @@ export class UserSearchBarComponent implements OnInit, OnChanges, ControlValueAc
   }
 
   /**
-   * If true, the search bar will allow to select multiple users or groups (default: true)
-   */
+  If true, the search bar will allow to select multiple users or groups (default: true)
+  */
   @Input({ transform: booleanAttribute }) multi = true
 
   /**
-   * List of users or groups to exclude from the search results.
-   */
+  List of users or groups to exclude from the search results.
+  */
   @Input() excludes: string[] = []
 
   /**
-   * If true, the search bar will be disabled. (default: false)
-   */
+  If true, the search bar will be disabled. (default: false)
+  */
   @Input({ transform: booleanAttribute }) disabled = false
 
   /**
-   * Allow to search for user groups. (default: false)
-   */
+  Allow to search for user groups. (default: false)
+  */
   @Input({ transform: booleanAttribute }) allowGroup = false
 
   /**
-   * If true, only user groups will be searched. (default: false)
-   */
+  If true, only user groups will be searched. (default: false)
+  */
   @Input({ transform: booleanAttribute }) onlyGroups = false
 
   /**
-   * It true, the search result will will be automatically selected and not displayed in a list of results with a remove button.
-   * (default: false)
-   */
+  It true, the search result will will be automatically selected and not displayed in a list of results with a remove button.
+  (default: false)
+  */
   @Input({ transform: booleanAttribute }) autoSelect = false
 
   /**
-   * Custom filters to apply to the search.
-   */
+  Custom filters to apply to the search.
+  */
   @Input() filters: UserFilters = { limit: DEFAULT_SEARCH_BAR_LIMIT }
 
   /**
-   * Total number of users or groups matching the current search.
-   */
+  Total number of users or groups matching the current search.
+  */
   get total(): number {
     return this.totalCount
   }
 
   /**
-   * Gets a value indicating whether the search is in progress.
-   */
+  Gets a value indicating whether the search is in progress.
+  */
   get searching(): boolean {
     return this.isSearching
   }

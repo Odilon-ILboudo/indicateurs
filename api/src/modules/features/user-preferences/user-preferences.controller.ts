@@ -8,7 +8,7 @@ interface AuthenticatedRequest extends Request {
   user?: AuthenticatedUser;
 }
 
-@Controller('preferences')  // ← Préfixe unique, pas dans /indicators
+@Controller('preferences')  // Préfixe unique, pas dans /indicators
 @UseGuards(AuthGuard)
 export class UserPreferencesController {
   constructor(private readonly preferencesService: UserPreferencesService) {}

@@ -1,4 +1,3 @@
-// web/src/app/shared/components/indicator-selector/indicator-selector.component.ts
 import { Component, Input, OnInit, Output, EventEmitter, inject, ChangeDetectorRef } from '@angular/core';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
@@ -38,7 +37,7 @@ import { IndicatorDefinition, IndicatorScope, IndicatorVisualization, contextIco
 import { buildIndicatorDisplayRows, IndicatorDisplayRow } from '../../shared/utils/indicator-family-grouping';
 import { getCurrentUserId } from '../../core/auth/current-user';
 
-// ── Constantes DSL ────────────────────────────────────────────────────────────
+//  Constantes DSL
 
 const STEP_COLORS: Record<string, string> = {
   fetch:     '#1890ff',
@@ -103,429 +102,14 @@ const CTX_LABELS: Record<string, string> = {
   admin:    'Admin',
 };
 
-// ── Modal de détail d'un indicateur ──────────────────────────────────────────
+//  Modal de détail d'un indicateur 
 
 @Component({
   selector: 'ui-indicator-view-modal',
   standalone: true,
   imports: [CommonModule, MatIconModule, NzTagModule, NzDividerModule, NzEmptyModule],
-  template: `
-    <div class="view-modal">
-
-      <!-- ── Statut + description ── -->
-      <div class="header-section">
-        <span class="status-badge" [class.active]="ind.isActive">
-          {{ ind.isActive ? '● Actif' : '● Inactif' }}
-        </span>
-        <span class="family-badge" *ngIf="ind.familyName">
-          <mat-icon>folder_special</mat-icon>
-          Famille : {{ ind.familyName }}
-        </span>
-        <span class="family-badge" *ngIf="baseIndicatorName">
-          <mat-icon>content_copy</mat-icon>
-          Basé sur : {{ baseIndicatorName }}
-        </span>
-        <p class="ind-description" *ngIf="ind.description; else noDesc">{{ ind.description }}</p>
-        <ng-template #noDesc>
-          <p class="ind-description empty">Aucune description renseignée</p>
-        </ng-template>
-      </div>
-
-      <!-- ── Section 1 : Informations générales ── -->
-      <div class="section">
-        <div class="section-title">
-          <mat-icon>info_outline</mat-icon>
-          Informations générales
-        </div>
-
-        <div class="info-grid">
-
-          <div class="info-row">
-            <span class="info-label">Contextes</span>
-            <div class="info-value tags-row">
-              <nz-tag *ngFor="let ctx of contexts" nzColor="blue">{{ ctxLabel(ctx) }}</nz-tag>
-              <span *ngIf="!contexts.length" class="empty-val">-</span>
-            </div>
-          </div>
-
-          <div class="info-row">
-            <span class="info-label">Déclencheurs</span>
-            <div class="info-value tags-row">
-              <nz-tag *ngFor="let ev of triggerLabels" nzColor="purple">{{ ev }}</nz-tag>
-              <span *ngIf="!(ind.requiredEvents?.length)" class="empty-val">Aucun</span>
-            </div>
-          </div>
-
-          <div class="info-row">
-            <span class="info-label">Mise à jour</span>
-            <span class="info-value update-row">
-              {{ ind.requiredEvents?.length
-                  ? 'Temps réel à chaque événement'
-                  : 'Recalcul périodique (pas de déclencheur)' }}
-            </span>
-          </div>
-
-          <div class="info-row">
-            <span class="info-label">Utilisations</span>
-            <span class="info-value">
-              {{ ind.usageCount ?? 0 }}
-              utilisateur{{ (ind.usageCount ?? 0) !== 1 ? 's' : '' }} actif{{ (ind.usageCount ?? 0) !== 1 ? 's' : '' }}
-            </span>
-          </div>
-
-        </div>
-      </div>
-
-      <!-- ── Section 2 : Visualisations ── -->
-      <div class="section" *ngIf="ind.visualizations?.length">
-        <div class="section-title">
-          <mat-icon>bar_chart</mat-icon>
-          Visualisations
-          <span class="section-count">{{ ind.visualizations.length }} configurée{{ ind.visualizations.length > 1 ? 's' : '' }}</span>
-        </div>
-
-        <div class="view-card" *ngFor="let viz of ind.visualizations">
-          <div class="view-header">
-            <mat-icon class="view-viz-icon" [style.color]="viz.color">{{ contextIcon(ind.contextType) }}</mat-icon>
-            <span class="view-label">{{ viz.label || vizLabel(viz.type) }}</span>
-            <span class="view-type-chip" [style.background]="viz.color || vizColor(viz.type)">
-              {{ vizLabel(viz.type) }}
-            </span>
-          </div>
-
-          <div class="view-meta" *ngIf="viz.unit || viz.color">
-            <span class="meta-item" *ngIf="viz.unit">
-              <span class="meta-k">Unité :</span> {{ viz.unit }}
-            </span>
-            <span class="meta-item color-item" *ngIf="viz.color">
-              <span class="meta-k">Couleur :</span>
-              <span class="color-dot" [style.background]="viz.color"></span>
-            </span>
-          </div>
-
-          <div class="thresholds-row" *ngIf="viz.thresholds as t">
-            <span class="meta-k">Seuils :</span>
-            <span class="threshold good">Bon ≤ {{ t.good }}{{ viz.unit ?? '' }}</span>
-            <span class="threshold warning">Moyen ≤ {{ t.warning }}{{ viz.unit ?? '' }}</span>
-            <span class="threshold danger">Critique &gt; {{ t.warning }}{{ viz.unit ?? '' }}</span>
-          </div>
-
-          <div class="pipeline-row" *ngIf="vizPipeline(viz).length">
-            <span class="meta-k pipeline-label">
-              Pipeline{{ usesOwnFormula(viz) ? '' : ' (formule globale)' }} :
-            </span>
-            <div class="pipeline-steps">
-              <ng-container *ngFor="let s of vizPipeline(viz); let last = last">
-                <span class="step-chip"
-                  [style.background]="stepColor(s.type)"
-                  [title]="s.label || s.type">
-                  {{ stepLabel(s.type) }}
-                </span>
-                <span *ngIf="!last" class="step-arrow">→</span>
-              </ng-container>
-            </div>
-          </div>
-
-          <div class="view-no-formula" *ngIf="!vizPipeline(viz).length">
-            <mat-icon>warning_amber</mat-icon>
-            Aucune formule configurée pour cette visualisation
-          </div>
-        </div>
-      </div>
-
-      <!-- ── Aucune configuration ── -->
-      <nz-empty
-        *ngIf="!ind.visualizations?.length"
-        nzNotFoundContent="Aucune configuration de visualisation disponible."
-        style="margin: 24px 0">
-      </nz-empty>
-
-    </div>
-  `,
-  styles: [`
-    .view-modal {
-      font-size: 14px;
-      line-height: 1.6;
-      color: #262626;
-    }
-
-    /* ── Header statut + description ── */
-    .header-section {
-      margin-bottom: 20px;
-    }
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      padding: 3px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-      margin-bottom: 10px;
-      background: #fff2f0;
-      color: #cf1322;
-    }
-    .status-badge.active {
-      background: #f6ffed;
-      color: #389e0d;
-    }
-    .family-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      padding: 3px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-      margin-bottom: 10px;
-      margin-left: 8px;
-      background: #f9f0ff;
-      color: #722ed1;
-
-      mat-icon {
-        font-size: 14px;
-        width: 14px;
-        height: 14px;
-        line-height: 14px;
-      }
-    }
-    .ind-description {
-      color: #595959;
-      margin: 8px 0 0;
-      font-size: 14px;
-    }
-    .ind-description.empty {
-      color: #bfbfbf;
-      font-style: italic;
-    }
-
-    /* ── Sections ── */
-    .section {
-      border: 1px solid #f0f0f0;
-      border-radius: 10px;
-      padding: 16px 20px;
-      margin-bottom: 16px;
-      background: #fafafa;
-    }
-    .section:last-child {
-      margin-bottom: 0;
-    }
-    .section-title {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 11px;
-      font-weight: 700;
-      color: #8c8c8c;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      margin-bottom: 14px;
-    }
-    .section-title mat-icon {
-      font-size: 15px;
-      line-height: 1;
-      color: #1890ff;
-    }
-    .section-count {
-      margin-left: auto;
-      font-size: 11px;
-      font-weight: 400;
-      color: #bfbfbf;
-      text-transform: none;
-      letter-spacing: 0;
-    }
-
-    /* ── Grille d'infos ── */
-    .info-grid {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .info-row {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-    }
-    .info-label {
-      flex-shrink: 0;
-      width: 120px;
-      font-size: 12px;
-      font-weight: 600;
-      color: #8c8c8c;
-      padding-top: 3px;
-    }
-    .info-value {
-      flex: 1;
-      color: #262626;
-      font-size: 13px;
-    }
-    .tags-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      align-items: center;
-    }
-    .empty-val {
-      color: #bfbfbf;
-      font-style: italic;
-    }
-    .update-row {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-    }
-    /* ── Contexte ── */
-    .ctx-block {
-      margin-bottom: 4px;
-    }
-    .ctx-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 10px;
-    }
-    .ctx-icon {
-      font-size: 18px;
-      color: #1890ff;
-    }
-    .ctx-name {
-      font-weight: 700;
-      font-size: 14px;
-      color: #1a1a1a;
-    }
-    .ctx-count-badge {
-      font-size: 11px;
-      background: #e6f7ff;
-      color: #1890ff;
-      padding: 1px 8px;
-      border-radius: 10px;
-      font-weight: 500;
-    }
-
-    /* ── Carte de vue ── */
-    .view-card {
-      border: 1px solid #e8e8e8;
-      border-radius: 8px;
-      padding: 12px 16px;
-      margin-bottom: 8px;
-      background: white;
-    }
-    .view-card:last-child {
-      margin-bottom: 0;
-    }
-    .view-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 8px;
-    }
-    .view-viz-icon {
-      font-size: 18px;
-      color: #595959;
-    }
-    .view-label {
-      font-weight: 600;
-      font-size: 13px;
-      flex: 1;
-      color: #1a1a1a;
-    }
-    .view-type-chip {
-      font-size: 11px;
-      color: white;
-      padding: 2px 10px;
-      border-radius: 12px;
-      font-weight: 500;
-    }
-
-    /* ── Méta ── */
-    .view-meta {
-      display: flex;
-      gap: 16px;
-      margin-bottom: 6px;
-      font-size: 13px;
-      color: #595959;
-    }
-    .meta-item {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .meta-k {
-      font-weight: 600;
-      color: #8c8c8c;
-      font-size: 12px;
-    }
-    .color-dot {
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      border: 1px solid rgba(0, 0, 0, 0.15);
-      display: inline-block;
-    }
-
-    /* ── Seuils ── */
-    .thresholds-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 6px;
-      flex-wrap: wrap;
-      font-size: 12px;
-    }
-    .threshold {
-      padding: 2px 10px;
-      border-radius: 6px;
-      font-weight: 500;
-    }
-    .threshold.good    { background: #f6ffed; color: #389e0d; }
-    .threshold.warning { background: #fff7e6; color: #d46b08; }
-    .threshold.danger  { background: #fff2f0; color: #cf1322; }
-
-    /* ── Pipeline ── */
-    .pipeline-row {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 4px;
-    }
-    .pipeline-label {
-      padding-top: 3px;
-    }
-    .pipeline-steps {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 4px;
-      flex: 1;
-    }
-    .step-chip {
-      padding: 2px 8px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 600;
-      color: white;
-      cursor: default;
-    }
-    .step-arrow {
-      color: #d9d9d9;
-      font-size: 12px;
-    }
-
-    /* ── Avertissement ── */
-    .view-no-formula {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 12px;
-      color: #fa8c16;
-      margin-top: 4px;
-    }
-    .view-no-formula mat-icon {
-      font-size: 14px;
-      line-height: 1.4;
-    }
-  `],
+  templateUrl: './indicator-view-modal.component.html',
+  styleUrls: ['./indicator-view-modal.component.scss'],
 })
 export class IndicatorViewModalComponent {
   readonly modalData = inject(NZ_MODAL_DATA) as { indicator: IndicatorDefinition; allIndicators?: IndicatorDefinition[] };
@@ -559,18 +143,18 @@ export class IndicatorViewModalComponent {
   stepLabel(type: string): string { return STEP_LABELS[type] ?? type; }
   stepColor(type: string): string { return STEP_COLORS[type] ?? '#8c8c8c'; }
 
-  /** Pipeline de l'indicateur (partagé par toutes ses visualisations). */
+  // Pipeline de l'indicateur (partagé par toutes ses visualisations).
   vizPipeline(_viz: IndicatorVisualization): { id: string; type: string; label?: string }[] {
     return this.ind.formula?.pipeline ?? [];
   }
 
-  /** Toujours false : toutes les visualisations partagent la formule de l'indicateur. */
+  // Toujours false : toutes les visualisations partagent la formule de l'indicateur.
   usesOwnFormula(_viz: IndicatorVisualization): boolean {
     return false;
   }
 }
 
-// ── Composant principal ───────────────────────────────────────────────────────
+//  Composant principal 
 
 @Component({
   selector: 'ui-indicator-selector',
@@ -598,13 +182,15 @@ export class IndicatorSelectorComponent implements OnInit {
   @Output() indicatorsChanged = new EventEmitter<void>();
 
   /** Non-null : la vue courante est la page dédiée d'une famille - la liste est alors
-   *  restreinte à cette seule famille, affichée à plat (jamais repliée). */
+   restreinte à cette seule famille, affichée à plat (jamais repliée).
+  */
   @Input() familyNameFilter: string | null = null;
 
   allIndicators: IndicatorDefinition[] = [];
   displayRows: IndicatorDisplayRow[] = [];
   /** Cartes de l'onglet Familles (une par famille) - affichées en grille de 3, paginées à 5
-   *  lignes (15/page) via `pagedFamilyCards`. */
+   lignes (15/page) via `pagedFamilyCards`.
+  */
   familyCards: { familyName: string; members: IndicatorDefinition[] }[] = [];
   familyPageIndex = 1;
   readonly familyPageSize = 15;
@@ -650,8 +236,10 @@ export class IndicatorSelectorComponent implements OnInit {
 
   applyFilters(): void {
     if (!this.familyNameFilter) {
-      // Persiste l'état des filtres/onglet de la liste principale pour que "Retour à la
-      // liste" les restaure au lieu de repartir des valeurs par défaut.
+      /*
+      Persiste l'état des filtres/onglet de la liste principale pour que "Retour à la
+      liste" les restaure au lieu de repartir des valeurs par défaut.
+      */
       this.listState.selector.scope = this.filters.scope;
       this.listState.selector.sortBy = this.filters.sortBy;
       this.listState.selector.grouping = this.filters.grouping;
@@ -692,8 +280,10 @@ export class IndicatorSelectorComponent implements OnInit {
     }
 
     const rows = buildIndicatorDisplayRows(filtered, this.expandedFamilies);
-    // En page de famille dédiée, la ligne d'en-tête de famille est redondante avec le titre
-    // de la page : on ne garde que les membres, à plat.
+    /*
+    En page de famille dédiée, la ligne d'en-tête de famille est redondante avec le titre
+    de la page : on ne garde que les membres, à plat.
+    */
     this.displayRows = this.familyNameFilter ? rows.filter(r => r.kind !== 'family') : rows;
     this.familyCards = rows.filter((r): r is Extract<IndicatorDisplayRow, { kind: 'family' }> => r.kind === 'family');
     this.familyPageIndex = 1;
@@ -705,7 +295,8 @@ export class IndicatorSelectorComponent implements OnInit {
   }
 
   /** Clic sur une ligne de famille dans la liste principale : navigue vers sa page dédiée
-   *  plutôt que de la déplier sur place. */
+   plutôt que de la déplier sur place.
+  */
   openFamilyPage(familyName: string): void {
     this.router.navigate([`${this.routeBasePath}/indicators/selector-family`, familyName]);
   }
@@ -715,7 +306,8 @@ export class IndicatorSelectorComponent implements OnInit {
   }
 
   /** Nombre d'indicateurs de la famille affichée (indépendant des filtres recherche/tri
-   *  appliqués sur cette page, contrairement à `displayRows`). */
+   appliqués sur cette page, contrairement à `displayRows`).
+  */
   familyMemberCount(): number {
     return this.allIndicators.filter(ind => ind.familyName === this.familyNameFilter).length;
   }
@@ -779,13 +371,13 @@ export class IndicatorSelectorComponent implements OnInit {
     return VIZ_ICONS[viz] || 'widgets';
   }
 
-  // ── Choix des visualisations à afficher (par utilisateur) ─────────────────
+  //  Choix des visualisations à afficher (par utilisateur) ─
 
   isVizEnabled(indicatorId: string, vizId: string): boolean {
     return this.indicatorService.isVizEnabled(indicatorId, vizId);
   }
 
-  /** Active/désactive une visualisation pour l'utilisateur. Empêche de tout désactiver. */
+  // Active/désactive une visualisation pour l'utilisateur. Empêche de tout désactiver.
   toggleViz(indicator: IndicatorDefinition, viz: { id: string }, event: Event): void {
     event.stopPropagation();
     const all = indicator.visualizations ?? [];

@@ -5,18 +5,19 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { RabbitMQModule } from '@golevelup/nestjs-rabbitmq';
 import { IngestionService } from './ingestion.service';
 import { IngestionConsumerService, QUEUE_LEARNER, QUEUE_AGGREGATE } from './ingestion-consumer.service';
-import { IngestionController } from './ingestion.controller';
 import { IndicatorsGateway } from './indicators.gateway';
 import { IndicatorDefinition } from '../indicators/entities/indicator-definition.entity';
 import { IndicatorValue } from '../indicators/entities/indicator-value.entity';
 import { IndicatorsModule } from '../indicators/indicators.module';
-import { PLATON_EXCHANGE } from '../ingestion-relay/ingestion-relay.service';
+import { EventRulesModule } from '../event-rules/event-rules.module';
+import { PLATON_EXCHANGE } from './ingestion.constants';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([IndicatorDefinition, IndicatorValue], 'indicators'),
     EventEmitterModule.forRoot(),
     IndicatorsModule,
+    EventRulesModule,
     RabbitMQModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -43,7 +44,6 @@ import { PLATON_EXCHANGE } from '../ingestion-relay/ingestion-relay.service';
       }),
     }),
   ],
-  controllers: [IngestionController],
   providers: [IngestionService, IngestionConsumerService, IndicatorsGateway],
   exports: [IngestionService],
 })

@@ -59,66 +59,59 @@ guide :
 
 ---
 
-## 0. Correctif bloquant à faire AVANT de créer quoi que ce soit
+## 0. Événement déclencheur requis pour ce guide
 
-**Aucun des cas de ce guide ne se mettra à jour en temps réel tant que ce point
-n'est pas corrigé.** Vérifié le 2026-08-12 :
+**Tous les indicateurs de ce guide dépendent d'une règle installée depuis
+l'admin** (`/dashboard/indicators`, rôle Admin → **"Événements &
+déclencheurs"**) - aucun déclencheur n'est jamais codé en dur dans une
+migration SQL (voir `docs/ingestion.md`). La règle attendue :
+**"Exercice complet"** / `exercice.completed`, sur `SessionData.attempts_at_success`,
+mapping de contexte complet userId/courseId/activityId/sessionId. Vérifier
+que son badge affiche "Installé" avant de suivre ce guide.
 
-- Le trigger legacy (`trg_platon_outbox_session_data`, sur `SessionData.grade`)
-  écrit un événement `exercise.answered` dont le payload ne contient **pas**
-  `attempts_at_success` - inutilisable pour ces indicateurs.
-- Une règle correcte existe déjà en base (`indicator_event_rules`, événement
-  **"Exercice complet"** / `exercice.completed`, surveille bien
-  `attempts_at_success`, mapping de contexte complet userId/courseId/
-  activityId/sessionId) mais n'est **pas installée** :
-  `password authentication failed for user "postgres"`.
-
-**À faire, une seule fois :**
-
-1. Corriger `PLATON_DB_ADMIN_PASSWORD` dans `api/.env` pour qu'il corresponde
-   au vrai mot de passe superuser du Postgres utilisé (actuellement `12345678`
-   ne fonctionne pas contre le conteneur `platon_postgres` lancé).
-2. Redémarrer le backend.
-3. `/dashboard/indicators` (rôle Admin) → **"Événements & déclencheurs"** →
-   sur la ligne **"Exercice complet"** → **Installer**.
-4. Vérifier que le badge passe à "Installé" (pas d'erreur affichée).
-
-Une fois fait, **tous** les indicateurs de ce guide utilisent
+**Tous** les indicateurs de ce guide utilisent
 `requiredEvents: ["exercice.completed"]` - ne créez pas de règle
-supplémentaire, ni ne réutilisez `exercise.answered` (payload incompatible).
+supplémentaire pour ce même besoin, ni ne réutilisez `exercise.answered`
+(événement historique, payload sans `attempts_at_success`, incompatible avec
+ces indicateurs).
 
-> Sans ce correctif, les indicateurs se calculent quand même à la première
-> consultation ou via **"Recalculer"** (icône replay, table de gestion) - mais
-> jamais automatiquement quand un étudiant répond à un exercice.
+> Sans cette règle installée, les indicateurs se calculent quand même à la
+> première consultation ou via **"Recalculer"** (icône replay, table de
+> gestion) - mais jamais automatiquement quand un étudiant répond à un
+> exercice.
 
 ---
 
 ## Tableau des 22 cas
 
-| # | `contextType` | Périmètre | Déclinaison | Statut en base (2026-08-12) |
-|---|---|---|---|---|
-| 1 | `learner` | 1 activité | moyenne globale | existe (event à corriger) |
-| 2 | `learner` | 1 activité | par exercice | à créer |
-| 3 | `learner` | 1 cours entier | moyenne globale | à créer |
-| 4 | `learner` | 1 cours entier | par activité | à créer |
-| 5 | `group` | 1 activité | moyenne globale | à créer |
-| 6 | `group` | 1 activité | par exercice | à créer |
-| 7 | `group` | 1 activité | répartition par exercice | à créer (voir limite 2D) |
-| 8 | `group` | 1 activité | répartition tous exercices | à créer |
-| 9 | `group` | 1 cours entier | moyenne globale | à créer |
-| 10 | `group` | 1 cours entier | par activité | à créer |
-| 11 | `group` | 1 cours entier | répartition par activité | à créer (voir limite 2D) |
-| 12 | `group` | 1 cours entier | répartition toutes activités | à créer |
-| 13 | `activity` | tous groupes | moyenne globale | existe |
-| 14 | `activity` | tous groupes | par exercice | existe une version approchante (`sum` au lieu d'`avg`) |
-| 15 | `activity` | tous groupes | répartition par exercice | à créer (nominatif + limite 2D) |
-| 16 | `activity` | tous groupes | répartition tous exercices | à créer (nominatif) |
-| 17 | `course` | tout le cours | moyenne globale | existe une version approchante (regroupée par ressource, pas une vraie moyenne globale) |
-| 18 | `course` | tout le cours | par activité | à créer |
-| 19 | `course` | tout le cours | répartition par activité | à créer (nominatif + limite 2D) |
-| 20 | `course` | tout le cours | répartition toutes activités | à créer (nominatif) |
-| 21 | `teacher` | plateforme entière | moyenne globale (seule variante possible) | à créer |
-| 22 | `admin` | plateforme entière | moyenne globale (seule variante possible) | à créer |
+Les 22 cas existent tous en base, actifs, avec `requiredEvents:
+["exercice.completed"]` (sauf le cas 3, volontairement sans déclencheur -
+recalcul périodique) :
+
+| # | `contextType` | Périmètre | Déclinaison |
+|---|---|---|---|
+| 1 | `learner` | 1 activité | moyenne globale |
+| 2 | `learner` | 1 activité | par exercice |
+| 3 | `learner` | 1 cours entier | moyenne globale |
+| 4 | `learner` | 1 cours entier | par activité |
+| 5 | `group` | 1 activité | moyenne globale |
+| 6 | `group` | 1 activité | par exercice |
+| 7 | `group` | 1 activité | répartition par exercice |
+| 8 | `group` | 1 activité | répartition tous exercices |
+| 9 | `group` | 1 cours entier | moyenne globale |
+| 10 | `group` | 1 cours entier | par activité |
+| 11 | `group` | 1 cours entier | répartition par activité |
+| 12 | `group` | 1 cours entier | répartition toutes activités |
+| 13 | `activity` | tous groupes | moyenne globale |
+| 14 | `activity` | tous groupes | par exercice |
+| 15 | `activity` | tous groupes | répartition par exercice |
+| 16 | `activity` | tous groupes | répartition tous exercices |
+| 17 | `course` | tout le cours | moyenne globale |
+| 18 | `course` | tout le cours | par activité |
+| 19 | `course` | tout le cours | répartition par activité |
+| 20 | `course` | tout le cours | répartition toutes activités |
+| 21 | `teacher` | plateforme entière | moyenne globale (seule variante possible) |
+| 22 | `admin` | plateforme entière | moyenne globale (seule variante possible) |
 
 **Limite 2D** (cas 7, 11, 15, 19) : aucun type de visualisation actuel
 (`card`/`gauge`/`line-chart`/`bar-chart`/`histogram`) ne représente nativement
@@ -415,9 +408,6 @@ lisible que le cas 10.
 }
 ```
 
-> **Aucun de ces 8 cas (5 à 12) n'existe encore en base** - à créer un par un
-> si besoin, pas de recette automatique dans le builder pour l'instant.
-
 ---
 
 ## Cas 13 à 16 - `activity` (tous rôles, tous groupes confondus)
@@ -450,8 +440,6 @@ référence :
 
 ### Cas 14 - détaillée par exercice
 
-Une version existe (`Tentatives v2 - Activité`) mais fait un `sum`, pas une
-`avg` - à corriger ou recréer proprement :
 ```json
 {
   "name": "Tentatives avant réussite - Activité (par exercice)",

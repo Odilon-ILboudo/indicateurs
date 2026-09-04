@@ -129,8 +129,9 @@ export class CoursesService {
     return { resource: this.mapCourse(row, permissions) };
   }
 
-  /** Réplique la règle PLaTon : update = owner OU admin global OU membre "teacher" du cours.
-   *  delete = owner OU admin global uniquement (teacher membre ne suffit pas). */
+  /* Réplique la règle PLaTon : update = owner OU admin global OU membre "teacher" du cours.
+   delete = owner OU admin global uniquement.
+  */
   private async computeCoursePermissions(
     ownerId: string,
     courseId: string,
@@ -221,7 +222,7 @@ export class CoursesService {
     };
   }
 
-  /** Un seul membre, hydraté avec les infos utilisateur (même forme que listMembers). */
+  // Un seul membre, hydraté avec les infos utilisateur (même forme que listMembers).
   private async getMemberById(memberId: string): Promise<Record<string, unknown> | null> {
     const rows: Record<string, unknown>[] = await this.dataSource.query(
       `SELECT
@@ -512,9 +513,11 @@ export class CoursesService {
       permissions: {
         answer: true,
         update: hasWritePermission,
-        // Un étudiant doit pouvoir consulter les statistiques de ses propres
-        // activités, pas seulement l'enseignant - contrairement à update/
-        // viewResource, qui restent réservés à l'admin/enseignant du cours.
+        /*
+        Un étudiant doit pouvoir consulter les statistiques de ses propres
+        activités, pas seulement l'enseignant; contrairement à update/
+        viewResource, qui restent réservés à l'admin/enseignant du cours.
+        */
         viewStats: true,
         viewResource: hasWritePermission,
       },
@@ -687,7 +690,7 @@ export class CoursesService {
       [activityId, startDate, endDate],
     );
 
-    // Group by user, build nbSuccess map: date → count
+    // Group by user, build nbSuccess map: date - count
     const userMap = new Map<string, { id: string; username: string; firstName: string; lastName: string; nbSuccess: Record<string, number> }>();
     for (const row of rows) {
       const id = row.id as string;

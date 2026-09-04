@@ -50,7 +50,7 @@ et `indicators` si besoin de vraies données de test - voir point suivant).
 
 ### 4. Cas particulier de la base `indicators`
 
-Le schéma se construit désormais automatiquement via les migrations TypeORM
+Le schéma se construit automatiquement via les migrations TypeORM
 (service Docker `migrate`, voir [docker.md](docker.md#schéma-de-la-base-indicators-migrations-typeorm)) -
 inutile de dumper/restaurer `indicators` juste pour obtenir le schéma. Cette
 procédure ne reste utile que pour récupérer de **vraies données** de test déjà

@@ -1,0 +1,187 @@
+<div class="schema-explorer">
+
+  <!-- Sidebar gauche : liste des tables -->
+  <aside class="schema-sidebar">
+    <div class="schema-search">
+      <input nz-input [(ngModel)]="schemaSearch" placeholder="Rechercher une table…" nzSize="small" />
+    </div>
+    <ul class="schema-table-list">
+      <li *ngFor="let t of filteredSchemaTables"
+          class="schema-table-item"
+          [class.schema-table-active]="t.name === schemaSelected?.name"
+          (click)="selectSchemaTable(t.name)">
+        <span nz-icon nzType="table" style="margin-right:6px;opacity:.6"></span>
+        {{ t.name }}
+        <nz-badge *ngIf="schemaRelationsFor(t.name).length > 0"
+          [nzCount]="schemaRelationsFor(t.name).length"
+          nzSize="small"
+          style="margin-left:auto">
+        </nz-badge>
+      </li>
+    </ul>
+  </aside>
+
+  <!-- Zone principale -->
+  <div class="schema-main" *ngIf="schemaSelected; else noTableSelected">
+
+    <!-- En-tête table -->
+    <div class="schema-table-header">
+      <span nz-icon nzType="database" style="font-size:20px;color:#1890ff"></span>
+      <h3>{{ schemaSelected.name }}</h3>
+      <nz-tag nzColor="blue">{{ schemaSelected.columns.length }} colonnes</nz-tag>
+      <nz-tag *ngIf="schemaFkOut(schemaSelected.name).length > 0" nzColor="orange">
+        {{ schemaFkOut(schemaSelected.name).length }} FK sortantes
+      </nz-tag>
+      <nz-tag *ngIf="schemaFkIn(schemaSelected.name).length > 0" nzColor="green">
+        {{ schemaFkIn(schemaSelected.name).length }} FK entrantes
+      </nz-tag>
+    </div>
+
+    <!-- Onglets Vue graphique / Colonnes & relations -->
+    <nz-tabset [(nzSelectedIndex)]="schemaViewTab" nzSize="small" style="margin-top:4px">
+
+      <!--  Onglet 1 : Colonnes & relations -->
+      <nz-tab nzTitle="Colonnes & relations">
+        <div class="schema-section">
+          <table class="schema-col-table">
+            <thead>
+              <tr><th>Nom</th><th>Type</th><th>Nullable</th><th>Lien FK</th></tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let col of schemaSelected.columns">
+                <td class="col-name">
+                  <span *ngIf="isSchemaFkCol(schemaSelected.name, col.name)" class="fk-dot" nz-tooltip="Clé étrangère">🔗</span>
+                  {{ col.name }}
+                </td>
+                <td class="col-type">{{ col.type }}</td>
+                <td class="col-null">
+                  <span *ngIf="col.nullable" style="color:#fa8c16">nullable</span>
+                  <span *ngIf="!col.nullable" style="color:#52c41a">NOT NULL</span>
+                </td>
+                <td class="col-fk">
+                  <ng-container *ngFor="let rel of schemaFkForCol(schemaSelected.name, col.name)">
+                    <span class="fk-link" (click)="selectSchemaTable(rel.targetTable)">
+                      → {{ rel.targetTable }}.{{ rel.targetColumn }}
+                    </span>
+                  </ng-container>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="schema-section" *ngIf="schemaFkOut(schemaSelected.name).length > 0">
+          <div class="schema-section-title"><span nz-icon nzType="arrow-right"></span> Références vers</div>
+          <div class="schema-rel-list">
+            <div *ngFor="let rel of schemaFkOut(schemaSelected.name)" class="schema-rel-item">
+              <span class="rel-col">{{ rel.sourceColumn }}</span>
+              <span class="rel-arrow">→</span>
+              <span class="rel-table" (click)="selectSchemaTable(rel.targetTable)">{{ rel.targetTable }}</span>
+              <span class="rel-col-target">.{{ rel.targetColumn }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="schema-section" *ngIf="schemaFkIn(schemaSelected.name).length > 0">
+          <div class="schema-section-title"><span nz-icon nzType="arrow-left"></span> Référencée par</div>
+          <div class="schema-rel-list">
+            <div *ngFor="let rel of schemaFkIn(schemaSelected.name)" class="schema-rel-item">
+              <span class="rel-table" (click)="selectSchemaTable(rel.sourceTable)">{{ rel.sourceTable }}</span>
+              <span class="rel-col-target">.{{ rel.sourceColumn }}</span>
+              <span class="rel-arrow">→</span>
+              <span class="rel-col">{{ rel.targetColumn }}</span>
+            </div>
+          </div>
+        </div>
+      </nz-tab>
+
+      <!--  Onglet 2 : Vue graphique  -->
+      <nz-tab nzTitle="Vue graphique">
+        <ng-container *ngIf="schemaDiagram as diag; else noRelations">
+          <div class="diagram-container">
+            <svg [attr.width]="diag.width" [attr.height]="diag.height" [attr.viewBox]="diag.viewBox">
+              <defs>
+                <marker id="arrow-out" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                  <path d="M0,0 L0,6 L8,3 z" fill="#1890ff"/>
+                </marker>
+                <marker id="arrow-in" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                  <path d="M0,0 L0,6 L8,3 z" fill="#52c41a"/>
+                </marker>
+              </defs>
+              <g class="diag-edges">
+                <path *ngFor="let edge of diag.edges"
+                  [attr.d]="edge.path"
+                  [attr.stroke]="edge.isIncoming ? '#52c41a' : '#1890ff'"
+                  stroke-width="1.5" fill="none" stroke-dasharray="5,3"
+                  [attr.marker-end]="edge.isIncoming ? 'url(#arrow-in)' : 'url(#arrow-out)'">
+                </path>
+              </g>
+              <g *ngFor="let node of diag.nodes" class="diag-node"
+                 [style.transform]="'translate(' + node.x + 'px,' + node.y + 'px)' + (hoveredDiagNode === node.name ? ' scale(1.03)' : '')"
+                 (mouseenter)="hoveredDiagNode = node.name"
+                 (mouseleave)="hoveredDiagNode = null"
+                 (click)="selectSchemaTable(node.name)" style="cursor:pointer">
+                <rect [attr.width]="node.width" [attr.height]="node.height"
+                  rx="6" ry="6"
+                  [attr.fill]="node.isCenter ? '#e6f7ff' : '#fafafa'"
+                  [attr.stroke]="node.isCenter ? '#1890ff' : '#d9d9d9'"
+                  [attr.stroke-width]="node.isCenter ? 2 : 1">
+                </rect>
+                <rect [attr.width]="node.width" height="30" rx="6" ry="6"
+                  [attr.fill]="node.isCenter ? '#1890ff' : (node.isIncoming ? '#52c41a' : '#8c8c8c')">
+                </rect>
+                <rect [attr.width]="node.width" y="16" height="14"
+                  [attr.fill]="node.isCenter ? '#1890ff' : (node.isIncoming ? '#52c41a' : '#8c8c8c')">
+                </rect>
+                <text x="8" y="20" font-size="12" font-weight="700" fill="white" font-family="monospace">
+                  {{ node.name.length > 22 ? node.name.slice(0, 21) + '…' : node.name }}
+                </text>
+                <g *ngFor="let col of node.columns; let ci = index">
+                  <line x1="0" [attr.y1]="34 + ci * 22"
+                        [attr.x2]="node.width" [attr.y2]="34 + ci * 22"
+                        stroke="#f0f0f0" stroke-width="1">
+                  </line>
+                  <rect *ngIf="col.isFK" x="0" [attr.y]="34 + ci * 22"
+                        [attr.width]="node.width" height="22" fill="#fff7e6" opacity="0.8">
+                  </rect>
+                  <text x="6" [attr.y]="34 + ci * 22 + 15" font-size="10"
+                        [attr.fill]="col.isPK ? '#722ed1' : col.isFK ? '#fa8c16' : '#8c8c8c'">
+                    {{ col.isPK ? '🔑' : col.isFK ? '🔗' : '·' }}
+                  </text>
+                  <text x="24" [attr.y]="34 + ci * 22 + 15" font-size="11" font-family="monospace"
+                        [attr.fill]="col.isFK ? '#fa8c16' : '#262626'"
+                        [attr.font-weight]="col.isPK ? '700' : '400'">
+                    {{ col.name.length > 18 ? col.name.slice(0, 17) + '…' : col.name }}
+                  </text>
+                  <text [attr.x]="node.width - 4" [attr.y]="34 + ci * 22 + 15"
+                        font-size="10" font-family="monospace" fill="#bbb" text-anchor="end">
+                    {{ col.shortType }}
+                  </text>
+                </g>
+              </g>
+            </svg>
+          </div>
+        </ng-container>
+        <ng-template #noRelations>
+          <div style="padding:24px;text-align:center;color:#bbb">
+            <span nz-icon nzType="deployment-unit" style="font-size:32px"></span>
+            <p style="margin-top:8px">Aucune relation FK pour cette table</p>
+          </div>
+        </ng-template>
+      </nz-tab>
+
+    </nz-tabset>
+
+  </div>
+
+  <ng-template #noTableSelected>
+    <div class="schema-main schema-empty">
+      <span nz-icon nzType="database" style="font-size:48px;color:#d9d9d9"></span>
+      <p>Sélectionnez une table dans la liste</p>
+    </div>
+  </ng-template>
+
+  <!-- Spinner chargement -->
+  <div *ngIf="schemaLoading" class="schema-loading">
+    <nz-spin nzSimple></nz-spin>
+  </div>
+
+</div>

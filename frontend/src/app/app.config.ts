@@ -1,4 +1,3 @@
-// web/src/app/app.config.ts
 import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
 import { AuthProvider } from './core/auth/auth.types';
 import { RemoteAuthProvider } from './core/auth/remote-auth.provider';
@@ -6,7 +5,6 @@ import { provideRouter, withRouterConfig } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
-import { indicatorInterceptor } from './core/interceptors/indicator.interceptor';
 import { ROUTE_BASE_PATH } from './core/tokens/route-base-path.token';
 import { appRoutes } from './app.routes';
 
@@ -30,7 +28,7 @@ export const appConfig: ApplicationConfig = {
     { provide: ROUTE_BASE_PATH, useValue: '/dashboard' },
     provideRouter(appRoutes, withRouterConfig({ paramsInheritanceStrategy: 'always' })),
     provideHttpClient(
-      withInterceptors([authInterceptor, indicatorInterceptor])
+      withInterceptors([authInterceptor])
     ),
     provideAnimationsAsync(),
     { provide: NZ_I18N, useValue: fr_FR },

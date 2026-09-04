@@ -423,32 +423,8 @@
         }
       }
       
-      .trend-info {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        margin-top: 16px;
-        
-        mat-icon {
-          font-size: 20px;
-          
-          &.trend-up {
-            color: #52c41a;
-          }
-          
-          &.trend-down {
-            color: #f5222d;
-          }
-        }
-        
-        span {
-          font-size: 14px;
-          color: #666;
-        }
-      }
     }
-    
+
     .chart-viz {
       .chart {
         height: 400px;

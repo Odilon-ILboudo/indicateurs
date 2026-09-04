@@ -175,10 +175,11 @@ export class EventRuleManagerComponent implements OnInit {
   private readonly messageSvc = inject(NzMessageService);
   private readonly selfRef = inject(NzModalRef, { optional: true });
 
-  /** Referme cette modale, attend la FIN réelle de son animation de fermeture (via
-   *  `afterClose`, pas un simple `setTimeout`) avant d'ouvrir la modale imbriquée - sinon les
-   *  deux overlays se chevauchent brièvement pendant que celui de la première s'estompe.
-   *  Rouvre celle-ci à la fermeture de la modale imbriquée. */
+  /* Referme cette modale, attend la FIN réelle de son animation de fermeture (via
+   `afterClose`, pas un simple `setTimeout`) avant d'ouvrir la modale imbriquée - sinon les
+   deux overlays se chevauchent brièvement pendant que celui de la première s'estompe.
+   Rouvre celle-ci à la fermeture de la modale imbriquée.
+  */
   private openNested(factory: () => Parameters<NzModalService['create']>[0]): void {
     const openNext = () => {
       const ref = this.modalSvc.create(factory());

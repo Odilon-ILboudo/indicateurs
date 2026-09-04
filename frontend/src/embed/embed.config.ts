@@ -1,8 +1,10 @@
-// Fournisseurs du point d'entrée embarqué - reprend app.config.ts sans provideZoneChangeDetection
-// (zone.js fourni via polyfills à la place). AuthProvider et provideAnimationsAsync() sont
-// nécessaires même embarqué : DashboardSettingsService et ng-zorro en dépendent. LocationStrategy
-// utilise MemoryLocationStrategy plutôt que withHashLocation(), qui écrirait dans
-// window.location et écraserait l'URL de la page hôte (voir memory-location.strategy.ts).
+/*
+Fournisseurs du point d'entrée embarqué - reprend app.config.ts sans provideZoneChangeDetection
+(zone.js fourni via polyfills à la place). AuthProvider et provideAnimationsAsync() sont
+nécessaires même embarqué : DashboardSettingsService et ng-zorro en dépendent. LocationStrategy
+utilise MemoryLocationStrategy plutôt que withHashLocation(), qui écrirait dans
+window.location et écraserait l'URL de la page hôte (voir memory-location.strategy.ts).
+*/
 import { ApplicationConfig } from '@angular/core';
 import { LocationStrategy } from '@angular/common';
 import { provideRouter, withRouterConfig } from '@angular/router';
@@ -15,7 +17,6 @@ import { provideNzIcons } from 'ng-zorro-antd/icon';
 import { provideEchartsCore } from 'ngx-echarts';
 
 import { authInterceptor } from '../app/core/interceptors/auth.interceptor';
-import { indicatorInterceptor } from '../app/core/interceptors/indicator.interceptor';
 import { EMBEDDED_MODE } from '../app/core/tokens/embedded-mode.token';
 import { ROUTE_BASE_PATH } from '../app/core/tokens/route-base-path.token';
 import { NZ_ICONS_LIST } from '../app/shared/nz-icons';
@@ -33,7 +34,7 @@ export const embedConfig: ApplicationConfig = {
     { provide: AuthProvider, useClass: RemoteAuthProvider },
     { provide: LocationStrategy, useClass: MemoryLocationStrategy },
     provideRouter(embedRoutes, withRouterConfig({ paramsInheritanceStrategy: 'always' })),
-    provideHttpClient(withInterceptors([authInterceptor, indicatorInterceptor])),
+    provideHttpClient(withInterceptors([authInterceptor])),
     provideAnimationsAsync(),
     { provide: NZ_I18N, useValue: fr_FR },
     provideNzIcons(NZ_ICONS_LIST),

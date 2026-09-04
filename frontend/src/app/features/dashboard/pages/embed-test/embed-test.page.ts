@@ -1,10 +1,12 @@
 import { AfterViewInit, Component, CUSTOM_ELEMENTS_SCHEMA, ElementRef, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-// Page de diagnostic, non liée dans la navigation (URL directe /dashboard/embed-test) : monte
-// <indicateurs-app> à l'intérieur de cette app standalone, pour vérifier la coexistence de deux
-// apps Angular sur une seule page. Avant de tester : `ng build indicateurs-embed` et copier son
-// dist/indicateurs-embed/browser/* dans dist/indicateurs/browser/embed-assets/.
+/*
+Page de diagnostic, non liée dans la navigation (URL directe /dashboard/embed-test) : monte
+<indicateurs-app> à l'intérieur de cette app standalone, pour vérifier la coexistence de deux
+apps Angular sur une seule page. Avant de tester : `ng build indicateurs-embed` et copier son
+dist/indicateurs-embed/browser/* dans dist/indicateurs/browser/embed-assets/.
+*/
 @Component({
   standalone: true,
   selector: 'app-embed-test',

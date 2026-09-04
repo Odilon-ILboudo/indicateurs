@@ -67,7 +67,7 @@
           </ng-container>
         </ng-container>
 
-        <!-- ── Section Indicateurs globaux de l'activité ───────────────── -->
+        <!--  Section Indicateurs globaux de l'activité-->
         <nz-divider [nzText]="globalTitle" nzOrientation="left"></nz-divider>
         <ng-template #globalTitle>
           <span class="section-divider-btn" (click)="collapsedGlobal = !collapsedGlobal">
@@ -108,7 +108,7 @@
           </ng-container>
         </ng-container>
 
-        <!-- ── Section Indicateurs par groupe ─────────────── -->
+        <!--  Section Indicateurs par groupe -->
         <ng-container *ngIf="!indicatorsLoading && groupIndicators.length > 0 && context.activity">
           <nz-divider [nzText]="groupTitle" nzOrientation="left"></nz-divider>
           <ng-template #groupTitle>
