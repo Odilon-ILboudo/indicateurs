@@ -1,6 +1,6 @@
 # Indicateurs - Documentation complète du projet
 
-Ce document décrit l'état réel du dépôt `indicateurs/` : architecture, modèle de
+Ce document décrit le dépôt `indicateurs/` : architecture, modèle de
 données, moteur de calcul DSL, routes API, frontend, sécurité et limites connues.
 L'objectif est qu'une lecture complète de ce fichier suffise à comprendre le
 fonctionnement global du projet sans avoir à parcourir tout le code source.
@@ -9,15 +9,15 @@ fonctionnement global du projet sans avoir à parcourir tout le code source.
 > - [`docs/guide.md`](docs/guide.md) - guide pas-à-pas pour créer et tester chaque type
 >   d'indicateur (les 6 `contextType`, toutes les fonctionnalités du DSL).
 > - [`docs/parcours-donnees.md`](docs/parcours-donnees.md) - pour chaque route listée en
->   section 9, trace fichier par fichier et ligne par ligne le chemin complet
+>   §9, trace fichier par fichier et ligne par ligne le chemin complet
 >   composant frontend → service → contrôleur → service backend → accès BDD.
 > - [`docs/integration-indicateurs.md`](docs/integration-indicateurs.md) et
 >   [`docs/integration-platon.md`](docs/integration-platon.md) - le second point
->   d'entrée de build (`indicateurs-embed`, voir section 10 "Point d'entrée embarqué"),
+>   d'entrée de build (`indicateurs-embed`, voir §10 "Point d'entrée embarqué"),
 >   qui expose `<indicateurs-app>` comme Web Component intégrable dans un LMS
 >   hôte (PLaTon aujourd'hui, potentiellement un autre demain).
 > - [`docs/integration-platon-relay.md`](docs/integration-platon-relay.md) - le
->   relais d'événements (`platon_outbox_events` → RabbitMQ, voir section 6bis et
+>   relais d'événements (`platon_outbox_events` → RabbitMQ, voir §6bis et
 >   `docs/ingestion.md` étape 2), qui vit côté LMS hôte, pas dans ce dépôt ;
 >   fichiers prêts à copier dans `docs/platon-integration/`.
 
@@ -88,7 +88,7 @@ INDICATORS_DB_NAME=
 # Optionnel - identifiant Postgres à privilèges élevés (superuser, ou propriétaire
 # des tables PLaTon concernées), utilisé uniquement pour exécuter le DDL d'installation
 # des déclencheurs dynamiques (section 6bis / event-rules). Sans ça, l'installation
-# tente la connexion applicative habituelle.
+# tente la connexion applicative habituelle et échouera.
 PLATON_DB_ADMIN_USERNAME=
 PLATON_DB_ADMIN_PASSWORD=
 
@@ -96,9 +96,6 @@ NODE_ENV=development
 PORT=3001
 JWT_SECRET=
 ```
-
-Redis est configuré (`redis: { host, port, password }`, valeurs par défaut
-`localhost:6379`) mais **n'est utilisé nulle part actuellement**.
 
 ### Lancer le projet
 
@@ -799,7 +796,7 @@ DELETE /indicators/:id/feedback/:feedbackId - (admin)
 > (admin) = protégé par `AuthGuard` + `AdminGuard` (rôle `admin` requis, voir
 > section 12). Les autres routes d'`indicators` restent ouvertes - y compris
 > plusieurs qui exécutent une formule DSL (`preview`, `preview-steps`,
-> `compute-view`, `snapshots`) : limite de sécurité connue, voir `docs/js.md` section 3.
+> `compute-view`, `snapshots`) : limite de sécurité connue, voir `docs/js.md` §3.
 >
 > (admin ou enseignant*) : pas d'`AdminGuard` sur ces deux routes - seul
 > `AuthGuard` s'applique, le contrôle fin (admin **ou** enseignant avec droit
@@ -1112,7 +1109,7 @@ Doit toujours être posé **après** `AuthGuard`
 (`@UseGuards(AuthGuard, IndicatorVisibilityGuard)`) : lit le rôle réel de
 `request.user.id` en base PLaTon locale (jamais un rôle envoyé par le
 client) et applique la même règle que `RoleService.canSeeIndicatorContext`
-côté front (section 8), mais pour de vrai - pour que la restriction de rôle/contexte
+côté front (§8), mais pour de vrai - pour que la restriction de rôle/contexte
 tienne aussi face à un appel API direct, pas seulement via l'interface
 Angular. Posé sur
 `getIndicatorValues`/`computeView`/`getSnapshots`/`createSnapshot`
@@ -1123,10 +1120,10 @@ Angular. Posé sur
 
 | Zone | Protection actuelle |
 |---|---|
-| Permissions cours/activités | calculées (owner/admin/teacher membre), voir section 9 |
-| Permissions ressources | calculées en lecture (owner/admin/membre de cercle), voir section 9 |
+| Permissions cours/activités | calculées (owner/admin/teacher membre), voir §9 |
+| Permissions ressources | calculées en lecture (owner/admin/membre de cercle), voir §9 |
 | Mutations indicateurs/event-types | rôle `admin` réellement vérifié (`AdminGuard`) |
-| Visibilité des indicateurs par rôle/contexte | rôle réel vérifié (`IndicatorVisibilityGuard`), voir section 8 |
+| Visibilité des indicateurs par rôle/contexte | rôle réel vérifié (`IndicatorVisibilityGuard`), voir §8 |
 | Préférences utilisateur | `userId` toujours forcé à `request.user.id`, jamais accepté depuis le client |
 | Session expirée | 401 → `auth.interceptor.ts` vide le `localStorage` et redirige vers `/authentification` |
 

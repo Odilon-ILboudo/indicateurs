@@ -2,7 +2,7 @@
 
 ## Principe général
 
-Le microservice indicateurs s'appuie sur l'infrastructure Docker de PLaTon (PostgreSQL, Redis) via le réseau partagé `platon-network`. Il apporte uniquement ce qui lui est propre : RabbitMQ, son API NestJS et son frontend Angular.
+Le microservice indicateurs s'appuie sur l'infrastructure Docker de PLaTon (PostgreSQL) via le réseau partagé `platon-network`. Il apporte uniquement ce qui lui est propre : RabbitMQ, son API NestJS et son frontend Angular.
 
 **Prérequis** : le projet PLaTon doit tourner (`bin/docker/up.sh` dans le dossier `platon/`).
 
