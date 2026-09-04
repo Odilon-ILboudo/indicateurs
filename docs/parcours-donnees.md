@@ -215,16 +215,21 @@ demande via `computeView()` lorsque l'utilisateur les affiche - voir C.
       toujours défini ici (étape 5).
    10. Retourne `{ value, structuredValue, metadata }`.
 
-### B.3 Sélection de visualisation - `selectViz`
+### B.3 Sélection de visualisation - modale de config
 
-1. Clic sur un `.viz-chip` (template `indicator-card.component.html`,
-   visible si `visibleVisualizations.length > 1`) → `selectViz(viz, event)`
-   `indicator-card.component.ts`.
-2. `indicatorService.setVizPreference(environment.defaultUserId, indicator.id, viz.id)`
+1. Clic sur l'icône crayon (template `indicator-card.component.html`) →
+   `openConfigModal(event)` (`indicator-card.component.ts`) ouvre
+   `IndicatorConfigModalComponent` (pas de chips de sélection directement sur
+   la carte).
+2. À la validation (`nzOnOk`) → `saveVizVisibility(componentInstance, modal)` :
+   `getCurrentUserId()` (`core/auth/current-user.ts`) résout l'utilisateur
+   courant, puis `indicatorService.setVizPreference(userId, indicator.id, chosenVizId)`
    (`indicator.service.ts`) → **`PATCH /api/preferences/:indicatorId?userId=`**
    body `{activeVizId: viz.id}` (fire-and-forget) → `user-preferences.controller.ts`
    `updatePreference` → `user-preferences.service.ts` (voir D.2 pour
-   la cascade complète de `updatePreference`).
+   la cascade complète de `updatePreference`). La même méthode appelle aussi
+   `setEnabledVizIds(userId, indicator.id, allVizIds)` pour le masquage
+   sélectif de visualisations (voir D.2).
 3. Re-`loadValue()` → relance B.1 ou B.2 selon le `scope`, avec le
    nouveau `vizId`.
 
@@ -264,7 +269,7 @@ parent (voir F pour `from: 'activity'` / `from: 'group-snapshot'`).
    - Si `canCompute && activeViz` → `computeViz(activeViz)`.
 3. `onVizTabChange(index)` (changement d'onglet `NzTabs`,
    `indicator-detail.component.html`) :
-   - `indicatorService.setVizPreference(environment.defaultUserId, indicator.id, viz.id)`
+   - `indicatorService.setVizPreference(getCurrentUserId(), indicator.id, viz.id)`
      → **`PATCH /api/preferences/:indicatorId?userId=`** body
      `{activeVizId}` - même endpoint que B.3 → D.2.
    - Si pas encore calculé pour cette viz → `computeViz(viz)`.
@@ -355,9 +360,11 @@ Méthode privée appelée par `createPreference` (POST) et
   `calculateAndStoreValue`).
 - **Masquage sélectif** (`enabledVizIds`) : `indicator-selector.component.ts`
   `toggleViz(indicator, viz, event)` (clic sur les chips de visualisation du
-  tableau) → `indicatorService.setEnabledVizIds(environment.defaultUserId, indicator.id, persisted)`
-  (`indicator.service.ts`) → **`PATCH /api/preferences/:indicatorId?userId=`**
+  tableau) → `indicatorService.setEnabledVizIds(getCurrentUserId(), indicator.id, persisted)`
+  (`indicator.service.ts`, `getCurrentUserId()` depuis `core/auth/current-user.ts`)
+  → **`PATCH /api/preferences/:indicatorId?userId=`**
   body `{enabledVizIds}` (fire-and-forget) → même cascade `updatePreference`.
+  Même mécanisme depuis `IndicatorConfigModalComponent` (voir B.3).
 
 ### D.3 Suppression de préférence
 
@@ -786,8 +793,8 @@ Backend : `courses.controller.ts` `search` (params `search`, `members`,
     "CourseMembers" cm LEFT JOIN "Users" u ON u.id = cm.user_id WHERE ...
     ORDER BY cm.role, u.last_name ASC` (tables `CourseMembers`, `Users`).
   - `addMembers`/`remove`/`updateRole` (`members.page.ts`) →
-    `presenter.addMember`/`deleteMember`/`updateMemberRole` → **stubs no-op**
-    (`course-browser.ts`).
+    `presenter.createMember`/`deleteMember`/`updateMemberRole` → **stubs
+    no-op** (`course-browser/course.service.ts`).
   - `features/courses/course/students/students.page.ts` est un simple
     wrapper qui réutilise `CourseMembersPage`.
 
@@ -811,9 +818,9 @@ Backend : `courses.controller.ts` `search` (params `search`, `members`,
     JOIN "CourseMembers" cm ON cm.user_id = cgm.user_id AND cm.course_id =
     $1 WHERE cgm.group_id = $2 ORDER BY u.last_name ASC, u.first_name ASC`
     (mapping en mémoire).
-  - `updateGroupName`/`removeGroupMember`/`addGroupMember`/`addGroup`/
+  - `updateGroupName`/`deleteGroupMember`/`addGroupMember`/`addCourseGroup`/
     `deleteGroup` (`groups.page.ts`) → tous **stubs no-op** côté
-    `course-browser.ts`.
+    `course-browser/course.service.ts`.
 
 ### G.4 Page activité - résultats, détail, CSV
 
@@ -878,61 +885,45 @@ Backend : `courses.controller.ts` `search` (params `search`, `members`,
 
 ---
 
-## H - Ressources
+## H - Ressources (backend seul, sans page frontend consommatrice)
 
 Module `api/src/modules/features/resources/` (`@Controller('v1/resources')`
 → `/api/v1/resources`, `@UseGuards(AuthGuard)` sur tout le contrôleur - voir
-readme.md section 12), même pattern SQL brut sur `'platon'`. Frontend :
-`ResourceService` (`platon-stubs/resource-browser.ts`,
-`const API = ${environment.apiUrl}/v1`) via
-`features/resources/resource/resource.presenter.ts` (`ResourcePresenter`).
-Là aussi, la plupart des opérations d'écriture (`update`, `delete`, `join`,
-`duplicate`, `watch`...) sont des **stubs no-op** `of(undefined)`.
+readme.md section 12), même pattern SQL brut sur `'platon'`. **Aucune page du
+frontend actuel n'appelle ce module** : il n'existe pas de
+`features/resources/` côté frontend (le stub `platon-stubs/resource-browser/`
+présent dans l'arborescence n'a aucun rapport - c'est un composant générique
+de liste `nge-ui-list`, voir readme.md section 3.3). Le contrôleur reste
+documenté ci-dessous pour référence de l'API exposée, au cas où un écran
+viendrait un jour le consommer.
 
-### H.1 Page de recherche - `features/resources/resources.page.ts`
+### H.1 Routes exposées
 
-`ngOnInit()` :
-
-- `Promise.all([...])` :
-  - `resourceService.tree()` → `resource-browser.ts` →
-    **`GET /api/v1/resources/tree`** → `resources.controller.ts`
-    `getTree` → `resources.service.ts` `getCircleTree` :
-    `SELECT id, name, parent_id AS "parentId" FROM "Resources" WHERE type =
-    'CIRCLE' AND personal = false ORDER BY name ASC`, arbre
-    construit en mémoire par `buildTree`. Retourne soit la racine
-    unique, soit `{ id: 'root', name: 'Cercles', children: tree }`.
-  - `resourceService.circle(user.username)` →
-    `resource-browser.ts` → **`GET /api/v1/resources/user-circle`**
-    (le paramètre `username` n'est pas utilisé pour construire l'appel ;
-    l'ancien `?userId=` client est de toute façon ignoré côté backend) →
-    `resources.controller.ts` `getUserCircle` (lit `request.user.id`, posé
-    par `AuthGuard`) → `resources.service.ts` `getUserCircle` :
-    `SELECT r.* FROM "Resources" r WHERE r.personal = true AND r.owner_id =
-    $1 LIMIT 1`. Si aucune ligne, retourne un objet `CIRCLE`
-    minimal construit en mémoire (`id: userId, name: 'Mon espace',
-    permissions: {read:true, write:true}`, pas d'écriture DB). Sinon,
-    `mapResource(rows[0])` avec permissions calculées (voir H.2).
-    Sinon `mapResource(rows[0])`.
-  - `resourceService.search({views: true, expands: EXPANDS})` → voir
-    ci-dessous.
-  - `resourceService.listOwners()` → `resource-browser.ts` →
-    **`GET /api/v1/resources/owners`** → `resources.controller.ts`
-    `getOwners` → `resources.service.ts` `getOwners` :
-    `SELECT DISTINCT u.id, u.username, u.first_name, u.last_name, u.email
-    FROM "Users" u INNER JOIN "Resources" r ON r.owner_id = u.id WHERE
-    r.type != 'CIRCLE' ORDER BY u.username ASC LIMIT 100`.
-- `completion = resourceService.completion().pipe(shareReplay(1))` →
-  `resource-browser.ts` → **`GET /api/v1/resources/completion`** →
-  `resources.controller.ts` `getCompletion` →
-  `resources.service.ts` `getCompletion` :
+- **`GET /api/v1/resources/tree`** → `resources.controller.ts` `getTree` →
+  `resources.service.ts` `getCircleTree` :
+  `SELECT id, name, parent_id AS "parentId" FROM "Resources" WHERE type =
+  'CIRCLE' AND personal = false ORDER BY name ASC`, arbre
+  construit en mémoire par `buildTree`. Retourne soit la racine
+  unique, soit `{ id: 'root', name: 'Cercles', children: tree }`.
+- **`GET /api/v1/resources/user-circle`** → `resources.controller.ts`
+  `getUserCircle` (lit `request.user.id`, posé par `AuthGuard`) →
+  `resources.service.ts` `getUserCircle` :
+  `SELECT r.* FROM "Resources" r WHERE r.personal = true AND r.owner_id =
+  $1 LIMIT 1`. Si aucune ligne, retourne un objet `CIRCLE`
+  minimal construit en mémoire (`id: userId, name: 'Mon espace',
+  permissions: {read:true, write:true}`, pas d'écriture DB). Sinon,
+  `mapResource(rows[0])` avec permissions calculées (voir H.2).
+- **`GET /api/v1/resources/owners`** → `resources.controller.ts`
+  `getOwners` → `resources.service.ts` `getOwners` :
+  `SELECT DISTINCT u.id, u.username, u.first_name, u.last_name, u.email
+  FROM "Users" u INNER JOIN "Resources" r ON r.owner_id = u.id WHERE
+  r.type != 'CIRCLE' ORDER BY u.username ASC LIMIT 100`.
+- **`GET /api/v1/resources/completion`** → `resources.controller.ts`
+  `getCompletion` → `resources.service.ts` `getCompletion` :
   `SELECT DISTINCT name FROM "Resources" WHERE type != 'CIRCLE' ORDER BY
   name LIMIT 200`, retourne `{ resource: { names, topics: [], levels: [] } }`
-  (`topics`/`levels` toujours vides). Utilisé pour les suggestions de la
-  barre de recherche.
-- À chaque changement de `activatedRoute.queryParams` →
-  `resourceService.search({...filters, expands: EXPANDS, limit:
-  PAGINATION_LIMIT})` → `resource-browser.ts` `search()` →
-  **`GET /api/v1/resources?search=&types=&status=&owners=&parents=&personal=&period=&offset=&limit=&order=&direction=`**
+  (`topics`/`levels` toujours vides).
+- **`GET /api/v1/resources?search=&types=&status=&owners=&parents=&personal=&period=&offset=&limit=&order=&direction=`**
   → `resources.controller.ts` `search` → `resources.service.ts`
   `searchResources` :
   - Conditions dynamiques (`search` → `LOWER(name) LIKE` ou
@@ -941,36 +932,20 @@ Là aussi, la plupart des opérations d'écriture (`update`, `delete`, `join`,
   - `SELECT COUNT(*) FROM "Resources" r ${where}`.
   - `SELECT r.id, r.name, ... FROM "Resources" r ${where} ORDER BY
     ${orderField} ${orderDir} LIMIT $n OFFSET $n`. Mapping `mapResource(r)`.
-  - Le paramètre `views=true` ("récemment consultées")
-    **n'est pas implémenté** - aucune condition basée sur `filters.views`.
-- `loadMore()` (scroll infini, `ViewportIntersectionDirective`) →
-  même `search()` avec `offset: items.length`.
 
-### H.2 Détail ressource - `ResourcePresenter.refresh(id)`
+### H.2 `GET /api/v1/resources/:id`
 
-`resource.presenter.ts` (déclenché par `activatedRoute.paramMap`) :
-
-- `resourceService.find({id, markAsViewed: isInitialLoading,
-  expands:['parent','statistic','metadata']})` →
-  `resource-browser.ts` → **`GET /api/v1/resources/:id`** →
-  `resources.controller.ts` `findById` (lit `request.user.id`) →
-  `resources.service.ts` `findResourceById` : `SELECT r.* FROM "Resources" r
-  WHERE r.id::text = $1 OR r.code = $1`. 404 si vide.
-  `computeResourcePermissions(resource, userId)` : `write` = owner du cercle
-  (le cercle lui-même si `type=CIRCLE`, sinon son `parentId`) OU `admin`
-  global sur cercle non-personnel OU membre accepté (`ResourceMembers`,
-  `waiting=false`) du cercle ou d'un cercle ancêtre (requête récursive sur
-  `parent_id`) ; `member`/`watcher`/`waiting` lus directement sur la ressource
-  (`ResourceMembers`/`ResourceWatchers`) ; `read` toujours `true`. Règle
-  répliquée de PLaTon (`permissions.service.ts#userPermissionsOnResource`).
-  Mapping `mapResource(row, permissions)`.
-- `resourceService.tree()` → **`GET /api/v1/resources/tree`** (H.1).
-
-Sous-pages `features/resources/resource/{overview,browse,settings,events}` :
-consomment `ResourcePresenter.contextChange` déjà chargé, pas de nouveaux
-appels indicateurs identifiés. `settings/members/members.page.ts` utilise
-`presenter.searchMembers()` → stub `of({resources:[], total:0})`
-(`resource-browser.ts`) - aucune donnée réelle.
+`resources.controller.ts` `findById` (lit `request.user.id`) →
+`resources.service.ts` `findResourceById` : `SELECT r.* FROM "Resources" r
+WHERE r.id::text = $1 OR r.code = $1`. 404 si vide.
+`computeResourcePermissions(resource, userId)` : `write` = owner du cercle
+(le cercle lui-même si `type=CIRCLE`, sinon son `parentId`) OU `admin`
+global sur cercle non-personnel OU membre accepté (`ResourceMembers`,
+`waiting=false`) du cercle ou d'un cercle ancêtre (requête récursive sur
+`parent_id`) ; `member`/`watcher`/`waiting` lus directement sur la ressource
+(`ResourceMembers`/`ResourceWatchers`) ; `read` toujours `true`. Règle
+répliquée de PLaTon (`permissions.service.ts#userPermissionsOnResource`).
+Mapping `mapResource(row, permissions)`.
 
 ---
 
@@ -1059,16 +1034,16 @@ Côté frontend : `frontend/src/app/core/services/indicator-socket.service.ts`
 - Filtre les événements par `(indicatorId, contextType, contextId)`.
 - Met à jour la valeur de la carte sans rechargement via `markForCheck()`.
 
-### I.5 `POST /api/ingest` (HTTP legacy)
+### I.5 Pas d'endpoint HTTP d'ingestion
 
-`ingestion.controller.ts` - endpoint HTTP toujours présent pour les tests manuels.
-En production, les événements arrivent exclusivement par le pipeline RabbitMQ (I.1 → I.3).
-
-> **Côté frontend**, aucun composant n'appelle directement `/ingest`.
-> `core/services/indicator-event.service.ts` expose `flush()` → `POST /ingest/batch`
-> (toutes les 5s), prévu pour s'activer une fois le frontend intégré dans
-> l'application PLaTon principale. Les URLs cibles (`/exercises`, `/sessions`)
-> ne sont pas exposées par ce microservice.
+Le module `ingestion` (`api/src/modules/features/ingestion/`) ne déclare
+**aucun contrôleur** - `ingestion.module.ts` n'a que des `providers`
+(`IngestionService`, `IngestionConsumerService`, `IndicatorsGateway`). Il n'y
+a donc ni `POST /api/ingest` ni `POST /api/ingest/batch` : en développement
+comme en production, les événements n'arrivent que par le pipeline RabbitMQ
+(I.1 → I.3). Pour tester manuellement, publier directement un message sur
+l'exchange `platon.events` (voir [`docs/ingestion.md`](ingestion.md)) plutôt
+que d'appeler une route HTTP.
 
 ---
 
@@ -1085,9 +1060,6 @@ En production, les événements arrivent exclusivement par le pipeline RabbitMQ 
   'Utilisateur non trouvé' }` (HTTP 200, pas de 404). Sinon projection
   camelCase sans exposer les champs sensibles (`active`, `*_login`,
   `*_at`, `discord_id`, `last_activity`).
-- **`core/services/indicator-event.service.ts`** : voir I.4 - utilisé par
-  l'intercepteur global mais ses cibles (`/exercises`, `/sessions`) ne sont
-  pas exposées par ce microservice.
 
 ---
 

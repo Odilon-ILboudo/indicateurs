@@ -114,7 +114,7 @@ Variables importantes à adapter :
 | `PLATON_DB_PASSWORD` | Mot de passe PostgreSQL (même que dans `platon/.env`) |
 | `JWT_SECRET` | Doit être identique au `SECRET_KEY` du PLaTon déployé aux côtés de cette instance (utilisé uniquement en `NODE_ENV=production`, voir readme.md section 12 - sans effet en dev, où les utilisateurs s'authentifient sur le PLaTon universitaire) |
 | `INDICATEURS_PORT` | Port exposé pour le frontend (défaut : `4300`) |
-| `PLATON_DB_ADMIN_USERNAME`/`PASSWORD` | Optionnel - identifiant Postgres à privilèges élevés pour l'installation des déclencheurs dynamiques (readme.md section 6bis). Laisser vide si non utilisé. |
+| `PLATON_DB_ADMIN_USERNAME`/`PASSWORD` | Optionnel - identifiant Postgres à privilèges élevés pour l'installation des déclencheurs dynamiques (readme.md section 6bis). **Absent de `.env.example`** : à ajouter manuellement dans `.env` si besoin - `env_file: .env` sur le service `api` transmet n'importe quelle variable ajoutée là, pré-listée ou non. |
 
 **Pas une variable d'environnement, un fichier à éditer avant de builder** :
 `frontend/src/environments/environment.embed.prod.ts` contient un placeholder

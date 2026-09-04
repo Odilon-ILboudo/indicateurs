@@ -9,15 +9,15 @@ fonctionnement global du projet sans avoir à parcourir tout le code source.
 > - [`docs/guide.md`](docs/guide.md) - guide pas-à-pas pour créer et tester chaque type
 >   d'indicateur (les 6 `contextType`, toutes les fonctionnalités du DSL).
 > - [`docs/parcours-donnees.md`](docs/parcours-donnees.md) - pour chaque route listée en
->   §9, trace fichier par fichier et ligne par ligne le chemin complet
+>   section 9, trace fichier par fichier et ligne par ligne le chemin complet
 >   composant frontend → service → contrôleur → service backend → accès BDD.
 > - [`docs/integration-indicateurs.md`](docs/integration-indicateurs.md) et
 >   [`docs/integration-platon.md`](docs/integration-platon.md) - le second point
->   d'entrée de build (`indicateurs-embed`, voir §10 "Point d'entrée embarqué"),
+>   d'entrée de build (`indicateurs-embed`, voir section 10 "Point d'entrée embarqué"),
 >   qui expose `<indicateurs-app>` comme Web Component intégrable dans un LMS
 >   hôte (PLaTon aujourd'hui, potentiellement un autre demain).
 > - [`docs/integration-platon-relay.md`](docs/integration-platon-relay.md) - le
->   relais d'événements (`platon_outbox_events` → RabbitMQ, voir §6bis et
+>   relais d'événements (`platon_outbox_events` → RabbitMQ, voir section 6bis et
 >   `docs/ingestion.md` étape 2), qui vit côté LMS hôte, pas dans ce dépôt ;
 >   fichiers prêts à copier dans `docs/platon-integration/`.
 
@@ -65,8 +65,9 @@ redéploiement n'est nécessaire pour ajouter un nouvel indicateur.
 - Node.js + yarn
 - Deux bases PostgreSQL accessibles :
   - **PLaTon** (lecture seule - données pédagogiques existantes)
-  - **indicators** (lecture/écriture - créée/synchronisée automatiquement par
-    TypeORM en développement, `synchronize: true`)
+  - **indicators** (lecture/écriture - schéma géré uniquement par les
+    migrations TypeORM, `synchronize: false` en toute circonstance, y
+    compris en développement)
 
 ### Variables d'environnement (`api/.env`)
 
@@ -99,8 +100,15 @@ JWT_SECRET=
 
 ### Lancer le projet
 
+Backend et frontend n'ont pas de script racine commun : deux commandes,
+dans deux terminaux.
+
 ```bash
-yarn start
+cd api && yarn start
+```
+
+```bash
+cd frontend && ng serve
 ```
 
 Le backend écoute sur `http://localhost:3001`, préfixe global `/api`.
@@ -149,89 +157,76 @@ modules/
 ```
 app.routes.ts           - route racine → redirige vers /dashboard
 core/
-  guards/indicator.guard.ts        - vérifie l'existence d'un indicateur :id
-  interceptors/auth.interceptor.ts - VIDE (stub, aucun token injecté)
+  auth/                             - AuthProvider (auth.types.ts, current-user.ts, remote-auth.provider.ts)
+  guards/
+    auth.guard.ts                   - exige un utilisateur authentifié
+    indicator.guard.ts              - vérifie l'existence d'un indicateur :id
+  interceptors/auth.interceptor.ts - injecte le Bearer token, gère les 401
+                                      (déconnexion standalone, ou événement
+                                      indicateurs-token-expired en mode embarqué)
   models/indicator.model.ts        - types partagés (IndicatorDefinition, IndicatorVisualization…)
+  tokens/
+    embedded-mode.token.ts         - bascule standalone / embarqué
+    route-base-path.token.ts       - préfixe de route en mode embarqué
   services/
     indicator.service.ts           - client HTTP + caches (préférences viz, visibilité)
+    indicator-list-state.service.ts
+    indicator-socket.service.ts    - WebSocket (indicator.updated)
     dashboard-settings.service.ts  - préférences/contexte de l'utilisateur courant
     role.service.ts                - rôle courant + règles de visibilité (section 8)
-    user.service.ts / group.service.ts...
+    user.service.ts
 features/
+  authentification/       - page de connexion standalone
   dashboard/
     dashboard.page.ts/html         - shell (sidebar + toolbar + router-outlet)
     pages/
-      overview/                    - grille des indicateurs actifs (+ sélecteur de contexte enseignant)
+      overview/                    - grille des indicateurs actifs
       indicators/                  - onglet "Indicateurs" : préférences + (admin) gestion
-      widgets/sidebar/ + toolbar/ + teacher-context-selector/
+      context-indicators/          - page utilisée uniquement par les routes embarquées (section 10)
+      embed-test/                  - page de diagnostic du mode embarqué, jamais liée dans la navigation
+      widgets/sidebar/ + toolbar/
   admin/
     admin-indicator-manager.component.ts  - table CRUD admin
     indicator-builder.component.ts        - wizard de création/édition (3 étapes, voir section 6/7)
-    indicator-config.component.ts         - config rapide d'affichage
     event-rule-manager.component.ts       - écran "Événements & déclencheurs" (section 6bis)
     event-rule-builder.component.ts       - wizard guidé de création d'une règle
     event-rule-install-modal.component.ts - aperçu SQL + confirmation d'install/retrait
   indicator-selector/    - l'utilisateur active/désactive ses indicateurs
   indicator-detail/      - page détail d'un indicateur (tabs par visualisation)
+  pin-indicator-modal/   - épingler un indicateur en favori
   courses/                - pages "Cours" copiées/adaptées depuis PLaTon (voir 3.3)
-  resources/              - pages "Ressources" copiées/adaptées depuis PLaTon (voir 3.3)
 shared/
-  ui/indicator-card/ + statistic-card/ + layout-block/
-  pipes/duration.pipe.ts
-  utils/indicator-family-grouping.ts  - regroupement par famille (section 8)
+  ui/indicator-card/ (dont indicator-config-modal.component.ts - config rapide d'affichage) + indicator-reuse-card/ + layout-block/
+  utils/indicator-family-grouping.ts    - regroupement par famille (section 8)
+  utils/indicator-chart-options.util.ts - options de graphique partagées (section 10)
   styles/                 - SCSS, thèmes Material clair/sombre, ng-zorro
 ```
 
 ### 3.3 Stubs PLaTon (`frontend/src/platon-stubs/`)
 
-PLaTon est un monorepo Nx ; `@platon/*`/`@cisstech/nge/*` sont des libs
-internes à son workspace Nx, résolues par son propre système de build - pas de
-vrais paquets npm publiés, indépendamment importables. Ce projet n'utilise pas
-Nx (choix délibéré) → **impossible d'importer directement les libs PLaTon**.
-Les pages "Cours" et "Ressources" ont donc été **copiées depuis PLaTon puis
-adaptées**, et
-toutes les dépendances `@platon/*` / `@cisstech/nge/*` sont remplacées par des
-**stubs locaux** via des alias `tsconfig.json` :
+La page "Cours" a donc été copiée depuis PLaTon puis adaptée, ses dépendances @platon/*/@cisstech/nge/* remplacées par des stubs locaux via des alias tsconfig.json:
 
 | Stub (`src/platon-stubs/`) | Alias tsconfig |
 |---|---|
 | `core-common.ts` / `core-browser.ts` | `@platon/core/common` / `@platon/core/browser` |
 | `core-browser/user-search-bar/` | composant `UserSearchBarComponent` (ControlValueAccessor) |
 | `course-common.ts` / `course-browser.ts` | `@platon/feature/course/{common,browser}` |
-| `resource-common.ts` / `resource-browser.ts` | `@platon/feature/resource/{common,browser}` |
-| `resource-browser/resource-version/` | `ResourceVersionComponent` / `ResourceVersioningComponent` |
-| `resource-browser/resource-files/` | `ResourceFilesComponent` |
-| `resource-browser/event-list/`, `event-item/` | `ResourceEventListComponent` / `ResourceEventItemComponent` |
-| `resource-browser/member-table/` | `ResourceMemberTableComponent` |
-| `resource-browser/invitation-form/`, `invitation-table/` | `ResourceInvitationFormComponent` / `ResourceInvitationTableComponent` |
-| `resource-browser/resource-sharing/` | `ResourceSharingComponent` |
-| `resource-browser/template-card/`, `template-selection/` | `TemplateCardComponent` / `TemplateSelectionComponent` |
-| `resource-browser/circle-tree/`, `resource-filters/` | `CircleTreeComponent` / `ResourceFiltersComponent` |
-| `resource-browser/resource-item/`, `resource-list/` | `ResourceItemComponent` / `ResourceListComponent` |
-| `resource-browser/nge-ui-list/` | `NgeUiListModule`, `ListComponent`, `ListTemplateComponent` |
+| `resource-browser/nge-ui-list/` | `@cisstech/nge/ui/list` - générique, sans rapport avec la page Ressources (supprimée) |
 | `feature-result-common.ts` / `feature-result-browser.ts` | `@platon/feature/result/{common,browser}` |
-| `feature-tuto-browser.ts`, `feature-peer-browser.ts`, `feature-compiler.ts`, `shared-ui.ts` | divers `@platon/feature/*`, `@platon/shared/ui` |
-| `nge-directives.ts`, `nge-pipes.ts`, `nge-ui-icon.ts` | `@cisstech/nge/{directives,pipes,ui/icon}` |
-| `nge-services.ts` | `@cisstech/nge/services` → `ClipboardService`, `PickerBrowserService` |
-| `nge-markdown.ts` | `@cisstech/nge/markdown` → `NgeMarkdownComponent` (rendu minimal) |
+| `feature-peer-browser.ts`, `shared-ui.ts` | `@platon/feature/peer/browser`, `@platon/shared/ui` |
+| `nge-directives.ts`, `nge-pipes.ts` | `@cisstech/nge/{directives,pipes}` |
 
 Points clés de ces stubs :
 - `AuthService.ready()` lit l'utilisateur connecté depuis `localStorage.currentUser`
   (peuplé par le flux SSO réel, section 12) - repli sur un utilisateur anonyme
   (`role: student`) si absent.
-- `CourseService` / `ResourceService` font de **vrais appels HTTP** vers
-  `/api/v1/courses*` et `/api/v1/resources*` (modules `courses`/`resources` du
-  backend) - ce ne sont pas des stubs vides pour la lecture, seules les
-  **opérations d'écriture** (créer/déplacer/etc.) sont des no-ops car la BDD
-  PLaTon est en lecture seule.
+- `CourseService` fait de **vrais appels HTTP** vers `/api/v1/courses*`
+  (module `courses` du backend) - ce n'est pas un stub vide pour la lecture,
+  seules les **opérations d'écriture** (créer/déplacer/etc.) sont des no-ops
+  car la BDD PLaTon est en lecture seule.
 - Les composants UI (`UiLayoutTabsComponent`, `UiStatisticCardComponent`,
   `UiSearchBarComponent`, etc.) sont réimplémentés localement, sans dépendre
   du workspace Nx de PLaTon.
-- `@angular/cdk/portal` n'est pas installé : `ComponentType<T>` est défini
-  localement dans les stubs qui en ont besoin (ex. `event-item`).
-- Les icônes assets nge (`assets/vendors/nge/icons/`) sont absentes :
-  `NgeUiIconModule` utilise les glyphes AntD (folder/file) en remplacement.
-
 ---
 
 ## 4. Bases de données
@@ -300,6 +295,7 @@ La définition d'un indicateur.
 | `requiredEvents` | jsonb (string[]) | événements PLaTon qui déclenchent un recalcul |
 | `visualizations` | jsonb (`IndicatorVisualization[]`) | une ou plusieurs visualisations - représentations visuelles différentes d'une même formule (section 7) |
 | `isActive` | boolean | actif / désactivé |
+| `isComplete` | boolean | complétude réelle du formulaire, indépendante de `isActive` - reflète l'enregistrement via le bouton final du wizard plutôt que "Sauvegarder le brouillon", toujours `false` à la création |
 | `isFamilyPlaceholder` | boolean | ligne technique qui ne représente aucun indicateur réel - sert uniquement à faire exister une famille vide (pas de table dédiée, `familyName` est un simple champ partagé). Toujours `isActive=false`, jamais affichée aux utilisateurs finaux, supprimée automatiquement dès qu'un premier vrai indicateur rejoint la famille |
 | `usageCount` | number | compteur d'utilisation |
 | `formula` | jsonb \| null | **formule unique partagée par toutes les visualisations** (1 indicateur = 1 formule) |
@@ -330,7 +326,7 @@ Feedback utilisateur sur un indicateur : `indicatorId`, `userId`, `rating`, `com
 
 ### `IndicatorNotification` (table `indicator_notifications`)
 
-Notification destinée à un utilisateur : `indicatorId`, `userId`, `message`, `read`, `createdAt`.
+Notification liée à un indicateur (pas ciblée par utilisateur) : `indicatorId`, `title`, `message`, `createdAt`.
 
 ### `IndicatorEventType` (table `indicator_event_types`)
 
@@ -352,10 +348,12 @@ Une règle de classification : transforme un changement brut sur une table PLaTo
 
 ### `IndicatorSnapshot` (table `indicator_snapshots`)
 
-"Carte épinglée" d'un indicateur `group` pour une activité donnée (panneau
-"Par groupe" de la page activité). Contrainte unique
-`(indicatorId, contextType, contextId, activityId)` - anti-doublon. Champs :
-`contextId` (= `groupId`), `activityId`, `title`.
+"Carte épinglée" d'un indicateur `group` pour une activité ou un cours donné
+(panneau "Par groupe" de la page activité/cours). Anti-doublon appliqué par
+deux index uniques partiels en base (pas une contrainte `@Unique()` unique) :
+`activityId` et `courseId` sont mutuellement exclusifs, un seul des deux est
+renseigné à la fois. Champs : `contextId` (= `groupId`), `activityId`,
+`courseId`, `title`.
 
 ### `IndicatorPin` (table `indicator_pins`)
 
@@ -447,7 +445,7 @@ utilisé par le débogueur pas-à-pas du builder (`POST /preview-steps`).
 | `aggregate` | Agrège un `number[]`. | `aggregateFn: 'avg'\|'sum'\|'count'\|'min'\|'max'` |
 | `round` | Arrondit un nombre. | `decimals` (défaut 2) |
 | `divide` | Divise par une constante (0 si `divideBy === 0`). | `divideBy` |
-| `js` | Exécute du JS arbitraire ; `input` = sortie de l'étape précédente, doit `return` un résultat. | `code` - exécuté dans un **vrai isolate V8** (`isolated-vm`, 32 Mo, timeout 2s). Analyse statique préalable (13 patterns interdits). Voir [`docs/js.md`](docs/js.md) pour le détail des protections. |
+| `js` | Exécute du JS arbitraire ; `input` = sortie de l'étape précédente, doit `return` un résultat. | `code` - exécuté dans un **vrai isolate V8** (`isolated-vm`, 32 Mo, timeout 2s). Analyse statique préalable (13 patterns interdits). |
 
 Rétro-compatibilité : les anciens noms de table `sessions`/`activities` sont
 mappés vers `SessionData`/`Activities` (`LEGACY_TABLE_MAP`).
@@ -504,31 +502,42 @@ contextId, activityId?, vizId?, forceRefresh?, courseId?)` :
 ### Snapshots "vivants" et cache cours/groupe/activité - refresh automatique
 
 `IngestionService` appelle, en fire-and-forget après chaque événement PLaTon
-ingéré pour une activité, deux méthodes complémentaires :
+ingéré, les méthodes suivantes en passant systématiquement le `deltaEvent` de
+l'événement source - si `deltaEvent` est fourni, chaque méthode tente
+`computeViewIncremental()` (calcul différentiel, voir
+[`docs/calcul-differentiel.md`](docs/calcul-differentiel.md)) plutôt que
+`computeView(forceRefresh=true)` (recalcul total). Le recalcul total n'a lieu
+que si l'appelant ne fournit pas de `deltaEvent` (par exemple un recalcul
+manuel déclenché autrement) :
 
-1. `IndicatorsService.refreshSnapshots(indicatorId, scope, deltaEvent?)` : recalcule
-   (`forceRefresh = true`) **toutes** les `IndicatorSnapshot` épinglées pour ce
-   périmètre, pour chaque visualisation. `scope` est `{ activityId }` (une seule
+1. `IndicatorsService.refreshSnapshots(indicatorId, scope, deltaEvent?)` :
+   recalcule **toutes** les `IndicatorSnapshot` épinglées pour ce périmètre,
+   pour chaque visualisation. `scope` est `{ activityId }` (une seule
    activité) ou `{ courseId }` (indicateur `group` course-aware, voir
    `isCourseAware()` - agrège toutes les activités du cours pour ce groupe).
    Les erreurs par snapshot sont loggées sans bloquer les autres.
 
-2. `IndicatorsService.refreshActivityViews(indicatorId, activityId)` : recalcule
-   (`forceRefresh = true`) toutes les `indicator_values` de type
-   `course`/`group`/`activity` dont le `contextId` composite référence cette
-   `activityId` (matching `LIKE` sur les 4 formes possibles :
-   `activityId`, `activityId:vizId`, `courseId:activityId`,
-   `courseId:activityId:vizId`). Déduit les couples uniques
-   `(contextType, contextId d'origine)` et recalcule par visualisation.
-   Uniquement pour le périmètre "une activité" - l'équivalent pour un indicateur
-   `group` course-aware est `refreshCourseGroupViews(indicatorId, courseId)`,
-   plus simple (toujours un recalcul complet, pas de variante incrémentale).
+2. `IndicatorsService.refreshActivityViews(indicatorId, activityId, deltaEvent?)` :
+   recalcule toutes les `indicator_values` de type `course`/`group`/`activity`
+   dont le `contextId` composite référence cette `activityId` (matching `LIKE`
+   sur les 4 formes possibles : `activityId`, `activityId:vizId`,
+   `courseId:activityId`, `courseId:activityId:vizId`). Déduit les couples
+   uniques `(contextType, contextId d'origine)` et recalcule par
+   visualisation. Uniquement pour le périmètre "une activité" - l'équivalent
+   pour un indicateur `group` course-aware est
+   `refreshCourseGroupViews(indicatorId, courseId, deltaEvent?)`.
+
+3. `IndicatorsService.refreshCachedContextValues(indicatorId, contextType, deltaEvent?)` :
+   utilisée quand les contextIds pertinents ne sont pas connus à l'avance (cas
+   des indicateurs `learner`/`teacher`/`admin` à contexte global, ex.
+   `admin`) - relit tous les `contextId` déjà en cache pour ce
+   `(indicatorId, contextType)` et les recalcule un par un.
 
 Ces appels sont indépendants : `refreshSnapshots` couvre les groupes
-explicitement épinglés, `refreshActivityViews`/`refreshCourseGroupViews` couvrent
-toutes les vues cours/groupe/activité simplement consultées (cachées par
-`computeView`). Ensemble, ils garantissent que **toutes** les valeurs
-course/group/activity en cache sont fraîches après chaque événement d'ingestion.
+explicitement épinglés, `refreshActivityViews`/`refreshCourseGroupViews`/
+`refreshCachedContextValues` couvrent toutes les vues simplement consultées
+(cachées par `computeView`). Ensemble, ils garantissent que **toutes** les
+valeurs en cache sont fraîches après chaque événement d'ingestion.
 
 **Tradeoff** : chaque événement déclenche le recalcul de toutes les vues déjà
 consultées pour cette activité. Pour une activité avec beaucoup de groupes/vues,
@@ -674,7 +683,7 @@ d'accéder directement à `indicator.visualizations`.
 **Principe clé** : 1 indicateur = 1 formule. Les visualisations diffèrent uniquement par leur rendu visuel, jamais par les données calculées. À la soumission, `submit()` sauvegarde la formule au niveau de l'indicateur.
 
 `FORMULA_RECIPES` fournit des recettes prêtes à l'emploi (Tentatives avant
-réussite, Note moyenne, Taux de réussite, Notes moyennes par ressource - avec
+réussite, Note moyenne, Exercices réussis, Notes moyennes par ressource - avec
 `join Resources`, Tentatives par étudiant d'un groupe - avec `join Users`).
 
 ---
@@ -699,25 +708,26 @@ famille ; les indicateurs sans famille restent à leur place. Réutilisé dans
 ### Visibilité par rôle (`RoleService.canSeeIndicatorContext`)
 
 `frontend/src/app/core/services/role.service.ts` - table
-`INDICATOR_VISIBILITY: Record<IndicatorScope, UserRole[]>` :
+`INDICATOR_VISIBILITY: Record<IndicatorScope, UserRole[]>`, avec
+`UserRole = 'student' | 'teacher' | 'admin'` :
 
-| `contextType` | Rôles qui voient cet indicateur |
+| `contextType` | Rôles qui voient cet indicateur (frontend) |
 |---|---|
 | `learner` | `student` |
 | `teacher` | `teacher` |
 | `admin` | `admin` |
-| `course` | `student`, `teacher`, `admin`, `demo` |
-| `activity` | `student`, `teacher`, `admin`, `demo` |
+| `course` | `student`, `teacher`, `admin` |
+| `activity` | `student`, `teacher`, `admin` |
 | `group` | `teacher`, `admin` |
 
-`UserRole` inclut aussi `'demo'` (compte de démonstration) - non listé pour
-`learner`/`teacher`/`admin`/`group`, il suit par défaut la règle la plus
-restrictive (celle de `student`), faute de spécification dédiée pour ces
-contextes.
-
-**Appliquée aussi côté backend**, pas seulement en affichage : cette même
-table est dupliquée dans `api/src/modules/features/indicators/indicator-visibility.util.ts`
-(`INDICATOR_VISIBILITY`) et appliquée par `IndicatorVisibilityGuard`
+**Appliquée aussi côté backend**, pas seulement en affichage - mais pas avec
+exactement la même table : `api/src/modules/features/indicators/indicator-visibility.util.ts`
+(`INDICATOR_VISIBILITY`) ajoute un rôle `demo` pour `course`/`activity`,
+absent du type `UserRole` côté frontend (aucun compte `demo` ne peut donc
+exister aujourd'hui dans l'interface, cette entrée backend est sans effet
+pratique tant que rien ne l'alimente). Les deux tables sont à maintenir
+manuellement en synchronisation - il n'y a pas de source unique partagée.
+Appliquée par `IndicatorVisibilityGuard`
 (`api/src/modules/core/guards/indicator-visibility.guard.ts`) sur
 `getIndicatorValues`/`computeView`/`getSnapshots`/`createSnapshot`
 (`indicators.controller.ts`) et `createPreference`/`updatePreference`
@@ -747,14 +757,17 @@ Toutes les routes sont préfixées `/api`. Les contrôleurs `courses`,
 `resources`, `user-preferences` exigent un token valide (`AuthGuard`, voir
 section 12) ; les routes d'écriture d'`indicators` et `event-types` exigent en
 plus le rôle `admin` (`AdminGuard`) - `event-rules` exige `AdminGuard` sur
-**toutes** ses routes, y compris les `GET`. Le reste (`indicators` en lecture,
-`ingest*`, `event-types` en lecture...) reste ouvert.
+**toutes** ses routes, y compris les `GET`. Le reste (la plupart des routes
+`indicators` en lecture, `event-types` en lecture...) reste ouvert à
+quiconque - sans même exiger de token pour certaines (voir les annotations
+"aucun guard" ci-dessous, qui couvrent aussi deux routes d'écriture
+`indicators/:id/snapshots/:snapshotId` par ailleurs non protégées).
 
 ### Indicateurs (`/api/indicators`, `indicators.controller.ts`)
 
 ```
 GET  /indicators                       - indicateurs actifs
-GET  /indicators/all                   - tous (admin)
+GET  /indicators/all                   - tous, y compris inactifs (aucun guard - route ouverte malgré son usage réservé à l'admin côté frontend)
 GET  /indicators/search?q=&excludeId=  - recherche par nom/description (détection de doublons)
 GET  /indicators/schema                - tables/colonnes PLaTon disponibles (filtrées, voir 12)
 GET  /indicators/schema/full           - schéma complet (explorateur de schéma de l'admin)
@@ -782,21 +795,22 @@ DELETE /indicators/:id                 - (admin)
 
 GET    /indicators/:id/snapshots?activityId=
 POST   /indicators/:id/snapshots       - { contextType, contextId, activityId, title } → 409 si doublon
-PATCH  /indicators/:id/snapshots/:snapshotId
-DELETE /indicators/:id/snapshots/:snapshotId
+PATCH  /indicators/:id/snapshots/:snapshotId  - (aucun guard, contrairement à GET/POST ci-dessus)
+DELETE /indicators/:id/snapshots/:snapshotId  - (aucun guard, contrairement à GET/POST ci-dessus)
 
 POST   /indicators/:id/notify          - notification liée à l'indicateur (admin)
 GET    /indicators/notifications/all   - toutes les notifications (onglet utilisateur à venir)
 
 POST   /indicators/:id/feedback        - soumet (ou met à jour) un retour d'expérience
-GET    /indicators/:id/feedback        - liste les retours d'expérience d'un indicateur (admin)
+GET    /indicators/:id/feedback        - liste les retours d'expérience d'un indicateur (aucun guard - route ouverte)
 DELETE /indicators/:id/feedback/:feedbackId - (admin)
 ```
 
 > (admin) = protégé par `AuthGuard` + `AdminGuard` (rôle `admin` requis, voir
 > section 12). Les autres routes d'`indicators` restent ouvertes - y compris
-> plusieurs qui exécutent une formule DSL (`preview`, `preview-steps`,
-> `compute-view`, `snapshots`) : limite de sécurité connue, voir `docs/js.md` §3.
+> `preview`/`preview-steps`, qui exécutent une formule DSL **sans aucun
+> guard** : limite de sécurité connue (voir la sandbox JS décrite en section
+> 6, catalogue des étapes, type `js`).
 >
 > (admin ou enseignant*) : pas d'`AdminGuard` sur ces deux routes - seul
 > `AuthGuard` s'applique, le contrôle fin (admin **ou** enseignant avec droit
@@ -838,6 +852,9 @@ GET /v1/courses/:id/activities               - filtres sectionId, challenge ; ti
 GET /v1/courses/:id/groups                   - groupes de TP du cours
 GET /v1/courses/:id/groups/:groupId/members
 GET /v1/courses/:id/members
+POST /v1/courses/:id/members                 - ajoute un membre (CreateCourseMemberDto)
+PATCH /v1/courses/:id/members/:memberId      - change le rôle d'un membre (UpdateCourseMemberRoleDto)
+DELETE /v1/courses/:id/members/:memberId     - retire un membre
 GET /v1/courses/:courseId/activities/:activityId
 GET /v1/courses/:courseId/activities/:activityId/results
 GET /v1/courses/:courseId/activities/:activityId/results/date?start=&end=
@@ -909,10 +926,12 @@ POST   /event-rules/:id/hard-delete        - retire le trigger puis supprime la 
 
 ```
 GET /api/users/:id
-
-POST /api/ingest        - injection directe d'un événement (HTTP, legacy)
-POST /api/ingest/batch  - injection directe batch (HTTP, legacy)
 ```
+
+Le module `ingestion` (`api/src/modules/features/ingestion/`) n'expose
+aucune route HTTP - c'est uniquement un consommateur RabbitMQ
+(`IngestionConsumerService`, voir [`docs/ingestion.md`](docs/ingestion.md)).
+Aucun endpoint d'injection HTTP directe n'existe dans ce dépôt.
 
 ---
 
@@ -929,12 +948,11 @@ POST /api/ingest/batch  - injection directe batch (HTTP, legacy)
   /indicators/selector-family/:name   - page dédiée d'une famille (vue sélecteur)
   /indicator/:id                      - détail d'un indicateur
   /courses/...                        - pages Cours (copiées/adaptées de PLaTon, voir 3.3)
-  /resources/...                      - pages Ressources (idem)
 ```
 
 ### Sidebar
 
-Liens : Tableau de bord, Indicateurs, Cours, Espace de travail (Ressources). Pas
+Liens : Tableau de bord, Indicateurs, Cours. Pas
 d'onglet "Admin" dédié dans la navigation principale - les composants admin
 (`admin-indicator-manager`, `indicator-builder`) sont accessibles via l'onglet
 "Indicateurs" pour les rôles habilités (`canManageIndicators` /
@@ -946,9 +964,16 @@ Second point d'entrée de build (`ng build indicateurs-embed`, cible
 `src/main-embed.ts`), à côté de l'app standalone ci-dessus - sans admin, sans
 sidebar/toolbar propres (fournies par le LMS hôte), compilé comme
 [Web Component](https://developer.mozilla.org/fr/docs/Web/API/Web_components)
-(`@angular/elements`). Le LMS hôte (PLaTon aujourd'hui) charge un `<script>` et
-monte `<indicateurs-app access-token="..." user="...">` sur ses propres pages ;
-routage interne isolé (`MemoryLocationStrategy`, jamais `window.location`),
+(`@angular/elements`). Le LMS hôte (PLaTon aujourd'hui) charge deux scripts
+(`polyfills.js` puis `main.js`) et monte
+`<indicateurs-app access-token="..." user="...">` sur ses propres pages, avec
+6 attributs optionnels supplémentaires : `initial-view` et les 5
+`context-type`/`context-activity-id`/`context-course-id`/
+`context-activity-name`/`context-course-name`, qui font naviguer
+automatiquement vers la route interne `context` (`ContextIndicatorsPage`) -
+c'est le mécanisme utilisé pour afficher les indicateurs pertinents depuis une
+page cours/activité native de PLaTon, sans passer par `overview`/`indicators`.
+Routage interne isolé (`MemoryLocationStrategy`, jamais `window.location`),
 `ROUTE_BASE_PATH` vide (routes montées à la racine, pas sous `/dashboard`).
 Servi par le serveur d'Indicateurs lui-même sous `/embed/` (voir
 `.docker/frontend/Dockerfile`/`nginx.conf`) - détail complet et contrat exact
@@ -998,8 +1023,10 @@ valeurs par défaut.
 
 ### `IndicatorCardComponent`
 
-- `learner` → `getIndicatorValue()` (valeur pré-calculée)
-- `course`/`group`/`activity` (+ `activityId`) → `computeView()` (cache backend)
+- `learner`/`teacher`/`admin` **non scopé** (pas d'`activityId`/`courseId` dans
+  le contexte) → `getIndicatorValue()` (valeur pré-calculée)
+- `course`/`group`/`activity`, et `learner`/`teacher`/`admin` **scopé** à une
+  activité ou un cours → `computeView()` (cache backend)
 - Visualisation active : fixée par la préférence sauvegardée ou
   `visibleVisualizations[0]`. **Pas de chips de sélection sur la carte** -
   le changement de viz se fait uniquement via le modal d'édition (icône crayon).
@@ -1032,7 +1059,11 @@ Pour les visualisations `line-chart`, un sélecteur de période est affiché :
 `nz-radio-group` natif Ant Design (`nzButtonStyle="solid"`). L'option
 "Personnalisé" affiche un `nz-range-picker` avec bornes inclusives (00:00–23:59).
 
-### Graphiques (`buildChartOptions`)
+### Graphiques (`buildIndicatorChartOptions`, `shared/utils/indicator-chart-options.util.ts`)
+
+Utilitaire partagé, appelé par `IndicatorDetailComponent` pour les types
+`bar-chart`/`histogram` (le type `line-chart` reste géré directement dans le
+composant) :
 
 - **bar-chart** : labels = `resource_name`/noms lisibles (jamais d'UUID),
   tronqués à 25 caractères avec tooltip complet, valeur affichée sur la barre.
@@ -1109,7 +1140,7 @@ Doit toujours être posé **après** `AuthGuard`
 (`@UseGuards(AuthGuard, IndicatorVisibilityGuard)`) : lit le rôle réel de
 `request.user.id` en base PLaTon locale (jamais un rôle envoyé par le
 client) et applique la même règle que `RoleService.canSeeIndicatorContext`
-côté front (§8), mais pour de vrai - pour que la restriction de rôle/contexte
+côté front (section 8), mais pour de vrai - pour que la restriction de rôle/contexte
 tienne aussi face à un appel API direct, pas seulement via l'interface
 Angular. Posé sur
 `getIndicatorValues`/`computeView`/`getSnapshots`/`createSnapshot`
@@ -1120,10 +1151,10 @@ Angular. Posé sur
 
 | Zone | Protection actuelle |
 |---|---|
-| Permissions cours/activités | calculées (owner/admin/teacher membre), voir §9 |
-| Permissions ressources | calculées en lecture (owner/admin/membre de cercle), voir §9 |
+| Permissions cours/activités | calculées (owner/admin/teacher membre), voir section 9 |
+| Permissions ressources | calculées en lecture (owner/admin/membre de cercle), voir section 9 |
 | Mutations indicateurs/event-types | rôle `admin` réellement vérifié (`AdminGuard`) |
-| Visibilité des indicateurs par rôle/contexte | rôle réel vérifié (`IndicatorVisibilityGuard`), voir §8 |
+| Visibilité des indicateurs par rôle/contexte | rôle réel vérifié (`IndicatorVisibilityGuard`), voir section 8 |
 | Préférences utilisateur | `userId` toujours forcé à `request.user.id`, jamais accepté depuis le client |
 | Session expirée | 401 → `auth.interceptor.ts` vide le `localStorage` et redirige vers `/authentification` |
 
@@ -1137,4 +1168,5 @@ complètement ce trou demanderait soit de connaître le secret de production
 à l'API PLaTon de production (`GET /api/v1/users/:username` avec le même
 Bearer, comme le fait déjà `authentification.page.ts` au login) - non
 implémenté à ce jour, faute d'un besoin de sécurité renforcée en développement.
+
 

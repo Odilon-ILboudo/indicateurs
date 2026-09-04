@@ -41,11 +41,10 @@ This will compile your project and store the build artifacts in the `dist/` dire
 
 ## Running unit tests
 
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
-```
+No test runner is installed yet (`ng test` is wired to the
+`@angular/build:unit-test` builder in `angular.json`, but no runner such as
+Vitest or Karma is declared as a dependency) - running `ng test` today fails
+until one is added.
 
 ## Running end-to-end tests
 

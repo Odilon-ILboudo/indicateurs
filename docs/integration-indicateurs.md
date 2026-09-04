@@ -48,14 +48,23 @@ export class EmbedRootComponent implements OnInit, OnChanges {
   @Input('access-token') accessToken?: string;
   @Input() user?: string; // JSON stringifié, même forme que `User` (auth.types.ts)
   @Input('initial-view') initialView?: 'overview' | 'indicators';
+  @Input('context-type') contextType?: 'activity' | 'course';
+  @Input('context-activity-id') contextActivityId?: string;
+  @Input('context-course-id') contextCourseId?: string;
+  @Input('context-activity-name') contextActivityName?: string;
+  @Input('context-course-name') contextCourseName?: string;
+
+  protected readonly routeBasePath = inject(ROUTE_BASE_PATH, { optional: true }) ?? '';
 
   private readonly router = inject(Router);
+  private readonly roleService = inject(RoleService);
+  private navigated = false;
 
   ngOnInit(): void {
     // createCustomElement() ne passe pas par ApplicationRef.bootstrap() : la navigation
     // initiale du routeur, normalement automatique, ne se déclenche jamais sans cet appel.
     this.router.initialNavigation();
-    if (this.initialView === 'indicators') this.router.navigate(['/indicators']);
+    this.navigateToInitialViewIfNeeded();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -63,9 +72,44 @@ export class EmbedRootComponent implements OnInit, OnChanges {
       localStorage.setItem('accessToken', this.accessToken);
     }
     if (changes['user'] && this.user) {
-      const parsed = JSON.parse(this.user);
-      localStorage.setItem('currentUser', this.user);
-      localStorage.setItem('userRole', parsed.role);
+      try {
+        const parsed = JSON.parse(this.user);
+        localStorage.setItem('currentUser', this.user);
+        localStorage.setItem('userRole', parsed.role);
+        this.roleService.loadRoleFromStorage();
+      } catch {
+        console.error('[indicateurs-app] attribut "user" invalide, JSON attendu.');
+      }
+    }
+    // context-type/initial-view peuvent changer après le montage initial (navigation
+    // PLaTon vers une autre page cours/activité sans démonter le widget) : on renavigue.
+    if ((changes['contextType'] || changes['initialView']) && this.navigated) {
+      this.navigated = false;
+      this.navigateToInitialViewIfNeeded();
+    }
+  }
+
+  // contextType prend le pas sur initialView si les deux sont fournis - voir section
+  // « Points d'entrée sidebar » plus bas.
+  private navigateToInitialViewIfNeeded(): void {
+    if (this.navigated) return;
+    this.navigated = true;
+
+    if (this.contextType) {
+      this.router.navigate([this.routeBasePath + '/context'], {
+        queryParams: {
+          contextType: this.contextType,
+          activityId: this.contextActivityId,
+          courseId: this.contextCourseId,
+          activityName: this.contextActivityName,
+          courseName: this.contextCourseName,
+        },
+      });
+      return;
+    }
+
+    if (this.initialView === 'indicators') {
+      this.router.navigate([this.routeBasePath + '/indicators']);
     }
   }
 }
@@ -88,7 +132,9 @@ l'app autonome (`authentification.page.ts:110-135`), `AuthGuard` et
 
 ## Routes réduites : `src/embed/embed.routes.ts`
 
-Reprises de `dashboard.routes.ts`, sans `admin`/`courses`/`resources` :
+Reprises de `dashboard.routes.ts`, moins deux routes (`indicators/family/:name`
+et `courses`, voir plus bas), plus une route ajoutée spécifiquement pour
+l'embarqué (`context`) :
 
 ```ts
 export const embedRoutes: Routes = [
@@ -110,7 +156,7 @@ reste dans les routes embarquées ; cette page n'affiche que les actions
 "voir" et "activer/désactiver", jamais d'édition/suppression.
 
 `IndicatorsPage` s'affiche correctement pour un rôle non-admin sans rien
-changer (`indicators.page.html:28-30`, `*ngIf="!roleService.isAdmin()"`) :
+changer (`indicators.page.html:27`, `*ngIf="!roleService.isAdmin()"`) :
 avec un utilisateur `role: 'teacher'`, l'onglet "Administration" n'apparaît
 jamais, seule la sélection d'indicateurs s'affiche.
 
@@ -124,10 +170,11 @@ quelle que soit l'URL choisie côté PLaTon.
 export const embedConfig: ApplicationConfig = {
   providers: [
     { provide: EMBEDDED_MODE, useValue: true },
+    { provide: ROUTE_BASE_PATH, useValue: '' }, // routes montées à la racine, pas sous /dashboard
     { provide: AuthProvider, useClass: RemoteAuthProvider },
     { provide: LocationStrategy, useClass: MemoryLocationStrategy },
     provideRouter(embedRoutes, withRouterConfig({ paramsInheritanceStrategy: 'always' })),
-    provideHttpClient(withInterceptors([authInterceptor, indicatorInterceptor])),
+    provideHttpClient(withInterceptors([authInterceptor])),
     provideAnimationsAsync(),
     { provide: NZ_I18N, useValue: fr_FR },
     provideNzIcons(NZ_ICONS_LIST), // liste factorisée dans shared/nz-icons.ts, partagée avec app.config.ts

@@ -113,6 +113,9 @@ export class IndicateursPage implements OnInit, AfterViewInit {
     this.accessToken = token?.accessToken;
     // Chemin retenu (voir "Décisions actées" en fin de doc) : servi par le serveur
     // d'Indicateurs, pas par PLaTon - domaine à remplacer par le vrai domaine d'Indicateurs.
+    // polyfills.js doit être chargé AVANT main.js : sans zone.js, l'application Angular
+    // du widget refuse de démarrer (erreur NG0908).
+    await import('https://<domaine-indicateurs>/embed/polyfills.js');
     await import('https://<domaine-indicateurs>/embed/main.js');
   }
 
