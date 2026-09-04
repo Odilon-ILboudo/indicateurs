@@ -112,14 +112,14 @@ Variables importantes à adapter :
 | Variable | Description |
 |---|---|
 | `PLATON_DB_PASSWORD` | Mot de passe PostgreSQL (même que dans `platon/.env`) |
-| `JWT_SECRET` | Doit être identique au `SECRET_KEY` du PLaTon déployé aux côtés de cette instance (utilisé uniquement en `NODE_ENV=production`, voir readme.md §12 - sans effet en dev, où les utilisateurs s'authentifient sur le PLaTon universitaire) |
+| `JWT_SECRET` | Doit être identique au `SECRET_KEY` du PLaTon déployé aux côtés de cette instance (utilisé uniquement en `NODE_ENV=production`, voir readme.md section 12 - sans effet en dev, où les utilisateurs s'authentifient sur le PLaTon universitaire) |
 | `INDICATEURS_PORT` | Port exposé pour le frontend (défaut : `4300`) |
-| `PLATON_DB_ADMIN_USERNAME`/`PASSWORD` | Optionnel - identifiant Postgres à privilèges élevés pour l'installation des déclencheurs dynamiques (readme.md §6bis). Laisser vide si non utilisé. |
+| `PLATON_DB_ADMIN_USERNAME`/`PASSWORD` | Optionnel - identifiant Postgres à privilèges élevés pour l'installation des déclencheurs dynamiques (readme.md section 6bis). Laisser vide si non utilisé. |
 
 **Pas une variable d'environnement, un fichier à éditer avant de builder** :
 `frontend/src/environments/environment.embed.prod.ts` contient un placeholder
 `<domaine-indicateurs-a-remplacer>` (adresse de l'API appelée par le widget
-embarqué, voir `docs/integration-indicateurs.md` §"environment.embed.prod.ts")
+embarqué, voir `docs/integration-indicateurs.md` section « environment.embed.prod.ts »)
 - à remplacer par le
 vrai domaine de production avant tout déploiement réel du widget. Le build
 réussit même si l'oubli persiste ; l'erreur n'apparaît qu'au runtime, dans le

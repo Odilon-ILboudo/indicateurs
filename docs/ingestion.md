@@ -197,7 +197,7 @@ avoir besoin d'accéder à la base Indicateurs. Fichier prêt à copier et guide
 complet : [`integration-platon-relay.md`](./integration-platon-relay.md).
 
 Le relais republie chaque ligne de `platon_outbox_events` **telle quelle**,
-sans l'interpréter (voir §"Principe" du guide ci-dessus) - la classification
+sans l'interpréter (voir section « Principe » du guide ci-dessus) - la classification
 des événements génériques (`raw:<Table>`) se fait dans les consumers, étape 3
 ci-dessous.
 
@@ -225,7 +225,7 @@ directement comme un événement métier déjà résolu.
   pipeline s'y prête, recalcul complet sinon - voir `calcul-differentiel.md`).
   `courseId` n'est résolu via PLaTon que si la formule en a réellement besoin
   (`isCourseAware` - voir définition d'`activity-aware`/`course-aware` dans
-  [`parcours-donnees.md` §0](./parcours-donnees.md#0-conventions)) ;
+  [`parcours-donnees.md` section 0](./parcours-donnees.md#0-conventions)) ;
   `computeViewIncremental` choisit lui-même `activityId` ou `courseId` selon
   ce que la formule déclare.
 - **Résultat :** met à jour `indicator_values` pour `(indicatorId, learner, userId)` + émet WS
@@ -326,7 +326,7 @@ curl -u "$RABBITMQ_USER:$RABBITMQ_PASSWORD" -X POST \
 `table`/colonnes à adapter à une règle réellement active et installée (voir
 `SELECT * FROM indicator_event_rules` en base `indicators`) - `attempts_at_success`
 correspond à la règle "Exercice complet" (`exercice.completed`) installée par
-défaut pour ce guide (§0).
+défaut pour ce guide (section 0).
 
 ### Test 2 - Déclenchement via trigger (simulation réaliste, bout en bout)
 

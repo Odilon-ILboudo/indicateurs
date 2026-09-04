@@ -3,7 +3,7 @@
 Ce document détaille l'anatomie d'un **indicateur** (`IndicatorDefinition`) : ce
 qu'il contient, comment lire sa définition JSON, et pourquoi on peut le décrire
 comme une **ressource réutilisable**. Pour le moteur qui exécute les formules et
-le modèle Option B+, voir [`readme.md`](../readme.md) §6 et §7.
+le modèle Option B+, voir [`readme.md`](../readme.md) section 6 et section 7.
 
 ---
 
@@ -51,11 +51,11 @@ indicateurs*.
   "description": "Nombre moyen de tentatives avant la première note de 100",
 
   // Le contexte unique de cet indicateur - détermine QUI le voit et
-  // comment son contextId est construit (voir readme.md §7-8)
+  // comment son contextId est construit (voir readme.md section 7-8)
   "contextType": "learner",   // learner | teacher | admin | course | activity | group
 
   // Optionnel - relie cet indicateur à ses "sœurs" du même thème mais
-  // scopées à d'autres contextType. Voir readme.md §8.
+  // scopées à d'autres contextType. Voir readme.md section 8.
   "familyName": "Tentatives avant réussite",
 
   // Événements PLaTon qui déclenchent un recalcul / refresh
@@ -69,7 +69,7 @@ indicateurs*.
   "usageCount": 12,
 
   // Optionnel - restreint la visibilité de l'indicateur (en plus des règles par
-  // contextType, voir readme.md §8) à une liste de rôles PLaTon.
+  // contextType, voir readme.md section 8) à une liste de rôles PLaTon.
   "visibilityRoles": null,
 
   // Optionnel - id de l'indicateur dont celui-ci a été créé par réutilisation
@@ -92,7 +92,7 @@ indicateurs*.
   "interpretationHint": "Un résultat élevé signifie que l'étudiant a eu du mal à réussir.",
 
   // Formule unique partagée par TOUTES les visualisations (1 indicateur = 1 formule).
-  // Voir readme.md §6 pour le catalogue des 10 types d'étapes.
+  // Voir readme.md section 6 pour le catalogue des 10 types d'étapes.
   "formula": {
     "version": "1.0",
     "pipeline": [
@@ -136,14 +136,14 @@ indicateurs*.
 | `id` | UUID, généré à la création. |
 | `name` | Nom affiché, unique. |
 | `description` | Texte libre, affiché en infobulle/aide. |
-| `contextType` | Le contexte auquel appartient l'indicateur - fixe pour toute sa durée de vie. Détermine `contextId` lors du calcul (`userId` pour `learner`, `courseId`/`groupId`/`activityId` pour les autres) et qui peut le voir (table de visibilité, readme §8). |
+| `contextType` | Le contexte auquel appartient l'indicateur - fixe pour toute sa durée de vie. Détermine `contextId` lors du calcul (`userId` pour `learner`, `courseId`/`groupId`/`activityId` pour les autres) et qui peut le voir (table de visibilité, readme section 8). |
 | `familyName` | `null` ou nom partagé par d'autres indicateurs traitant du même thème sous un autre `contextType`. Sert uniquement à l'affichage groupé côté admin/sélecteur (pages dédiées par famille) - aucun lien technique entre les membres d'une famille. |
 | `isFamilyPlaceholder` | `true` uniquement pour la ligne technique créée en démarrant une nouvelle famille sans indicateur existant à y ajouter tout de suite - invisible dans les listes normales, remplacée dès qu'un premier membre réel est ajouté. |
 | `baseIndicatorId` | `null` ou id de l'indicateur source d'une réutilisation (bouton "Réutiliser" du wizard) - copie ponctuelle à la création, sans lien vivant ensuite. |
-| `requiredEvents` | Liste d'événements PLaTon (`exercice.completed`, …) qui, lors de l'ingestion, déclenchent une mise à jour temps réel de la valeur. Le wizard ne propose que les événements **configurés et installés** (voir readme.md §6bis, `event-rules`) - impossible d'y saisir une valeur libre. Vide et case "Activer des événements déclencheurs" décochée = recalcul périodique à la place (voir `AggregationService.recalculateTriggerlessIndicators`, fréquence configurable via `TRIGGERLESS_RECALC_CRON`). |
+| `requiredEvents` | Liste d'événements PLaTon (`exercice.completed`, …) qui, lors de l'ingestion, déclenchent une mise à jour temps réel de la valeur. Le wizard ne propose que les événements **configurés et installés** (voir readme.md section 6bis, `event-rules`) - impossible d'y saisir une valeur libre. Vide et case "Activer des événements déclencheurs" décochée = recalcul périodique à la place (voir `AggregationService.recalculateTriggerlessIndicators`, fréquence configurable via `TRIGGERLESS_RECALC_CRON`). |
 | `isActive` | Indicateur visible/calculable ou désactivé globalement. Forcé à `false` à chaque sauvegarde (création ou édition) - une réactivation manuelle explicite est toujours nécessaire. |
 | `isComplete` | Complétude réelle du formulaire (nom, contexte, au moins une visualisation, pipeline valide), indépendante de `isActive` - affichée comme badge "Incomplet" côté admin quand fausse. |
-| `visibilityRoles` | `null` ou liste de rôles PLaTon auxquels restreindre la visibilité de l'indicateur, en plus des règles par `contextType` (readme §8). |
+| `visibilityRoles` | `null` ou liste de rôles PLaTon auxquels restreindre la visibilité de l'indicateur, en plus des règles par `contextType` (readme section 8). |
 | `usageCount` | Compteur d'utilisation (nombre d'utilisateurs l'ayant activé). |
 | `formula` | **Formule unique partagée par toutes les visualisations** - pipeline DSL (1 indicateur = 1 formule). |
 | `thresholds` | `{ good?: number; warning?: number; critical?: number }` - seuils globaux optionnels : ≤ good = vert, ≤ warning = orange, ≥ critical (si défini) = rouge foncé, sinon rouge dès > warning. Affectent la couleur de la valeur (card) et la légende du panneau latéral. |
@@ -178,12 +178,12 @@ indicateurs*.
 
 ## Pour aller plus loin
 
-- [`readme.md`](../readme.md) §5 - schéma complet des entités (`indicator_definitions`,
+- [`readme.md`](../readme.md) section 5 - schéma complet des entités (`indicator_definitions`,
   `indicator_values`, `indicator_execution_logs`, `indicator_feedback`,
   `indicator_notifications`, `indicator_event_types`, `indicator_event_rules`,
   `indicator_snapshots`, `indicator_pins`, `user_indicator_preferences`)
-- [`readme.md`](../readme.md) §6 - moteur DSL : catalogue des 10 types d'étapes,
+- [`readme.md`](../readme.md) section 6 - moteur DSL : catalogue des 10 types d'étapes,
   `computeView`, snapshots vivants
-- [`readme.md`](../readme.md) §7 - modèle Option B+ (`contextType` + `visualizations[]`),
+- [`readme.md`](../readme.md) section 7 - modèle Option B+ (`contextType` + `visualizations[]`),
   sélection de viz par l'utilisateur
-- [`readme.md`](../readme.md) §8 - familles d'indicateurs et visibilité par rôle
+- [`readme.md`](../readme.md) section 8 - familles d'indicateurs et visibilité par rôle

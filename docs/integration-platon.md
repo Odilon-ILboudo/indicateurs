@@ -39,9 +39,9 @@ sur une même page - voir le test empirique correspondant).
 Fichier : `apps/web/src/app/widgets/sidebar/sidebar.component.ts`, dans
 `ngOnInit()`, à côté des autres liens conditionnels (`isTeacherRole`,
 `UserRoles.admin`). Deux liens plutôt qu'un seul, décision explicite validée
-sur le simulateur (voir `integration-indicateurs.md` §"Points d'entrée sidebar") : pas de
+sur le simulateur (voir `integration-indicateurs.md` section « Points d'entrée sidebar ») : pas de
 sélecteur de page à l'intérieur du widget, chaque lien mène directement à
-la bonne page via `initial-view` (§6bis) :
+la bonne page via `initial-view` (section 6bis) :
 
 ```ts
 ...(this.user.role === UserRoles.teacher || this.user.role === UserRoles.student
@@ -118,7 +118,7 @@ export class IndicateursPage implements OnInit, AfterViewInit {
 
   ngAfterViewInit() {
     // Indispensable, pas optionnel : sans lui, RoleService démarre sur 'student' par défaut et
-    // tous les indicateurs teacher/admin restent invisibles, sans la moindre erreur (voir §10
+    // tous les indicateurs teacher/admin restent invisibles, sans la moindre erreur (voir section 10
     // de integration-indicateurs.md - le bug le plus sérieux trouvé pendant l'implémentation).
     // this.currentUser : objet PLaTon déjà disponible côté app hôte (id/username/firstName/
     // lastName/email/role/active/createdAt/updatedAt), à adapter au type réel utilisé ici.
@@ -185,7 +185,7 @@ this.router.navigate(['/indicateurs'], {
 })
 ```
 
-La page hôte (§3) lit ces query params sur sa propre route et les
+La page hôte (section 3) lit ces query params sur sa propre route et les
 retransmet en attributs `context-*` :
 
 ```ts
@@ -216,7 +216,7 @@ export class IndicateursPage implements OnInit {
     this.contextCourseId = q['courseId'];
     this.contextActivityName = q['activityName'];
     this.contextCourseName = q['courseName'];
-    // ... reste du contrat §3
+    // ... reste du contrat section 3
   }
 }
 ```
@@ -227,7 +227,7 @@ leur propre section). Sans `context-type`, le widget démarre simplement
 sur le tableau de bord comme avant - aucune régression pour une
 intégration qui ne fournirait pas ces attributs.
 
-Testé dans le simulateur (voir `integration-indicateurs.md` §"Accès aux indicateurs scopés...") : clic réel
+Testé dans le simulateur (voir `integration-indicateurs.md` section « Accès aux indicateurs scopés... ») : clic réel
 depuis une page d'activité/cours factice jusqu'à la bonne vue d'indicateurs,
 avec panneau de groupe et bouton de comparaison fonctionnels.
 
@@ -237,12 +237,12 @@ au widget, rien à fournir côté PLaTon pour que ce lien fonctionne.
 
 ### 6bis. `initial-view` (optionnel) - pour le second lien de sidebar
 
-Complète le lien "Gérer mes indicateurs" du §1 : sans lui, `<indicateurs-app>`
+Complète le lien "Gérer mes indicateurs" du section 1 : sans lui, `<indicateurs-app>`
 démarre toujours sur le tableau de bord (cartes personnelles). Avec
 `initial-view="indicators"`, il démarre directement sur la page d'activation -
 pas de sélecteur intermédiaire à l'intérieur du widget, la sidebar PLaTon
 jouant déjà ce rôle (voir `integration-indicateurs.md`
-§"Points d'entrée sidebar").
+section « Points d'entrée sidebar »).
 
 ```html
 <indicateurs-app
@@ -251,7 +251,7 @@ jouant déjà ce rôle (voir `integration-indicateurs.md`
 </indicateurs-app>
 ```
 
-`context-type` (§6), s'il est fourni, prend le pas sur `initial-view` - le
+`context-type` (section 6), s'il est fourni, prend le pas sur `initial-view` - le
 lien "Voir les indicateurs" d'une page cours/activité reste prioritaire sur
 n'importe quel lien de sidebar.
 
@@ -264,11 +264,11 @@ n'importe quel lien de sidebar.
   indicateurs, détail, familles - ne dépend de code admin ni de `@platon/*`).
 - Le contrat de la balise `<indicateurs-app>` : un seul attribut/`@Input()`
   requis, le jeton d'accès (`access-token`) ; `user` fortement recommandé
-  (voir §3) ; `initial-view` (§6bis) et `context-*` (§6) optionnels. Le
+  (voir section 3) ; `initial-view` (section 6bis) et `context-*` (section 6) optionnels. Le
   routage interne
   (tableau de bord ↔ liste ↔ détail) reste entièrement gardé par Indicateurs
   lui-même, via une `LocationStrategy` purement interne plutôt qu'en hash
-  routing (voir `integration-indicateurs.md` §"Routage interne isolé") : le routage du widget ne
+  routing (voir `integration-indicateurs.md` section « Routage interne isolé ») : le routage du widget ne
   touche jamais l'URL visible de PLaTon, dans un sens comme dans l'autre -
   zéro risque de collision, mais aussi zéro deep-link direct vers une vue
   précise du widget depuis l'extérieur (voir Ouvert).
@@ -286,7 +286,7 @@ n'importe quel lien de sidebar.
   reproduit fidèlement ce qui compte pour ce test (mêmes versions, vrais
   fichiers CSS, vraie config de routeur, fidélité validée en démarrant une
   fois le vrai PLaTon en local - voir `integration-indicateurs.md`
-  §"Simulateur de test en conditions réelles PLaTon") mais
+  section « Simulateur de test en conditions réelles PLaTon ») mais
   pas les ~20 autres libs `@platon/feature/*` chargées simultanément, ni le
   vrai CSP, ni la vraie authentification CAS. **Cette dernière validation en
   conditions réelles complètes reste la responsabilité de l'équipe PLaTon**,

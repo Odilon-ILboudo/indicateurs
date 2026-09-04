@@ -273,7 +273,7 @@ computeViewIncremental(indicator, event)
         ├─ 1. getIncrementalShape(formula) → shape ou null
         │
         ├─ shape?.findFirst ?
-        │      ├─ OUI → Chemin findFirst (§7.3)
+        │      ├─ OUI → Chemin findFirst (section 7.3)
         │      │
         │      ├─ shape?.groupByField ?
         │      │      └─ OUI → groupCandidateRows
@@ -282,11 +282,11 @@ computeViewIncremental(indicator, event)
         │      └─ Fallback : computeWithCandidateRows (SQL complet)
         │
         ├─ shape?.groupByField ?
-        │      └─ OUI → Chemin groupBy (§7.2)
+        │      └─ OUI → Chemin groupBy (section 7.2)
         │             ├─ existingGroupRowValues en BDD ? → incrémental
         │             └─ sinon → computeWithGroupRowMap (SQL complet)
         │
-        └─ else → Chemin rowValues (§7.1) ou SQL complet (§7.4)
+        └─ else → Chemin rowValues (section 7.1) ou SQL complet (section 7.4)
 ```
 
 ### 7.1 Chemin `rowValues` (le plus simple)

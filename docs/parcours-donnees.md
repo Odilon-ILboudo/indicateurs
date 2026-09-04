@@ -1,6 +1,6 @@
 # Parcours de données - du composant frontend à la base de données
 
-Ce document complète `readme.md` (qui liste les routes API par contrôleur, §9)
+Ce document complète `readme.md` (qui liste les routes API par contrôleur, section 9)
 en traçant, **fichier par fichier**, le chemin complet de
 chaque cercle de requêtes : composant Angular → service frontend → appel HTTP
 → contrôleur NestJS → service backend (avec ses cascades) → accès aux données
@@ -185,7 +185,7 @@ demande via `computeView()` lorsque l'utilisateur les affiche - voir C.
       (`indicator.formula` - **1 indicateur = 1 formule**, partagée par
       toutes les visualisations). Pas de pipeline → `BadRequestException`.
    3. Calcule la clé de cache `cacheContextId` via `resolveCacheContextId()`
-      (jamais de `vizId` dedans - voir `readme.md` §6 "clé de cache" pour le
+      (jamais de `vizId` dedans - voir `readme.md` section 6 "clé de cache" pour le
       détail par `contextType`).
    4. **Cache** : si `!forceRefresh`, lecture
       `indicatorValueModel` (table `indicator_values`,
@@ -199,7 +199,7 @@ demande via `computeView()` lorsque l'utilisateur les affiche - voir C.
       `computeWithCandidateRows`, qui alimentent aussi l'état différentiel en
       cache pour les événements suivants) ; sinon, retombe sur
       `formulaInterpreter.interpret(formula, formulaContext)` générique
-      (moteur DSL, voir `readme.md` §6 pour le détail des 10 types d'étapes,
+      (moteur DSL, voir `readme.md` section 6 pour le détail des 10 types d'étapes,
       et `docs/calcul-differentiel.md` pour le détail des deux chemins).
    7. **Post-traitement noms** : si le résultat est un tableau de
       buckets avec `userIds`, appel
@@ -273,7 +273,7 @@ parent (voir F pour `from: 'activity'` / `from: 'group-snapshot'`).
    → **`POST /api/indicators/:id/compute-view`** - **cascade
    identique à B.2**. Le résultat est stocké dans `results[viz.id]`, puis
    `buildChartOptions(viz, result)` (purement local) construit les
-   options ECharts (bar/gauge/line/histogram, voir `readme.md` §10
+   options ECharts (bar/gauge/line/histogram, voir `readme.md` section 10
    "Graphiques").
 
 ---
@@ -282,7 +282,7 @@ parent (voir F pour `from: 'activity'` / `from: 'group-snapshot'`).
 
 `api/src/modules/features/user-preferences/` - préfixe `@Controller('preferences')`
 → `/api/preferences` (PAS de sous-préfixe `/indicators`), `@UseGuards(AuthGuard)`
-sur tout le contrôleur (voir readme.md §12).
+sur tout le contrôleur (voir readme.md section 12).
 
 > Le `?userId=` visible dans les appels ci-dessous est toujours envoyé par le
 > frontend (`indicator.service.ts`), mais le backend l'**ignore** : l'utilisateur
@@ -407,7 +407,7 @@ visible pour `canManageIndicators`/`canCreateIndicators` (`RoleService`).
    modale retourne "saved".
 5. `openFamilyWizard()` / `openFamilyMember()` : enchaîne plusieurs
    `IndicatorBuilderComponent` (un par contexte de la famille) - voir
-   readme.md §8 pour le détail fonctionnel.
+   readme.md section 8 pour le détail fonctionnel.
 
 ### `IndicatorBuilderComponent` - `features/admin/indicator-builder.component.ts`
 
@@ -569,7 +569,7 @@ Bouton "Événements & déclencheurs" (`admin-indicator-manager.component.ts`
 
 > Toutes les routes `/api/event-rules*` exigent `AuthGuard` + `AdminGuard`
 > (y compris les `GET`), contrairement à `/api/event-types` dont les `GET`
-> restent publics - voir readme.md §6bis pour le détail du mécanisme.
+> restent publics - voir readme.md section 6bis pour le détail du mécanisme.
 
 ---
 
@@ -670,7 +670,7 @@ depuis l'ingestion d'événements (voir I.3). Flux :
 
 Module `api/src/modules/features/courses/` (`@Controller('v1/courses')` →
 `/api/v1/courses`, `@UseGuards(AuthGuard)` sur tout le contrôleur - voir
-readme.md §12). Le service interroge directement
+readme.md section 12). Le service interroge directement
 `@Inject('PLATON_DATA_SOURCE') DataSource` en SQL brut (connexion `'platon'`,
 lecture seule), sans passer par `PlatonService`.
 
@@ -882,7 +882,7 @@ Backend : `courses.controller.ts` `search` (params `search`, `members`,
 
 Module `api/src/modules/features/resources/` (`@Controller('v1/resources')`
 → `/api/v1/resources`, `@UseGuards(AuthGuard)` sur tout le contrôleur - voir
-readme.md §12), même pattern SQL brut sur `'platon'`. Frontend :
+readme.md section 12), même pattern SQL brut sur `'platon'`. Frontend :
 `ResourceService` (`platon-stubs/resource-browser.ts`,
 `const API = ${environment.apiUrl}/v1`) via
 `features/resources/resource/resource.presenter.ts` (`ResourcePresenter`).

@@ -13,8 +13,8 @@ séparés de PLaTon, mais il **accède directement à la base de données de PLa
   DSL) et l'explorateur de schéma de l'admin.
 - **Écriture (DDL)** : `EventRulesService.installTrigger()` exécute `CREATE TRIGGER`
   directement sur `platon_db`, via une connexion admin séparée
-  (`PLATON_DB_ADMIN_USERNAME`/`PASSWORD`, voir `ingestion.md` § "Droits Postgres
-  requis").
+  (`PLATON_DB_ADMIN_USERNAME`/`PASSWORD`, voir `ingestion.md` section « Droits Postgres
+  requis »).
 
 C'est un couplage fort ("database per service" non respecté), accepté jusqu'ici parce
 que la contrainte du projet était de **ne jamais modifier ni redéployer le code de
@@ -135,7 +135,7 @@ seulement dans cette proposition future (voir
   côté Indicateurs doivent encore classifier (`EventClassifierService`).
 
 `DELETE /api/external/watchers/:id` retire la règle et réduit/supprime le
-déclencheur, même logique qu'aujourd'hui (§ "Supprimer" dans `ingestion.md`).
+déclencheur, même logique qu'aujourd'hui (section « Supprimer » dans `ingestion.md`).
 
 ### 1.4 Authentification
 

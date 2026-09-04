@@ -24,7 +24,7 @@ Les écrans concernés (`overview.page.ts`, `indicators.page.ts`,
 aucune réécriture nécessaire, seul leur assemblage change.
 
 `family-indicators.page.ts` est explicitement exclu des routes embarquées
-(voir §"Routes réduites" ci-dessous) : ce fichier enveloppe directement un
+(voir section « Routes réduites » ci-dessous) : ce fichier enveloppe directement un
 composant d'administration, sans vérification de rôle - "zéro import
 `@platon/*`" ne suffit pas à garantir qu'un écran soit sûr pour un
 non-admin.
@@ -103,7 +103,7 @@ export const embedRoutes: Routes = [
 
 `indicators/family/:name` (`FamilyIndicatorsPage`) est volontairement
 absent : cette page enveloppe directement le composant d'administration
-sans vérification de rôle (voir §"Écrans réutilisés" ci-dessus). Seule
+sans vérification de rôle (voir section « Écrans réutilisés » ci-dessus). Seule
 `indicators/selector-family/:name` (`SelectorFamilyIndicatorsPage`, qui
 enveloppe `IndicatorSelectorComponent` - le vrai composant de sélection)
 reste dans les routes embarquées ; cette page n'affiche que les actions
@@ -138,7 +138,7 @@ export const embedConfig: ApplicationConfig = {
 
 Différences avec `app.config.ts` de l'app autonome, et pourquoi :
 - Pas de `provideZoneChangeDetection` : `zone.js` reste nécessaire (voir
-  §"Second projet" plus bas) mais fourni via `polyfills` plutôt que ce
+  section « Second projet » plus bas) mais fourni via `polyfills` plutôt que ce
   provider.
 - `{ provide: AuthProvider, useClass: RemoteAuthProvider }` conservé :
   `DashboardSettingsService` en dépend directement (`NullInjectorError`
@@ -153,11 +153,11 @@ Différences avec `app.config.ts` de l'app autonome, et pourquoi :
   que `withHashLocation()` : `withHashLocation()` écrit dans
   `window.location`, le même objet que le routeur de la page hôte -
   écraserait l'URL visible de PLaTon dès l'initialisation du widget. Voir
-  §"Routage interne isolé" plus bas.
+  section « Routage interne isolé » plus bas.
 
 `EMBEDDED_MODE` (`core/tokens/embedded-mode.token.ts`) est un
 `InjectionToken<boolean>` lu par `auth.interceptor.ts` pour émettre un
-évènement plutôt que naviguer sur un jeton expiré - voir §"Jeton expiré".
+évènement plutôt que naviguer sur un jeton expiré - voir section « Jeton expiré ».
 
 ## `main-embed.ts` : bootstrap en élément personnalisé
 
@@ -190,7 +190,7 @@ createApplication(embedConfig)
           "src/app/shared/styles/ng-zorro/light.less",
           "src/app/shared/styles/material/light.scss"
           // pas de bundleName/inject:false : Angular concatène les trois dans un seul
-          // styles.css, dans cet ordre - voir §"CSS" plus bas
+          // styles.css, dans cet ordre - voir section « CSS » plus bas
         ]
       },
       "configurations": {
@@ -287,7 +287,7 @@ Voir Ouvert.
 
 ## `OnPush` - recommandé, pas indispensable
 
-`zone.js` étant conservé (voir §"Second projet"), `OnPush` n'est pas un
+`zone.js` étant conservé (voir section « Second projet »), `OnPush` n'est pas un
 prérequis - juste une bonne pratique déjà largement suivie dans le code.
 
 ## Accès aux indicateurs scopés cours/activité/groupe depuis PLaTon : `context-*`
@@ -304,7 +304,7 @@ Résolu en deux parties :
   `ActivityPresenter`/`CoursePresenter` (dépendent de `@platon/*`, sans
   objet ici puisque les identifiants arrivent déjà de PLaTon).
 - **Attributs `context-*`** sur `<indicateurs-app>` (voir
-  `integration-platon.md` §6) : `EmbedRootComponent` navigue automatiquement
+  `integration-platon.md` section 6) : `EmbedRootComponent` navigue automatiquement
   vers `/context` avec les bons query params dès que `context-type` est
   fourni, après `router.initialNavigation()` (l'ordre importe : appeler
   `router.navigate()` avant démarrerait un routeur pas encore initialisé).
@@ -341,7 +341,7 @@ vrai dépôt PLaTon (Nx, API NestJS, ~20 libs `@platon/feature/*`) :
   (donc `PathLocationStrategy`, la config à laquelle `MemoryLocationStrategy`
   doit rester inoffensive).
 - Une page hôte (`indicateurs-page.component.ts`) qui reproduit exactement
-  le contrat documenté dans `integration-platon.md` §3-4/7 (attribut
+  le contrat documenté dans `integration-platon.md` section 3-4/7 (attribut
   `access-token`, propriété `user`, attributs `context-*`, la feuille de
   style unique, script `main.js`).
 - La vraie sidebar de PLaTon (`sidebar.component.ts` du simulateur) - même
