@@ -42,15 +42,46 @@ seul à connaître les règles configurées par son administration
 
 [`outbox-relay.service.ts`](./platon-integration/outbox-relay.service.ts) et
 [`outbox-relay.module.ts`](./platon-integration/outbox-relay.module.ts), à
-copier dans le dépôt PLaTon (emplacement au choix de l'équipe, ex. un module
-`outbox-relay/` à côté des autres modules de `apps/api/src/`), puis adapter :
+copier dans le dépôt PLaTon. `apps/api/src/app/` ne contient que
+`app.module.ts` et `commands/` : chaque fonctionnalité de PLaTon vit dans sa
+propre lib Nx sous `libs/feature/<nom>/server/` (voir par exemple
+`libs/feature/announcement/server/`), importée ensuite dans `AppModule`.
+Suivre cette même convention plutôt qu'un dossier isolé dans `apps/api/` :
+
+```
+libs/feature/indicateurs-relay/server/
+└── src/lib/
+    ├── outbox-relay.module.ts    ← copié depuis docs/platon-integration/
+    └── outbox-relay.service.ts   ← copié depuis docs/platon-integration/
+```
+
+Généré comme les autres libs de PLaTon, par exemple :
+
+```bash
+nx g @nx/nest:library indicateurs-relay/server --directory=libs/feature/indicateurs-relay
+```
+
+puis exporté depuis `src/index.ts` de cette lib et importé dans
+`apps/api/src/app/app.module.ts` :
+
+```ts
+import { OutboxRelayModule } from '@platon/feature/indicateurs-relay/server'
+
+@Module({
+  imports: [
+    // ... les autres FeatureXxxServerModule
+    OutboxRelayModule,
+  ],
+})
+export class AppModule {}
+```
+
+Avant d'importer, adapter dans les deux fichiers copiés :
 
 - L'injection de la base de données (`@InjectDataSource()`) : utiliser la
   connexion réelle du projet PLaTon si elle est nommée autrement.
 - La lecture de l'URI RabbitMQ (`INDICATEURS_RABBITMQ_URI` dans l'exemple du
   module) : adapter à la convention de configuration réelle de PLaTon.
-- Importer `OutboxRelayModule` dans le module racine (`AppModule` ou
-  équivalent).
 
 ### 3. Dépendances npm à ajouter
 

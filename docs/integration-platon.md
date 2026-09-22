@@ -94,7 +94,6 @@ complet, tout regroupé :
   standalone: true,
   selector: 'app-indicateurs-page',
   template: `
-    <link rel="stylesheet" href="https://<domaine-indicateurs>/embed/styles.css">
     <indicateurs-app
       #el
       [attr.access-token]="accessToken"
@@ -120,6 +119,8 @@ export class IndicateursPage implements OnInit, AfterViewInit {
   protected contextActivityName?: string;
   protected contextCourseName?: string;
 
+  private readonly base = 'https://<domaine-indicateurs>/embed';
+
   async ngOnInit() {
     const token = await this.authService.token();
     this.accessToken = token?.accessToken;
@@ -132,9 +133,7 @@ export class IndicateursPage implements OnInit, AfterViewInit {
     this.contextActivityName = q['activityName'];
     this.contextCourseName = q['courseName'];
 
-    // polyfills.js avant main.js : zone.js doit être chargé avant le bootstrap du widget.
-    await import('https://<domaine-indicateurs>/embed/polyfills.js');
-    await import('https://<domaine-indicateurs>/embed/main.js');
+    this.loadEmbedAssets();
   }
 
   ngAfterViewInit() {
@@ -148,6 +147,25 @@ export class IndicateursPage implements OnInit, AfterViewInit {
       // rediriger l'utilisateur vers la connexion PLaTon, au choix de l'équipe.
     });
   }
+
+  private loadEmbedAssets(): void {
+    if (document.querySelector(`link[href="${this.base}/styles.css"]`)) {
+      return;
+    }
+
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = `${this.base}/styles.css`;
+    document.head.appendChild(link);
+
+    // polyfills.js avant main.js : zone.js doit être chargé avant le bootstrap du widget.
+    for (const src of ['polyfills.js', 'main.js']) {
+      const script = document.createElement('script');
+      script.type = 'module';
+      script.src = `${this.base}/${src}`;
+      document.body.appendChild(script);
+    }
+  }
 }
 ```
 
@@ -156,12 +174,27 @@ export class IndicateursPage implements OnInit, AfterViewInit {
 méthode que celle déjà utilisée ailleurs dans PLaTon, rien à ajouter de ce
 côté.
 
+**Mécanisme retenu** : `loadEmbedAssets()` crée les balises `<link>`/`<script
+type="module">` par programmation plutôt que d'utiliser un `import()`
+dynamique, cette approche est celle qui a effectivement fonctionné dans le
+simulateur (`platon-simulateur/src/app/indicateurs-page/indicateurs-page.component.ts`).
+Le garde-fou sur `document.querySelector` évite de recharger le script si la
+route est revisitée sans démonter le composant.
+
+**Point de vigilance pour le déploiement réel** : `<script type="module">`
+est soumis au CORS dès qu'il est chargé depuis un domaine différent,
+contrairement à un `<script>` classique. L'en-tête CORS déjà prévu côté API
+Indicateurs (`api/src/main.ts`, `origin: true`) ne couvre pas ces fichiers
+statiques ; il faut aussi l'ajouter sur le bloc `location /embed/` de
+`nginx.conf`. Non couvert par le test en simulateur, qui charge ces fichiers
+depuis sa propre origine.
+
 Détail des parties de ce composant :
 
-- **La feuille de style** (`<link>`) : le script JS ne l'injecte pas
-  lui-même, elle doit être posée à côté de `<indicateurs-app>` dans le
-  template. Un seul fichier (`styles.css`, ~900 Ko brut, ~65 Ko compressé),
-  fusionné au build à partir de trois blocs (normalize + police d'icônes
+- **La feuille de style** (`<link>`) : posée par `loadEmbedAssets()` en même
+  temps que le script, le CSS n'est pas injecté par `main.js` lui-même. Un
+  seul fichier (`styles.css`, ~900 Ko brut, ~65 Ko compressé), fusionné au
+  build à partir de trois blocs (normalize + police d'icônes
   Material + variables, thème ng-zorro, thème Material).
 - **`user`** (`ngAfterViewInit`) : posé comme propriété sur l'élément natif
   (pas un attribut HTML, sa valeur est un objet JSON trop gros pour un
