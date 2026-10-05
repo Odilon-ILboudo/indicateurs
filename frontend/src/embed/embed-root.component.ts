@@ -1,8 +1,4 @@
-/*
-Racine du point d'entrée embarqué - <indicateurs-app>, montée par PLaTon. Pas de
-sidebar/toolbar interne (fournies par PLaTon) ni de flux de connexion (jeton et utilisateur
-arrivent via les attributs de la balise).
-*/
+/* Racine du point d'entrée embarqué <indicateurs-app> - pas de sidebar/toolbar ni de flux de connexion internes, tout arrive en attributs. */
 import { ChangeDetectionStrategy, Component, Input, OnChanges, OnInit, SimpleChanges, inject } from '@angular/core';
 import { Router, RouterModule } from '@angular/router';
 import { RoleService } from '../app/core/services/role.service';
@@ -44,10 +40,7 @@ export class EmbedRootComponent implements OnInit, OnChanges {
   private navigated = false;
 
   ngOnInit(): void {
-    /*
-    createCustomElement() ne passe pas par le bootstrap standard d'Angular : la navigation
-    initiale du routeur ne se déclenche jamais sans cet appel explicite.
-    */
+    /* createCustomElement() ne passe pas par le bootstrap standard : la navigation initiale ne se déclenche jamais sans cet appel. */
     this.router.initialNavigation();
     this.navigateToInitialViewIfNeeded();
   }

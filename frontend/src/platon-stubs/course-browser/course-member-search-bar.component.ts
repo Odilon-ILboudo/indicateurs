@@ -51,10 +51,7 @@ export class CourseMemberSearchBarComponent implements ControlValueAccessor, OnI
     this.refresh()
   }
 
-  /** Recharge la liste depuis le serveur - à appeler après tout ajout/suppression/changement
-   de rôle, ce composant ne se rafraîchit jamais tout seul. Public car appelé depuis
-   members.page.ts via une référence de template (#searchbar).
-  */
+  /** Recharge la liste - à appeler après ajout/suppression/changement de rôle, ne se rafraîchit jamais seul. Public (#searchbar). */
   refresh(): void {
     if (!this.courseId) return
     this.searching = true

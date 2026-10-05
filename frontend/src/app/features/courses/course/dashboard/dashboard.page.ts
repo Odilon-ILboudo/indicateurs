@@ -100,10 +100,7 @@ export class CourseDashboardPage implements OnInit, OnDestroy {
   protected teacherContext: DashboardContext | null = null
   protected adminContext: DashboardContext | null = null
 
-  /*
-  Indicateurs figés (pins enseignant) sur ce cours - indépendant des
-  préférences perso, cf. IndicatorPinsService côté backend.
-  */
+  /* Indicateurs figés (pins enseignant) sur ce cours - indépendant des préférences perso. */
   protected pinsByIndicatorId = new Map<string, IndicatorPin>()
   protected canManagePins = false
   private currentCourseId: string | null = null

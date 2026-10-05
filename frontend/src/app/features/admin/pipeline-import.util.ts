@@ -1,7 +1,4 @@
-/*
-Parsing/validation d'un import YAML/JSON d'indicateur - partagé entre le wizard et la modale
-de choix initial, qui doit valider avant d'ouvrir le wizard.
-*/
+/* Parsing/validation d'un import YAML/JSON d'indicateur - partagé entre le wizard et la modale de choix initial. */
 import * as yaml from 'js-yaml';
 import {
   ImportedIndicatorMeta,
@@ -48,9 +45,7 @@ export function dehydrateStep(s: any): PipelineStep {
   };
 }
 
-/** Vérifie qu'une étape du pipeline a bien ses champs requis pour son type. Ne vérifie pas
- qu'il y a au moins une étape : un brouillon peut avoir un pipeline vide ou partiel.
-*/
+/** Vérifie que l'étape a ses champs requis pour son type - ne vérifie pas qu'il y a au moins une étape (brouillon possible). */
 export function validatePipelineStepComplete(s: PipelineStep, stepIndex: number): string | null {
   const ctx = `Étape ${stepIndex + 1} (${STEP_TYPE_LABELS[s.type]})`;
   switch (s.type) {
@@ -334,19 +329,12 @@ function validatePipelineColumns(pipeline: PipelineStep[], platonSchema: PlatonT
   }
 }
 
-/** `true` si `text` est du JSON strictement valide - utilisé pour rejeter du JSON collé par
- erreur en mode YAML (le YAML est un sur-ensemble du JSON, `yaml.load` l'accepterait
- silencieusement sinon) : voir `parseIndicatorImport` et `formatImportText`.
-*/
+/** `true` si JSON strictement valide - rejette du JSON collé en mode YAML (sinon accepté silencieusement, YAML ⊃ JSON). */
 export function looksLikeJson(text: string): boolean {
   try { JSON.parse(text); return true; } catch { return false; }
 }
 
-/** Parse et valide un import YAML/JSON complet d'indicateur (pas seulement le pipeline).
- `platonSchema` peut être vide (validation des tables/colonnes alors ignorée) - utile pour
- valider avant que le schéma PLaTon soit chargé. Lève `PipelineError`/`Error` sur tout
- problème, avec un message prêt à afficher tel quel.
-*/
+/** Parse et valide un import complet (pas seulement le pipeline) ; `platonSchema` vide ignore la validation tables/colonnes. */
 export function parseIndicatorImport(
   text: string,
   mode: 'yaml' | 'json',
@@ -354,11 +342,7 @@ export function parseIndicatorImport(
 ): { pipeline: PipelineStep[]; meta: ImportedIndicatorMeta } {
   if (!text.trim()) throw new Error('Le champ est vide. Collez votre indicateur ci-dessus avant d\'appliquer.');
 
-  /*
-  Mode strict : le YAML est un sur-ensemble du JSON (js-yaml accepterait silencieusement du
-  JSON collé par erreur en mode YAML) - on rejette explicitement ce cas plutôt que de laisser
-  passer, pour que le mode sélectionné corresponde vraiment au texte collé.
-  */
+  /* Mode strict : rejette explicitement du JSON collé en mode YAML plutôt que de laisser js-yaml l'accepter silencieusement. */
   if (mode === 'yaml' && looksLikeJson(text)) {
     throw new Error(
       'Ce texte est du JSON valide, pas du YAML. Sélectionnez le mode JSON, ou reformulez en syntaxe YAML (indentation, sans accolades).',

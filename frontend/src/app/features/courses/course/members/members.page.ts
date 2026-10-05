@@ -112,10 +112,7 @@ export class CourseMembersPage implements OnInit, OnDestroy {
         })
       })
     )
-    /*
-    Le composant de recherche (#searchbar) ne se rafraîchit jamais tout seul après un ajout -
-    sans cet appel, le nouveau membre n'apparaît nulle part tant qu'on ne recharge pas la page.
-    */
+    /* Le composant de recherche ne se rafraîchit jamais seul après un ajout - sans cet appel, rien n'apparaît sans recharger. */
     this.searchbarRef?.refresh()
   }
 

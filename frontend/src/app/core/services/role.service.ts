@@ -29,10 +29,7 @@ export class RoleService {
   canManageIndicators = computed(() => this.isAdmin() || this.isTeacher());
   canCreateIndicators = computed(() => this.isAdmin());
 
-  /* Le rôle courant peut-il voir les indicateurs de ce contexte (`learner`/`group`/...) ?
-   Si `visibilityRoles` est renseigné sur l'indicateur, il prend le dessus sur la règle par
-   défaut du contextType (ex. restreindre un indicateur `course` nominatif à teacher/admin).
-  */
+  /* Le rôle peut-il voir ce contexte ? `visibilityRoles`, s'il est renseigné, prend le dessus sur la règle par défaut du contextType. */
   canSeeIndicatorContext(contextType: IndicatorScope, visibilityRoles?: string[] | null): boolean {
     if (visibilityRoles && visibilityRoles.length > 0) {
       return visibilityRoles.includes(this.currentRole());

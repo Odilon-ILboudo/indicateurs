@@ -129,9 +129,7 @@ export class CoursesService {
     return { resource: this.mapCourse(row, permissions) };
   }
 
-  /* Réplique la règle PLaTon : update = owner OU admin global OU membre "teacher" du cours.
-   delete = owner OU admin global uniquement.
-  */
+  /* Réplique la règle PLaTon : update = owner/admin/membre "teacher" ; delete = owner/admin global uniquement. */
   private async computeCoursePermissions(
     ownerId: string,
     courseId: string,
@@ -513,11 +511,7 @@ export class CoursesService {
       permissions: {
         answer: true,
         update: hasWritePermission,
-        /*
-        Un étudiant doit pouvoir consulter les statistiques de ses propres
-        activités, pas seulement l'enseignant; contrairement à update/
-        viewResource, qui restent réservés à l'admin/enseignant du cours.
-        */
+        /* Un étudiant peut consulter ses propres statistiques, contrairement à update/viewResource réservés admin/enseignant. */
         viewStats: true,
         viewResource: hasWritePermission,
       },

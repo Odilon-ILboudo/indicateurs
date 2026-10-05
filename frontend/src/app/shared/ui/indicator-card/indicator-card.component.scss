@@ -187,8 +187,7 @@
     font-size: 32px !important;
     width: 32px !important;
     height: 32px !important;
-    /* Couleur pilotée par [style.color]="displayColor" dans le template - le gris ici ne sert
-       que de repli si jamais aucune couleur n'était calculée. */
+    /* Couleur pilotée par [style.color]="displayColor" dans le template - le gris ici n'est qu'un repli. */
     color: #bfbfbf;
   }
   

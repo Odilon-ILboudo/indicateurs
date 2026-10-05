@@ -100,6 +100,12 @@ public/uploads/
 *.sqlite3
 *.db
 
+# Dumps pg_dump produits par bin/platon-db/export.sh - données réelles,
+# jamais dans git (taille, et contiennent des données d'étudiants).
+dumps/
+dumps-backup/
+*.dump
+
 # Prisma
 prisma/dev.db
 prisma/dev.db-journal

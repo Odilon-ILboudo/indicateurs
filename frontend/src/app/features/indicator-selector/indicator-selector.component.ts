@@ -181,16 +181,12 @@ export class IndicatorSelectorComponent implements OnInit {
 
   @Output() indicatorsChanged = new EventEmitter<void>();
 
-  /** Non-null : la vue courante est la page dédiée d'une famille - la liste est alors
-   restreinte à cette seule famille, affichée à plat (jamais repliée).
-  */
+  /** Non-null : page dédiée d'une famille - liste restreinte à cette famille, affichée à plat. */
   @Input() familyNameFilter: string | null = null;
 
   allIndicators: IndicatorDefinition[] = [];
   displayRows: IndicatorDisplayRow[] = [];
-  /** Cartes de l'onglet Familles (une par famille) - affichées en grille de 3, paginées à 5
-   lignes (15/page) via `pagedFamilyCards`.
-  */
+  /** Cartes de l'onglet Familles (une par famille) - grille de 3, paginées à 5 lignes via `pagedFamilyCards`. */
   familyCards: { familyName: string; members: IndicatorDefinition[] }[] = [];
   familyPageIndex = 1;
   readonly familyPageSize = 15;
@@ -236,10 +232,7 @@ export class IndicatorSelectorComponent implements OnInit {
 
   applyFilters(): void {
     if (!this.familyNameFilter) {
-      /*
-      Persiste l'état des filtres/onglet de la liste principale pour que "Retour à la
-      liste" les restaure au lieu de repartir des valeurs par défaut.
-      */
+      /* Persiste l'état des filtres/onglet pour que "Retour à la liste" les restaure. */
       this.listState.selector.scope = this.filters.scope;
       this.listState.selector.sortBy = this.filters.sortBy;
       this.listState.selector.grouping = this.filters.grouping;
@@ -280,10 +273,7 @@ export class IndicatorSelectorComponent implements OnInit {
     }
 
     const rows = buildIndicatorDisplayRows(filtered, this.expandedFamilies);
-    /*
-    En page de famille dédiée, la ligne d'en-tête de famille est redondante avec le titre
-    de la page : on ne garde que les membres, à plat.
-    */
+    /* En page de famille dédiée, l'en-tête de famille est redondant avec le titre : on garde seulement les membres. */
     this.displayRows = this.familyNameFilter ? rows.filter(r => r.kind !== 'family') : rows;
     this.familyCards = rows.filter((r): r is Extract<IndicatorDisplayRow, { kind: 'family' }> => r.kind === 'family');
     this.familyPageIndex = 1;
@@ -294,9 +284,7 @@ export class IndicatorSelectorComponent implements OnInit {
     return this.familyCards.slice(start, start + this.familyPageSize);
   }
 
-  /** Clic sur une ligne de famille dans la liste principale : navigue vers sa page dédiée
-   plutôt que de la déplier sur place.
-  */
+  /** Clic sur une ligne de famille : navigue vers sa page dédiée plutôt que de la déplier sur place. */
   openFamilyPage(familyName: string): void {
     this.router.navigate([`${this.routeBasePath}/indicators/selector-family`, familyName]);
   }
@@ -305,9 +293,7 @@ export class IndicatorSelectorComponent implements OnInit {
     this.router.navigate([`${this.routeBasePath}/indicators`]);
   }
 
-  /** Nombre d'indicateurs de la famille affichée (indépendant des filtres recherche/tri
-   appliqués sur cette page, contrairement à `displayRows`).
-  */
+  /** Nombre d'indicateurs de la famille affichée, indépendant des filtres de cette page (contrairement à `displayRows`). */
   familyMemberCount(): number {
     return this.allIndicators.filter(ind => ind.familyName === this.familyNameFilter).length;
   }

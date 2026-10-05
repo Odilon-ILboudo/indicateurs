@@ -12,10 +12,7 @@ export const VALID_CONTEXT_TYPES = ['learner', 'teacher', 'admin', 'course', 'ac
 export const VALID_VIZ_TYPES = ['card', 'gauge', 'line-chart', 'bar-chart', 'histogram'] as const;
 const VALID_STEP_TYPES = ['fetch', 'join', 'filter', 'groupBy', 'findFirst', 'extract', 'aggregate', 'round', 'divide', 'js'];
 
-/* Ordre attendu par indicator-card.component.ts#statusColor : val<=good -> vert,
- val<=warning -> orange, sinon rouge. `critical` reste une borne documentaire
- (voir indicator-definition.entity.ts) mais doit rester cohérente si fournie.
-*/
+/* Ordre attendu par indicator-card.component.ts#statusColor : good ≤ warning ≤ critical (documentaire mais cohérent si fourni). */
 @ValidatorConstraint({ name: 'thresholdsOrder', async: false })
 class ThresholdsOrderConstraint implements ValidatorConstraintInterface {
   validate(_: unknown, args: ValidationArguments): boolean {
@@ -30,10 +27,7 @@ class ThresholdsOrderConstraint implements ValidatorConstraintInterface {
   }
 }
 
-/* @Validate est répété sur les 3 champs (et non un seul) car @IsOptional() n'exécute les
-validateurs d'un champ que si ce champ est renseigné : il faut donc accrocher le contrôle
-croisé à chacun pour qu'il se déclenche quelle que soit la combinaison de champs fournis.
-*/
+/* @Validate répété sur les 3 champs : @IsOptional() n'exécute un validateur que si ce champ précis est renseigné. */
 export class ThresholdsDto {
   @IsOptional() @IsNumber() @Validate(ThresholdsOrderConstraint) good?: number;
   @IsOptional() @IsNumber() @Validate(ThresholdsOrderConstraint) warning?: number;
@@ -49,9 +43,7 @@ export class VisualizationDto {
   @IsOptional() @IsString() @MaxLength(40) unit?: string;
 }
 
-/* Validation large sur `params` : la validation fine par type est déjà faite côté frontend,
- le backend ne fait qu'une vérification de forme minimale.
-*/
+/* Validation large sur `params` : la validation fine par type est déjà faite côté frontend. */
 export class FormulaStepDto {
   @IsString() @IsNotEmpty() id: string;
   @IsIn(VALID_STEP_TYPES) type: string;

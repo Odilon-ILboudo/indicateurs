@@ -1,11 +1,7 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 
-/**
-Restreint une route aux utilisateurs dont le rôle global (table "Users" locale) est 'admin'.
-S'appuie sur `request.user.id`, peuplé par AuthGuard et doit donc toujours être posé APRÈS :
-`@UseGuards(AuthGuard, AdminGuard)`.
-*/
+/** Restreint une route aux utilisateurs role='admin' - s'appuie sur request.user.id, toujours posé après AuthGuard. */
 @Injectable()
 export class AdminGuard implements CanActivate {
   constructor(

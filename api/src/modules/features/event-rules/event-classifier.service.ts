@@ -14,12 +14,7 @@ export interface ClassifiedEvent {
   payload: Record<string, any>;
 }
 
-/*
-Interprète un événement générique brut (`{table, op, new, old}`, produit par un déclencheur
-installé depuis l'admin) en 0..N événements métier, selon les IndicatorEventRule actives.
-Utilisé par les consumers RabbitMQ (le relais, côté LMS hôte, ne fait que
-transmettre les lignes de l'outbox telles quelles - voir docs/integration-platon-relay.md).
-*/
+/* Interprète un événement générique brut en 0..N événements métier selon les IndicatorEventRule actives, utilisé par les consumers. */
 @Injectable()
 export class EventClassifierService {
   private ruleCache: IndicatorEventRule[] = [];

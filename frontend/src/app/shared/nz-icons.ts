@@ -1,8 +1,4 @@
-/*
-Liste des icônes ng-zorro enregistrées - partagée entre le point d'entrée standalone
-(app.config.ts) et le point d'entrée embarqué (embed/embed.config.ts) pour ne jamais
-diverger entre les deux.
-*/
+/* Liste des icônes ng-zorro, partagée entre le point d'entrée standalone et embarqué pour ne jamais diverger. */
 import {
   AimOutline, AlignLeftOutline, ApartmentOutline, AppstoreOutline, ArrowDownOutline, ArrowLeftOutline, ArrowRightOutline,
   BarChartOutline, BellOutline, BugOutline, BulbOutline,

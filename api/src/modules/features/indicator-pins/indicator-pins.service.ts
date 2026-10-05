@@ -55,9 +55,7 @@ export class IndicatorPinsService {
     await this.pinRepository.delete({ indicatorId, contextType, contextId });
   }
 
-  /* Réplique CoursesService#hasActivityWritePermission : admin global ou membre "teacher"
-   du cours, n'importe lequel, pas seulement celui qui a créé le pin.
-  */
+  /* Réplique CoursesService#hasActivityWritePermission : admin global ou n'importe quel membre "teacher" du cours. */
   private async assertCanManagePins(
     userId: string,
     contextType: IndicatorPinContextType,

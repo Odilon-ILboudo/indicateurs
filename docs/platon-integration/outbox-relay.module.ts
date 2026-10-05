@@ -4,9 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { RabbitMQModule } from '@golevelup/nestjs-rabbitmq';
 import { OutboxRelayService, PLATON_EXCHANGE } from './outbox-relay.service';
 
-// À importer dans le module racine de l'application (ex. AppModule), une seule fois.
-// Adapter la lecture de l'URI RabbitMQ (INDICATEURS_RABBITMQ_URI) à la convention de
-// configuration réelle de ce projet (ConfigService ici, à titre d'exemple).
+// À importer une seule fois dans AppModule - adapter la lecture de l'URI RabbitMQ à la convention réelle du projet.
 @Module({
   imports: [
     ScheduleModule.forRoot(),

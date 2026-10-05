@@ -6,9 +6,7 @@ mat-toolbar {
   }
 }
 
-// Le toast ng-zorro (nz-message) doit toujours passer au-dessus des modales, y compris
-// pendant leur animation de fermeture (masque/overlay). Valeur nettement supérieure au
-// z-index par défaut des modales (1000) et du message lui-même (1010 par défaut).
+// Le toast ng-zorro doit toujours passer au-dessus des modales, même en animation de fermeture - z-index nettement supérieur.
 .ant-message {
   z-index: 2000 !important;
 }

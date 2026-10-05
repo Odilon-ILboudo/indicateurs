@@ -1,10 +1,4 @@
-/*
-Fournisseurs du point d'entrée embarqué - reprend app.config.ts sans provideZoneChangeDetection
-(zone.js fourni via polyfills à la place). AuthProvider et provideAnimationsAsync() sont
-nécessaires même embarqué : DashboardSettingsService et ng-zorro en dépendent. LocationStrategy
-utilise MemoryLocationStrategy plutôt que withHashLocation(), qui écrirait dans
-window.location et écraserait l'URL de la page hôte (voir memory-location.strategy.ts).
-*/
+/* Fournisseurs du point d'entrée embarqué - reprend app.config.ts, MemoryLocationStrategy pour ne jamais écraser l'URL de la page hôte. */
 import { ApplicationConfig } from '@angular/core';
 import { LocationStrategy } from '@angular/common';
 import { provideRouter, withRouterConfig } from '@angular/router';

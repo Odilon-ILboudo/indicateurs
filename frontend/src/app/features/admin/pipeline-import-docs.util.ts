@@ -1,7 +1,4 @@
-/** Texte de référence complet du format d'import YAML/JSON, affiché dans le panneau d'aide du
- wizard (bouton "Voir la référence complète"). Pure fonction de `mode`, aucune dépendance à
- l'état du formulaire.
-*/
+/** Texte de référence complet du format d'import, affiché dans le panneau d'aide - pure fonction de `mode`. */
 export function buildImportDocsText(mode: 'yaml' | 'json'): string {
   return `╔══════════════════════════════════════════════════════════════════╗
 ║   RÉFÉRENCE COMPLÈTE - Format ${mode.toUpperCase().padEnd(4)} - Indicateur complet        

@@ -54,11 +54,7 @@ export class OverviewPage implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadActiveIndicators();
-    /*
-    Le rôle réel se charge de façon asynchrone et arrive après la construction de cette page :
-    on s'abonne à role$ plutôt que de lire le rôle une seule fois, sinon les indicateurs
-    teacher/admin restent invisibles jusqu'à la prochaine navigation.
-    */
+    /* Le rôle réel charge de façon asynchrone - on s'abonne à role$ plutôt que de le lire une seule fois. */
     this.subscriptions.push(
       this.roleService.role$.subscribe(() => {
         this.context = this.buildDefaultContext();
@@ -87,11 +83,7 @@ export class OverviewPage implements OnInit, OnDestroy {
         this.indicators = indicators.filter(ind =>
           ind.contextType === this.context.scope &&
           this.roleService.canSeeIndicatorContext(ind.contextType, ind.visibilityRoles) &&
-          /*
-          Un indicateur learner/teacher/admin activity-aware ou course-aware n'a pas de valeur
-          "globale" : il ne s'affiche que sur la page de l'activité/du cours concerné, jamais
-          ici (voir isActivityAware()/isCourseAware()).
-          */
+          /* Un indicateur personnel activity/course-aware n'a pas de valeur globale, il ne s'affiche jamais ici. */
           !((ind.contextType === 'learner' || ind.contextType === 'teacher' || ind.contextType === 'admin') &&
             (isActivityAware(ind.formula) || isCourseAware(ind.formula))));
         this.loading = false;

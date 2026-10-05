@@ -75,10 +75,7 @@ export class FormulaInterpreterService {
         const truncated = Array.isArray(current) && current.length > 200;
         const debugOutput = truncated ? current.slice(0, 200) : current;
         steps.push({ index: i, type: step.type, durationMs: Date.now() - t0, output: debugOutput, truncated });
-        /*
-        Plafonner les données intermédiaires à 5000 lignes entre les étapes :
-        évite l'explosion mémoire serveur sur les jointures.
-        */
+        /* Plafonner les données intermédiaires à 5000 lignes entre les étapes évite l'explosion mémoire sur les jointures. */
         if (Array.isArray(current) && current.length > 5000) {
           current = current.slice(0, 5000);
         }
@@ -90,11 +87,7 @@ export class FormulaInterpreterService {
     return { steps };
   }
 
-  /*
-  Exécute un pipeline DSL et retourne le résultat brut.
-  number : valeur scalaire (card/gauge/line-chart), object - { clé: valeur } (bar-chart),
-  array : [{ bucket, count }] (histogram). Enregistre un log dans indicator_execution_logs.
-  */
+  /* Exécute un pipeline DSL (number/object/array selon le type de viz) et log dans indicator_execution_logs. */
   async interpret(formula: FormulaDefinition, context: FormulaContext): Promise<any> {
     if (!formula?.pipeline?.length) return 0;
 
@@ -137,19 +130,7 @@ export class FormulaInterpreterService {
     return result;
   }
 
-  /*
-  Détecte si une formule est éligible au calcul incrémental (delta).
-  Formes acceptées :
-    fetch(SessionData, contextFields ∋ user_id)
-    [join]*
-    [filter]*
-    [groupBy(groupField)]   ← optionnel - active le chemin groupRowValues
-    extract(field)
-    aggregate(avg|sum|count|min|max)
-    [round|divide]*
-
-  Retourne null pour tout pipeline contenant findFirst ou js.
-  */
+  /* Formule éligible au calcul incrémental : fetch(user_id)+[join]*+[filter]*+[groupBy]?+extract+aggregate+[round|divide]* ; null si findFirst/js. */
   getIncrementalShape(formula: FormulaDefinition): IncrementalShape | null {
     const pipeline = formula?.pipeline ?? [];
     if (pipeline.length < 3) return null;
@@ -224,9 +205,7 @@ export class FormulaInterpreterService {
     return typeof current === 'number' ? current : 0;
   }
 
-  /* Calcul complet pour une formule incrémentable : fetch + joins/filtres, map sessionId -
-   valeur, puis aggregate/round/divide. Utilisé au premier événement et en fallback.
-  */
+  /* Calcul complet pour une formule incrémentable : fetch + joins/filtres, map sessionId→valeur. Utilisé en fallback. */
   async computeWithRowMap(
     formula: FormulaDefinition,
     context: FormulaContext,
@@ -279,11 +258,7 @@ export class FormulaInterpreterService {
     return { result: await this.applyPostSteps(allValues, shape.postSteps), groupRowValues };
   }
 
-  /*
-  Calcul complet pour findFirst semi-incrémental.
-  Construit candidateRows (sans groupBy) ou groupCandidateRows (avec groupBy).
-  Chaque entrée stocke : sortValue, extractedValue, passes (condition whereField).
-  */
+  /* Calcul complet pour findFirst semi-incrémental : construit candidateRows (ou groupCandidateRows avec groupBy). */
   async computeWithCandidateRows(
     formula: FormulaDefinition,
     context: FormulaContext,
@@ -348,10 +323,7 @@ export class FormulaInterpreterService {
     return this.applyPostSteps(winners, shape.postSteps);
   }
 
-  /*
-  Évalue un seul filtre DSL sur une ligne (row). Retourne true si la ligne passe le filtre.
-  Utilisé dans le chemin incrémental pour éviter un SQL complet.
-  */
+  /* Évalue un seul filtre DSL sur une ligne - utilisé dans le chemin incrémental pour éviter un SQL complet. */
   evaluateFilterRow(params: Record<string, any>, row: Record<string, any>): boolean {
     const { field, operator, value } = params;
     const rowVal = row[field];
@@ -367,11 +339,7 @@ export class FormulaInterpreterService {
     }
   }
 
-  /*
-  Fetch ciblé pour le chemin incrémental avec join : récupère 1 seule ligne SessionData
-  par sessionId, puis applique les joins de la shape en mémoire.
-  Retourne null si la session n'existe pas en BDD.
-  */
+  /* Fetch ciblé incrémental avec join : 1 ligne SessionData par sessionId, joins appliqués en mémoire. */
   async fetchSingleSessionRow(
     sessionId: string,
     context: FormulaContext,
@@ -425,10 +393,7 @@ export class FormulaInterpreterService {
     const rawTable: string = params['table'] ?? '';
     const table = FormulaInterpreterService.LEGACY_TABLE_MAP[rawTable] ?? rawTable;
 
-    /*
-    group_id déclenche une jointure vers CourseGroupsMember/CourseGroups, scopée par
-    activityId ou courseId; l'un ou l'autre, jamais aucun.
-    */
+    /* group_id déclenche une jointure vers CourseGroupsMember/CourseGroups, scopée par activityId ou courseId. */
     const wantsGroup = (contextFields as string[]).includes('group_id');
     if (wantsGroup && context.groupId) {
       const scope = context.activityId
@@ -461,15 +426,7 @@ export class FormulaInterpreterService {
     return this.platonService.queryTable(table, filters, limit);
   }
 
-  /*
-  Joint les lignes en entrée (table gauche) avec une seconde table PLaTon (table droite).
-  Params : table, contextFields (optionnel), leftKey, rightKey, joinType (optionnel, défaut 'left')
-    - 'left'  : toutes les lignes gauches, fusionnées si correspondance trouvée
-    - 'inner' : uniquement les lignes gauches avec une correspondance
-    - 'right' : toutes les lignes droites, fusionnées si correspondance trouvée
-    - 'full'  : union de 'left' et 'right'
-  En cas de fusion, les champs gauches sont prioritaires (écrasent les champs droits en cas de conflit de nom).
-  */
+  /* Joint les lignes en entrée avec une seconde table PLaTon (joinType left/inner/right/full) - champs gauches prioritaires. */
   private async executeJoin(params: Record<string, any>, input: any, context: FormulaContext): Promise<any[]> {
     const joinType: 'left' | 'inner' | 'right' | 'full' = params['joinType'] ?? 'left';
     const includesRight = joinType === 'right' || joinType === 'full';
@@ -569,10 +526,7 @@ export class FormulaInterpreterService {
     return Array.from(map.values());
   }
 
-  /*
-  findFirst accepte des groupes (any[][]) ou des lignes plates (any[]).
-  Retourne une ligne par groupe (ou une ligne depuis un tableau plat).
-  */
+  /* findFirst accepte des groupes (any[][]) ou des lignes plates - retourne une ligne par groupe. */
   private executeFindFirst(params: Record<string, any>, input: any[]): any[] {
     const { whereField, whereValue, sortField } = params;
     const groups: any[][] = this.isGroups(input) ? input : [input];
@@ -596,10 +550,7 @@ export class FormulaInterpreterService {
     return results;
   }
 
-  /*
-  extract accepte des lignes plates ou des groupes.
-  Retourne un tableau de nombres.
-  */
+  /* extract accepte des lignes plates ou des groupes - retourne un tableau de nombres. */
   private executeExtract(params: Record<string, any>, input: any): number[] {
     const { extractField } = params;
     const rows: any[] = this.isGroups(input) ? input.flat() : (Array.isArray(input) ? input : []);
@@ -634,12 +585,7 @@ export class FormulaInterpreterService {
     return by !== 0 ? value / by : 0;
   }
 
-  /*
-  Patterns interdits dans le code JS des formules.
-  Bloque les vecteurs d'évasion connus du module `vm` Node.js :
-  accès à `process`, chargement de modules (`require`/`import`),
-  constructeur Function (échappement classique), Buffer, variables système.
-  */
+  /* Patterns interdits dans le code JS des formules - bloque les vecteurs d'évasion connus du module `vm` Node.js. */
   private static readonly JS_FORBIDDEN_PATTERNS: { pattern: RegExp; label: string }[] = [
     { pattern: /\bprocess\b/,                          label: '"process" (accès système interdit)' },
     { pattern: /\brequire\s*\(/,                       label: '"require()" (import de module interdit)' },
@@ -656,10 +602,7 @@ export class FormulaInterpreterService {
     { pattern: /\bfs\b\.\w+\s*\(/,                     label: '"fs.*" (système de fichiers interdit)' },
   ];
 
-  /*
-  Vérifie que le code JS ne contient aucun pattern dangereux.
-  Lève une erreur explicite si un pattern interdit est détecté.
-  */
+  /* Vérifie que le code JS ne contient aucun pattern dangereux, lève une erreur explicite sinon. */
   private validateJsCode(code: string): void {
     for (const { pattern, label } of FormulaInterpreterService.JS_FORBIDDEN_PATTERNS) {
       if (pattern.test(code)) {
@@ -668,12 +611,7 @@ export class FormulaInterpreterService {
     }
   }
 
-  /*
-  Exécute du code JS dans un vrai isolate V8 (isolated-vm).
-  L'isolate est un processus V8 complètement séparé : process, require,
-  fs, Buffer, global, rien de Node.js n'est accessible par défaut.
-  L'analyse statique reste en place comme filet de sécurité complémentaire.
-  */
+  /* Exécute le code JS dans un isolate V8 séparé (isolated-vm) - rien de Node.js accessible, analyse statique en filet complémentaire. */
   private async executeJs(params: Record<string, any>, input: any): Promise<any> {
     const { code } = params;
     if (!code?.trim()) return input;
@@ -691,10 +629,7 @@ export class FormulaInterpreterService {
       const script = await isolate.compileScript(
         `(function(input) { ${code} })(input)`,
       );
-      /*
-      copy: true transfère automatiquement le résultat hors de l'isolate.
-      Sans cette option, les objets et tableaux retournent undefined.
-      */
+      /* copy: true transfère le résultat hors de l'isolate - sans elle, objets et tableaux retournent undefined. */
       return await script.run(context, { timeout: 2000, copy: true });
     } catch (err) {
       const error = err as Error;

@@ -6,25 +6,7 @@ import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 
 export const PLATON_EXCHANGE = 'platon.events';
 
-/**
- * Relais des événements écrits dans platon_outbox_events (par les déclencheurs installés
- * depuis l'administration Indicateurs) vers RabbitMQ, pour que le microservice Indicateurs
- * les consomme presque en temps réel.
- *
- * Volontairement "bête" : republie chaque ligne telle quelle, sans l'interpréter. La
- * classification (quel événement métier - "exercice.completed", etc. - une ligne générique
- * représente) se fait côté Indicateurs, qui est seul à connaître les règles configurées par
- * son administration (IndicatorEventRule). Ce service n'a donc besoin de lire que sa propre
- * base, jamais celle d'Indicateurs.
- *
- * Prérequis (voir docs/integration-platon-relay.md pour le détail) :
- * - Tables `platon_outbox_events` (côté Indicateurs, api/scripts/migrations/platon-outbox.sql)
- *   et `indicateurs_outbox_cursor` (ce dossier, outbox-cursor.sql) déjà créées sur cette BDD.
- * - Dépendances npm : `@nestjs/schedule`, `@golevelup/nestjs-rabbitmq` (ou client AMQP
- *   équivalent - adapter cette classe si un autre choix est fait).
- * - Accès réseau sortant vers l'instance RabbitMQ d'Indicateurs (voir configuration ci-dessous,
- *   côté module).
- */
+/** Relais platon_outbox_events → RabbitMQ, republie chaque ligne telle quelle ; prérequis détaillés dans docs/integration-platon-relay.md. */
 @Injectable()
 export class OutboxRelayService {
   private readonly logger = new Logger(OutboxRelayService.name);

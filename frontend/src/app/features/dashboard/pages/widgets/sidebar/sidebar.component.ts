@@ -46,11 +46,7 @@ export class SidebarComponent implements OnInit {
       const authUser = await this.authProvider.current()
       if (!authUser) return;
 
-      /*
-      Le rôle dans authProvider vient de PLaTon production (token OAuth).
-      On interroge le backend indicateurs qui lit la DB locale PLaTon,
-      source de vérité pour le rôle en développement.
-      */
+      /* Le rôle d'authProvider vient de PLaTon prod (OAuth) - on interroge le backend qui lit la DB locale, source de vérité en dev. */
       let role = authUser.role as User['role'];
       try {
         const response = await firstValueFrom(this.userService.getUserById(authUser.id));

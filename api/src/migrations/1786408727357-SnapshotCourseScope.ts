@@ -1,9 +1,6 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-/*
-Permet à un snapshot de groupe d'être scopé à une activité (activityId) ou à tout un
-cours (courseId) - exactement l'un des deux, jamais les deux (contrainte CHECK ci-dessous).
-*/
+/* Permet à un snapshot de groupe d'être scopé à une activité OU un cours entier - exactement l'un des deux (contrainte CHECK). */
 export class SnapshotCourseScope1786408727357 implements MigrationInterface {
     name = 'SnapshotCourseScope1786408727357'
 

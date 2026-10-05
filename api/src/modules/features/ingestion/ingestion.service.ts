@@ -105,10 +105,7 @@ export class IngestionService implements OnModuleInit {
     return this.findAffectedIndicators(event);
   }
 
-  /* Traite un événement pour les indicateurs d'un contextType donné, utilisé par les
-   consumers RabbitMQ. Routage basé sur l'éligibilité du pipeline (computeViewIncremental),
-   jamais sur le périmètre : c'est elle qui décide s'il faut recalculer entièrement ou non.
-  */
+  /* Traite un événement pour les indicateurs d'un contextType, utilisé par les consumers RabbitMQ - routage basé sur l'éligibilité du pipeline. */
   async ingestForContext(event: RawEvent, contextType: string): Promise<void> {
     if (!this.isValidEvent(event)) return;
 
@@ -125,11 +122,7 @@ export class IngestionService implements OnModuleInit {
 
     for (const indicator of filtered) {
       if (contextType === 'learner') {
-        /*
-        courseId n'est résolu (requête PLaTon) que si la formule en a réellement besoin -
-        computeViewIncremental choisit ensuite lui-même activityId ou courseId, ou aucun des
-        deux, selon ce que LA FORMULE déclare (isActivityAware/isCourseAware).
-        */
+        /* courseId résolu (requête PLaTon) seulement si la formule en a besoin - voir isActivityAware/isCourseAware. */
         const formula = resolveFormula(indicator);
         let courseId: string | undefined;
         if (formula && isCourseAware(formula)) {
@@ -152,9 +145,7 @@ export class IngestionService implements OnModuleInit {
     }
   }
 
-  /* Traite un indicateur non-learner, dispatch selon contextType. Chaque branche tente le
-   calcul différentiel et ne retombe sur un recalcul complet que si nécessaire.
-  */
+  /* Traite un indicateur non-learner, dispatch par contextType - chaque branche tente le calcul différentiel d'abord. */
   async processAggregateIndicator(indicator: IndicatorDefinition, event: RawEvent): Promise<void> {
     const deltaEvent: DeltaEvent = { sessionId: event.sessionId, payload: event.payload };
 
@@ -186,11 +177,7 @@ export class IngestionService implements OnModuleInit {
         if (!event.activityId) return;
 
         if (isCourseAware(resolveFormula(indicator))) {
-          /*
-          Groupe scopé à tout le cours (toutes activités confondues) : la ligne en
-          cache est identifiée par courseId, pas par activityId, un rafraîchissement
-          dédié est nécessaire (voir refreshCourseGroupViews).
-          */
+          /* Groupe scopé au cours entier : la ligne en cache est identifiée par courseId, nécessite refreshCourseGroupViews. */
           const courseId = event.courseId ?? await this.platonService.getCourseIdForActivity(event.activityId)
             .catch(e => { this.logger.warn(`[group] getCourseIdForActivity échoué: ${e.message}`); return null; });
           if (!courseId) return;
@@ -218,10 +205,7 @@ export class IngestionService implements OnModuleInit {
         const teacherId = await this.platonService.getTeacherByCourse(event.courseId)
           .catch(e => { this.logger.warn(`[teacher] getTeacherByCourse échoué: ${e.message}`); return null; });
         if (!teacherId) return;
-        /*
-        computeViewIncremental choisit lui-même activityId ou courseId selon ce que la formule
-        déclare (isActivityAware/isCourseAware) - les deux peuvent être transmis sans risque.
-        */
+        /* computeViewIncremental choisit lui-même activityId/courseId selon la formule - les deux peuvent être transmis sans risque. */
         const result = await this.indicatorsService
           .computeViewIncremental(indicator.id, 'teacher', teacherId, event.activityId, undefined, deltaEvent, event.courseId)
           .catch(e => { this.logger.warn(`[teacher] computeViewIncremental échoué ind=${indicator.id}: ${e.message}`); return null; });
@@ -231,10 +215,7 @@ export class IngestionService implements OnModuleInit {
         break;
       }
 
-      /*
-      admin et tout contextType futur : rafraîchit les valeurs déjà en cache (différentiel si
-      le pipeline s'y prête, recalcul complet sinon - voir refreshCachedContextValues)
-      */
+      /* admin et tout contextType futur : rafraîchit les valeurs en cache (différentiel si possible, sinon complet). */
       default: {
         await this.indicatorsService
           .refreshCachedContextValues(indicator.id, indicator.contextType, deltaEvent)

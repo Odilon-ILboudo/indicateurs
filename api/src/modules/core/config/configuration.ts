@@ -13,13 +13,7 @@ export default () => ({
     logging: false,
   },
 
-  /*
-  Identifiants Postgres à privilèges élevés sur PLaTon, utilisés uniquement pour le DDL
-  d'installation d'un trigger (event-rules) : CREATE/DROP TRIGGER exige d'être propriétaire
-  de la table, ce que le compte applicatif habituel (PLATON_DB_USERNAME) n'est pas. Les deux
-  variables doivent être renseignées ensemble - sans elles, l'installation retombe sur la
-  connexion applicative habituelle et échoue le plus souvent, faute de droits suffisants.
-  */
+  /* Identifiants Postgres à privilèges élevés, utilisés uniquement pour le DDL d'installation de trigger (event-rules). */
   platonDatabaseAdmin: {
     username: process.env.PLATON_DB_ADMIN_USERNAME || null,
     password: process.env.PLATON_DB_ADMIN_PASSWORD || null,
@@ -33,9 +27,7 @@ export default () => ({
     username: process.env.INDICATORS_DB_USERNAME,
     password: process.env.INDICATORS_DB_PASSWORD,
     database: process.env.INDICATORS_DB_NAME,
-    /* Toujours false : le schéma est géré par de vraies migrations TypeORM
-    (voir bin/migration/*.sh), jamais par l'auto-sync - y compris en dev,
-    pour ne jamais laisser le schéma dériver sans migration correspondante.*/
+    /* Toujours false : schéma géré par de vraies migrations TypeORM, jamais par l'auto-sync, y compris en dev. */
     synchronize: false,
     logging: false,
     entities: [__dirname + '/../indicators/entities/*.entity{.ts,.js}'],
@@ -44,11 +36,7 @@ export default () => ({
   jwtSecret: process.env.JWT_SECRET || 'secret',
 
   aggregation: {
-    /*
-    Fréquence du recalcul périodique des indicateurs actifs sans déclencheur (voir
-    AggregationService.recalculateTriggerlessIndicators) - expression cron standard.
-    Défaut : toutes les minutes.
-    */
+    /* Fréquence du recalcul périodique des indicateurs sans déclencheur (expression cron, défaut toutes les minutes). */
     triggerlessRecalcCron: process.env.TRIGGERLESS_RECALC_CRON || '*/1 * * * *',
   },
 

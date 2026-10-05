@@ -58,10 +58,7 @@ export class IndicatorDetailComponent implements OnInit {
   private readonly modalService = inject(NzModalService);
   private readonly cdr = inject(ChangeDetectorRef);
   protected readonly routeBasePath = inject(ROUTE_BASE_PATH, { optional: true }) ?? '/dashboard';
-  /*
-  Les bannières de contexte renvoient vers /courses/... en standalone, ou en interne vers
-  /context en mode embarqué - jamais un lien externe vers une page PLaTon native.
-  */
+  /* Bannières de contexte : /courses/... en standalone, en interne vers /context en embarqué - jamais de lien externe PLaTon natif. */
   protected readonly embedded = inject(EMBEDDED_MODE, { optional: true }) ?? false;
 
   readonly contextIcon = contextIcon;
@@ -81,10 +78,7 @@ export class IndicatorDetailComponent implements OnInit {
   activeCourseId: string | undefined = undefined;
 
   courseContextCourseName = '';
-  /*
-  Id du cours pour le lien "Retour au cours" - distinct de activeContextId, qui vaut l'id de
-  l'utilisateur (pas celui du cours) pour un indicateur personnel course-aware.
-  */
+  /* Id du cours pour "Retour au cours" - distinct de activeContextId (id utilisateur pour un indicateur personnel). */
   courseContextCourseId = '';
   hasCourseContext = false;
 
@@ -147,12 +141,7 @@ export class IndicatorDetailComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    /*
-    Une navigation entre deux /indicator/:id réutilise la même instance de composant : on
-    réagit à chaque NavigationEnd plutôt qu'une seule fois dans ngOnInit. On relit
-    route.snapshot plutôt que combiner paramMap/queryParams (deux flux qui peuvent émettre de
-    façon non atomique et produire une combinaison transitoire incohérente).
-    */
+    /* Réagit à chaque NavigationEnd (instance réutilisée entre deux /indicator/:id), relit route.snapshot pour rester atomique. */
     this.router.events.pipe(
       filter((e): e is NavigationEnd => e instanceof NavigationEnd),
       startWith(null),
@@ -162,10 +151,7 @@ export class IndicatorDetailComponent implements OnInit {
   }
 
   private loadFromRoute(id: string | null, q: Params): void {
-    /*
-    Réinitialise tout l'état dépendant de la route - nécessaire car l'instance peut être
-    réutilisée d'une navigation à l'autre (voir commentaire ngOnInit).
-    */
+    /* Réinitialise tout l'état dépendant de la route - l'instance peut être réutilisée entre deux navigations. */
     this.isLoading = true;
     this.indicator = null;
     this.results = {};
@@ -232,10 +218,7 @@ export class IndicatorDetailComponent implements OnInit {
       this.courseContextCourseId = q['courseId'];
       this.hasCourseContext = true;
     } else if (q['from'] === 'activity-personal' && q['contextType'] && q['activityId']) {
-      /*
-      Carte personnelle activity-aware : contextType dépend de l'indicateur cliqué, donc
-      fourni explicitement en query param plutôt que déduit de `from`.
-      */
+      /* Carte personnelle activity-aware : contextType fourni en query param plutôt que déduit de `from`. */
       this.activeContextType = q['contextType'];
       this.activeContextId = getCurrentUserId();
       this.activeActivityId = q['activityId'];
@@ -268,10 +251,7 @@ export class IndicatorDetailComponent implements OnInit {
           return;
         }
 
-        /*
-        Pas de contexte spécifique (clic depuis le tableau de bord) :
-        résout le contexte sur celui de l'indicateur (learner/teacher/admin = userId)
-        */
+        /* Pas de contexte spécifique (clic depuis le tableau de bord) : résout sur celui de l'indicateur (userId). */
         if (!this.hasGroupSnapshotContext && !this.hasActivityContext && !this.hasCourseContext) {
           this.activeContextType = this.indicator.contextType;
         }
@@ -337,11 +317,7 @@ export class IndicatorDetailComponent implements OnInit {
 
   private buildChartOptions(viz: IndicatorVisualization, result: ViewResult): void {
     if (viz.type === 'line-chart') {
-      /*
-      Seul cas non couvert par l'utilitaire partagé : dépend de l'historique temporel et de
-      l'état de sélection de période (historyPeriodDays/historyCustomRange), propres à cette
-      page - une modale de comparaison par snapshots ponctuels n'a pas cette notion.
-      */
+      /* Seul cas non couvert par l'utilitaire partagé : dépend de l'historique temporel propre à cette page. */
       const color = viz.color ?? '#5470c6';
       const unit  = viz.unit  ?? '';
       const fullHistory = result.metadata?.['history'] ?? [];

@@ -88,9 +88,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
 
   indicators: IndicatorDefinition[] = [];
   displayRows: IndicatorDisplayRow[] = [];
-  /* Cartes de l'onglet Familles (une par famille) - affichées en grille de 3, paginées à 5
-   lignes (15/page) via `pagedFamilyCards`.
-  */
+  /* Cartes de l'onglet Familles (une par famille) - grille de 3, paginées à 5 lignes via `pagedFamilyCards`. */
   familyCards: { familyName: string; members: IndicatorDefinition[] }[] = [];
   familyPageIndex = 1;
   readonly familyPageSize = 15;
@@ -108,10 +106,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
     { value: 'group', label: 'Groupe' },
   ];
 
-  /* Non-null : la vue courante est la page dédiée d'une famille (route
-   /dashboard/indicators/family/:name) - la liste est alors restreinte à cette seule famille,
-   affichée à plat (jamais repliée), et les onglets Uniques/Familles n'ont plus de sens.
-  */
+  /* Non-null : page dédiée d'une famille - liste restreinte à cette famille, à plat, onglets Uniques/Familles sans objet. */
   @Input() familyNameFilter: string | null = null;
   //Nombre de pins par indicateur (tous cours/activités confondus) - label informatif
   pinCountsByIndicatorId: Record<string, number> = {};
@@ -136,9 +131,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
     else this.addExistingSelectedIds.splice(idx, 1);
   }
 
-  /* Assigne la famille à tous les indicateurs sélectionnés en parallèle (un seul aller-retour
-   visible pour l'utilisateur) plutôt qu'un par un - voir historique de cette limitation.
-  */
+  /* Assigne la famille à tous les indicateurs sélectionnés en parallèle, un seul aller-retour visible. */
   confirmAddExistingToFamily(): void {
     if (!this.addExistingSelectedIds.length) return;
     this.addExistingLoading = true;
@@ -297,21 +290,14 @@ export class AdminIndicatorManagerComponent implements OnInit {
     this.applyGroupingFilter();
   }
 
-  /* Reconstruit `displayRows` selon le mode courant, combiné aux filtres recherche/contexte/
-   complétude. En mode "page de famille" (`familyNameFilter`), la liste est restreinte à
-   cette seule famille et toujours affichée à plat (onglet Uniques/Familles ignoré) ; sinon,
-   comportement habituel (onglet + familles jamais dépliées, le clic navigue).
-  */
+  /* Reconstruit `displayRows` selon le mode courant (page de famille à plat, ou liste habituelle) et les filtres actifs. */
   applyGroupingFilter(): void {
     let filtered: IndicatorDefinition[];
     if (this.familyNameFilter) {
       filtered = this.indicators.filter(ind => ind.familyName === this.familyNameFilter);
       this.expandedFamilies.add(this.familyNameFilter);
     } else {
-      /*
-      Persiste l'état des filtres/onglet de la liste principale pour que "Retour à la
-      liste" les restaure au lieu de repartir des valeurs par défaut.
-      */
+      /* Persiste l'état des filtres/onglet pour que "Retour à la liste" les restaure. */
       this.listState.admin.groupingFilter = this.groupingFilter;
       this.listState.admin.completenessFilter = this.completenessFilter;
       this.listState.admin.searchText = this.searchText;
@@ -332,10 +318,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
         this.completenessFilter === 'complete' ? ind.isComplete : !ind.isComplete);
     }
     const rows = buildIndicatorDisplayRows(filtered, this.expandedFamilies);
-    /*
-    En page de famille dédiée, la ligne d'en-tête de famille est redondante avec le titre
-    de la page (voir header ci-dessus) : on ne garde que les membres, à plat.
-    */
+    /* En page de famille dédiée, l'en-tête de famille est redondant avec le titre : on garde seulement les membres. */
     this.displayRows = this.familyNameFilter ? rows.filter(r => r.kind !== 'family') : rows;
     this.familyCards = rows.filter((r): r is Extract<IndicatorDisplayRow, { kind: 'family' }> => r.kind === 'family');
     this.familyPageIndex = 1;
@@ -346,9 +329,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
     return this.familyCards.slice(start, start + this.familyPageSize);
   }
 
-  /* Clic sur une ligne de famille dans la liste principale : navigue vers sa page dédiée
-   plutôt que de la déplier sur place.
-  */
+  /* Clic sur une ligne de famille : navigue vers sa page dédiée plutôt que de la déplier sur place. */
   openFamilyPage(familyName: string): void {
     this.router.navigate(['/dashboard/indicators/family', familyName]);
   }
@@ -357,9 +338,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
     this.router.navigate(['/dashboard/indicators']);
   }
 
-  /* Nombre d'indicateurs de la famille affichée (indépendant des filtres recherche/contexte/
-   complétude appliqués sur cette page, contrairement à `displayRows`).
-  */
+  /* Nombre d'indicateurs de la famille affichée, indépendant des filtres de cette page (contrairement à `displayRows`). */
   familyMemberCount(): number {
     return this.indicators.filter(ind => ind.familyName === this.familyNameFilter).length;
   }
@@ -376,10 +355,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
       this.openBuilderModal({ indicator });
       return;
     }
-    /*
-    Création : demande d'abord comment démarrer (zéro / réutilisation / import), puis ouvre
-    le wizard déjà pré-rempli en conséquence.
-    */
+    /* Création : demande d'abord comment démarrer (zéro/réutilisation/import), puis ouvre le wizard pré-rempli. */
     const choiceRef = this.modalSvc.create<NewIndicatorChoiceModalComponent, { indicators: IndicatorDefinition[] }>({
       nzTitle: 'Nouvel indicateur',
       nzContent: NewIndicatorChoiceModalComponent,
@@ -410,9 +386,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
     ref.afterClose.subscribe(saved => { if (saved) this.load(); });
   }
 
-  /* Ouvre la modale de démarrage d'une famille, puis enchaîne le builder pour chaque contexte
-   sélectionné - ou crée directement une famille vide si aucun contexte n'a été choisi.
-  */
+  /* Ouvre la modale de démarrage d'une famille puis enchaîne le builder par contexte, ou crée une famille vide. */
   openFamilyWizard(): void {
     const startRef = this.modalSvc.create({
       nzTitle: 'Créer une famille d\'indicateurs',
@@ -428,10 +402,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
     });
   }
 
-  /* Crée une famille sans indicateur réel pour l'instant (ligne technique isFamilyPlaceholder,
-   toujours isActive=false donc invisible des utilisateurs finaux) - à compléter plus tard via
-   "Ajouter un indicateur" sur la ligne de famille.
-  */
+  /* Crée une famille sans indicateur réel (isFamilyPlaceholder, isActive=false, invisible en prod), à compléter plus tard. */
   private createEmptyFamily(result: FamilyStartResult): void {
     this.indicatorSvc.createIndicator({
       name: `${result.familyName} (famille)`,
@@ -456,10 +427,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
     if (placeholder) this.indicatorSvc.deleteIndicator(placeholder.id).subscribe();
   }
 
-  /* Ouvre d'abord le choix de démarrage (zéro / réutiliser / import) pour ce membre de la
-   famille, puis le builder pré-rempli en conséquence, puis enchaîne sur le suivant à la
-   fermeture. Supprime au passage le placeholder de famille vide si c'est le premier vrai membre.
-  */
+  /* Choix de démarrage puis builder pré-rempli pour ce membre, enchaîne sur le suivant à la fermeture. */
   private openFamilyMember(start: FamilyStartResult, contextType: IndicatorScope, queue: IndicatorScope[]): void {
     const preset: IndicatorFamilyPreset = {
       familyName: start.familyName,
@@ -530,10 +498,7 @@ export class AdminIndicatorManagerComponent implements OnInit {
     this.indicatorSvc.updateIndicatorStatus(indicator.id, indicator.isActive).subscribe({
       next: () => {
         this.messageSvc.success(`Indicateur ${indicator.isActive ? 'activé' : 'désactivé'}`);
-        /*
-        Le filtre Complet/Incomplet doit refléter immédiatement le nouveau statut, sinon un
-        indicateur juste (dés)activé peut rester visible dans un filtre qu'il ne remplit plus.
-        */
+        /* Le filtre Complet/Incomplet doit refléter immédiatement le nouveau statut après (dés)activation. */
         this.applyGroupingFilter();
         if (indicator.isActive) {
           this.notifIndicator = indicator;

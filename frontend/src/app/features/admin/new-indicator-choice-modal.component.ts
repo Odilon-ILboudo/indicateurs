@@ -29,10 +29,7 @@ export type NewIndicatorChoiceResult =
 
 type ChoiceView = 'menu' | 'reuse' | 'reuse-preview' | 'import';
 
-/** Première étape avant le wizard de création : zéro, réutiliser, ou importer. Jamais de modale
- ouverte par-dessus une autre (règle du projet) : les étapes intermédiaires (galerie, aperçu,
- import) sont des vues internes de cette modale, pas des modales imbriquées.
-*/
+/** Première étape (zéro/réutiliser/importer) : jamais de modale par-dessus une autre, les étapes sont des vues internes. */
 @Component({
   selector: 'ui-new-indicator-choice-modal',
   standalone: true,
@@ -280,19 +277,14 @@ export class NewIndicatorChoiceModalComponent implements OnInit {
   private platonSchema: PlatonTableSchema[] = [];
 
   ngOnInit(): void {
-    /*
-    Nécessaire pour valider les noms de tables/colonnes d'un import avant de fermer cette
-    modale - sans quoi une erreur de ce type ne serait détectée qu'à l'ouverture du wizard.
-    */
+    /* Valide les noms de tables/colonnes d'un import avant fermeture, sinon détecté seulement à l'ouverture du wizard. */
     this.indicatorSvc.getPlatonSchema().subscribe({
       next: s => { this.platonSchema = s; },
       error: () => { this.platonSchema = []; },
     });
   }
 
-  /** Le menu de choix initial reste réduit au minimum ; la modale ne s'agrandit que pour les
-   vues qui en ont vraiment besoin (galerie de réutilisation, éditeur d'import).
-  */
+  /** Le menu de choix reste réduit au minimum ; la modale ne s'agrandit que pour les vues qui en ont besoin. */
   setView(v: ChoiceView): void {
     this.view = v;
     this.modalRef.updateConfig(
@@ -337,9 +329,7 @@ export class NewIndicatorChoiceModalComponent implements OnInit {
     reader.readAsText(file);
   }
 
-  /** Valide entièrement le texte (clés obligatoires, types, tables/colonnes réelles...) avant
-   de fermer la modale - en cas d'erreur, elle reste affichée ici, le wizard ne s'ouvre pas.
-  */
+  /** Valide entièrement le texte avant fermeture - en cas d'erreur, reste affichée, le wizard ne s'ouvre pas. */
   chooseImport(): void {
     if (!this.importText.trim()) return;
     this.importError = null;
@@ -363,10 +353,7 @@ export class NewIndicatorChoiceModalComponent implements OnInit {
     }
   }
 
-  /** Réindente le texte collé, strictement dans le langage du mode actif - ne convertit jamais
-   d'un format à l'autre (même contrôle strict que parseIndicatorImport, voir looksLikeJson).
-   N'écrase le texte que si le parsing réussit - laisse le texte fautif intact sinon.
-  */
+  /** Réindente dans le format actif sans jamais convertir (voir looksLikeJson) ; n'écrase que si le parsing réussit. */
   formatImportText(): void {
     if (this.importMode === 'json') {
       try {

@@ -1,8 +1,4 @@
-/*
-Construction des options ECharts pour gauge/bar-chart/histogram - partagée entre la page
-détail et la modale de comparaison par groupe. line-chart n'est pas couvert ici : il dépend
-d'un historique temporel qui n'existe que sur la page détail.
-*/
+/* Options ECharts pour gauge/bar-chart/histogram, partagées page détail/modale de comparaison - line-chart non couvert (historique). */
 import type { EChartsOption } from 'echarts';
 import { IndicatorVisualization } from '../../core/models/indicator.model';
 
@@ -26,26 +22,15 @@ export function buildIndicatorChartOptions(
   const unit = viz.unit ?? '';
 
   if (viz.type === 'gauge') {
-    /*
-    Échelle proportionnelle aux seuils réellement configurés, pas de marge arbitraire : la
-    zone "critique" (au-delà de warning) reçoit la même largeur que la zone "moyen"
-    (good -> warning). Sans warning, max = good.
-    */
+    /* Échelle proportionnelle aux seuils configurés, pas de marge arbitraire - sans warning, max = good. */
     const max = thresholds?.warning != null
       ? thresholds.warning + (thresholds.warning - (thresholds?.good ?? 0))
       : (thresholds?.good ?? 100);
 
-    /*
-    Arc principal (valeur) : couleur configurée par l'admin, uniforme sur tout l'arc - ne
-    représente plus les seuils (voir l'anneau extérieur ci-dessous pour ça).
-    */
+    /* Arc principal : couleur configurée par l'admin, uniforme - ne représente plus les seuils (voir l'anneau extérieur). */
     const series: any[] = [{
       type: 'gauge', radius: '70%', min: 0, max,
-      /*
-      "progress" (rempli jusqu'à la valeur courante) porte la couleur configurée ; "axisLine"
-      est la piste de fond (toujours pleine à 100%) - doit rester neutre, sinon les deux se
-      superposent et donnent l'illusion d'un arc toujours plein.
-      */
+      /* "progress" porte la couleur configurée ; "axisLine" (piste de fond) doit rester neutre, sinon illusion d'arc toujours plein. */
       progress: { show: true, width: 18, itemStyle: { color } },
       axisLine: { lineStyle: { width: 18, color: [[1, '#e9e9e9']] } },
       axisTick: { show: false }, splitLine: { show: false }, axisLabel: { show: false },

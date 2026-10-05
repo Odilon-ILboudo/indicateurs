@@ -13,9 +13,7 @@ function usesContextField(formula: FormulaDefinition | null, field: string): boo
   );
 }
 
-/* "activity-aware" : la formule filtre par activity_id, sa valeur ne doit s'afficher que sur
- la page de cette activité précise, jamais comme valeur globale.
-*/
+/* "activity-aware" : la formule filtre par activity_id, sa valeur ne doit s'afficher que sur cette activité précise. */
 export function isActivityAware(formula: FormulaDefinition | null): boolean {
   return usesContextField(formula, 'activity_id');
 }

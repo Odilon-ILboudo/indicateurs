@@ -82,10 +82,7 @@ const STEP_CATALOG: { type: StepType; label: string; icon: string; color: string
   { type: 'js',        label: 'Code JS',            icon: 'code',         color: '#595959', desc: 'Exécute une fonction JavaScript sur les données' },
 ];
 
-/** Carte affichée dans la modale "Pipelines" - `detail` (objectif/utilisation/adapter) n'existe
- que pour les pipelines prédéfinis (FORMULA_RECIPES) ; `usedBy` n'existe que pour les
- pipelines dérivés d'indicateurs déjà créés (voir loadExistingPipelines()).
-*/
+/** Carte de la modale "Pipelines" : `detail` seulement pour FORMULA_RECIPES, `usedBy` seulement pour un pipeline dérivé (voir loadExistingPipelines()). */
 interface PipelineCatalogItem {
   name: string;
   desc: string;
@@ -224,14 +221,9 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
     indicator?: IndicatorDefinition;
     familyPreset?: IndicatorFamilyPreset;
     familyQueue?: IndicatorScope[];
-    /** Réutilisation choisie dans la modale de démarrage (blanc/réutiliser/import), avant
-     l'ouverture de ce wizard - alternative à `familyPreset` pour une création standard.
-    */
+    /** Réutilisation choisie dans la modale de démarrage, alternative à `familyPreset` pour une création standard. */
     reuseSeed?: { source: IndicatorDefinition; override: ReuseIndicatorResult };
-    /** Import YAML/JSON choisi et déjà validé dans la modale de démarrage (voir
-     NewIndicatorChoiceModalComponent.chooseImport()) - appliqué tel quel dès l'ouverture du
-     wizard, aucune re-validation nécessaire.
-    */
+    /** Import YAML/JSON déjà validé en amont (NewIndicatorChoiceModalComponent), appliqué tel quel sans re-validation. */
     importSeed?: { pipeline: PipelineStep[]; meta: ImportedIndicatorMeta };
   } | null;
   private readonly indicatorSvc = inject(IndicatorService);
@@ -306,10 +298,7 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
   availableEventTypes: { name: string; label: string }[] = [];
   readonly OTHER_EVENT_OPTION = '__create_new__';
 
-  /** L'option "Autres" du sélecteur d'événements n'est pas un vrai événement - elle ouvre le
-   gestionnaire d'événements & règles directement depuis le wizard, puis se retire elle-même
-   de la sélection (elle ne doit jamais être envoyée au backend comme requiredEvents).
-  */
+  /** L'option "Autres" n'est pas un vrai événement : ouvre le gestionnaire de règles puis se retire de la sélection. */
   onRequiredEventsChange(values: string[]): void {
     if (!values.includes(this.OTHER_EVENT_OPTION)) return;
     this.def.requiredEvents = values.filter(v => v !== this.OTHER_EVENT_OPTION);
@@ -374,11 +363,7 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
   readonly CONTEXT_LABELS = CONTEXT_LABELS;
   readonly contextIcon = contextIcon;
   selectedRecipe: PipelineCatalogItem | null = null;
-  /*
-  Onglet "Depuis les indicateurs existants" de la modale Pipelines - chargé une seule fois à
-  la première ouverture (indicateurs ACTIFS uniquement, un brouillon peut être incomplet),
-  dédupliqué par contenu réel du pipeline (type+params, l'id et le label sont ignorés).
-  */
+  /* Onglet "Depuis les indicateurs existants" : chargé une fois (actifs uniquement), dédupliqué par type+params. */
   existingPipelines: PipelineCatalogItem[] = [];
   private existingPipelinesLoaded = false;
   recipesActiveTab = 0;
@@ -388,11 +373,7 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
     { value: 'course_id',   label: 'course_id - cours sélectionné' },
   ];
 
-  /*
-   Réutiliser un indicateur existant (capitalisation) - choix fait en amont dans la modale
-  de démarrage (NewIndicatorChoiceModalComponent) ; ce composant ne fait plus qu'appliquer
-  le résultat (`modalData.reuseSeed`) via composeFromReuseSource(), voir ngOnInit. ─
-  */
+  /* Réutilisation d'un indicateur existant, choisie en amont (NewIndicatorChoiceModalComponent), appliquée via composeFromReuseSource(). */
   reuseAppliedName: string | null = null;
 
   private composeFromReuseSource(src: IndicatorDefinition, override: ReuseIndicatorResult): void {
@@ -453,10 +434,7 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
     description: string;
     interpretationHint: string;
     requiredEvents: string[];
-    /* Flag UI-only (jamais envoyé au backend) : pilote l'affichage du bloc "Événements" à
-     l'étape Formules. Décoché → requiredEvents vide, l'indicateur est recalculé par le
-     cron minute côté serveur plutôt que par un événement précis.
-    */
+    /* Flag UI-only : décoché, requiredEvents est vidé et l'indicateur revient au recalcul cron minute. */
     useTriggerEvents: boolean;
     contextType: IndicatorScope;
     thresholds: { good: number | null; warning: number | null; critical: number | null } | null;
@@ -503,21 +481,14 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
         if (this.modalData?.familyPreset) this.def.contextType = this.modalData.familyPreset.contextType;
       }
       if (this.modalData?.importSeed) {
-        /*
-        Déjà validé (y compris colonnes/tables) dans la modale de choix initial - simple
-        application, aucune re-validation ni fallback d'erreur nécessaire ici.
-        */
+        /* Déjà validé (colonnes/tables incluses) en amont - simple application ici, pas de re-validation. */
         this.pipeline = this.modalData.importSeed.pipeline;
         this.applyImportedMeta(this.modalData.importSeed.meta);
         if (this.modalData?.familyPreset) this.def.contextType = this.modalData.familyPreset.contextType;
       }
     }
 
-    /*
-    Chargement initial : les 10 premiers cours (toutes ressources PLaTon, pas seulement
-    celles de l'utilisateur courant - voir courseSearch$ ci-dessous pour la recherche, et
-    loadMoreCourses() pour charger la suite, 10 par 10).
-    */
+    /* Chargement initial : 10 premiers cours (tout PLaTon, pas seulement les siens) - voir courseSearch$/loadMoreCourses() pour la suite. */
     this.previewCoursesLoading = true;
     this.indicatorSvc.searchCourses('').subscribe({
       next: courses => {
@@ -530,11 +501,7 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
       error: () => { this.previewCoursesLoading = false; },
     });
 
-    /*
-    Recherche serveur sur le sélecteur de cours (nzServerSearch) - debounce pour ne pas
-    spammer le backend à chaque frappe, 10 résultats par page côté serveur (voir
-    loadMoreCourses() pour la suite).
-    */
+    /* Recherche serveur du sélecteur de cours (debounce, 10 résultats/page) - voir loadMoreCourses() pour la suite. */
     this.courseSearch$.pipe(
       debounceTime(300),
       distinctUntilChanged(),
@@ -582,9 +549,7 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
     this.courseSearch$.next(value);
   }
 
-  /* Ajoute (n'écrase pas) la page suivante de cours - déclenché en scrollant jusqu'en bas du
-   menu déroulant (nzScrollToBottom), même recherche que celle actuellement tapée.
-  */
+  /* Ajoute (n'écrase pas) la page suivante de cours, déclenché en scrollant en bas du menu (nzScrollToBottom). */
   loadMoreCourses(): void {
     if (this.previewCoursesLoading || !this.previewCoursesHasMore) return;
     this.previewCoursesLoading = true;
@@ -623,11 +588,7 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
       error: () => { this.previewActivitiesLoading = false; },
     });
 
-    /*
-    Chargement dédié plutôt que dérivé du cache de recherche de cours (previewCourses) : ce
-    cache est remplacé à chaque nouvelle recherche ou page suivante, et peut ne plus contenir
-    le cours sélectionné - les groupes semblaient alors "ne jamais charger".
-    */
+    /* Chargement dédié : le cache previewCourses est remplacé à chaque recherche et peut ne plus contenir le cours sélectionné. */
     this.previewGroupsLoading = true;
     this.indicatorSvc.getCourseGroups(courseId).subscribe({
       next: groups => { this.previewGroups = groups; this.previewGroupsLoading = false; this.cdr.detectChanges(); },
@@ -649,9 +610,7 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
     return true;
   }
 
-  /* Décoché → on vide la sélection pour ne jamais soumettre un requiredEvents "fantôme", et on
-   referme l'aide (plus pertinente sans événements activés).
-  */
+  /* Décoché : vide requiredEvents (jamais de valeur fantôme) et referme l'aide. */
   onUseTriggerEventsChange(enabled: boolean): void {
     if (!enabled) {
       this.def.requiredEvents = [];
@@ -764,9 +723,7 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
     }
   }
 
-  /* Les recettes s'ouvrent dans une modale dédiée. Le détail d'un pipeline (bouton œil) est
-   une vue interne de cette même modale, jamais une seconde modale par-dessus.
-  */
+  /* Détail d'une recette (bouton œil) : vue interne de la même modale, jamais une modale par-dessus. */
   private recipesModalRef: NzModalRef | null = null;
 
   openRecipesModal(): void {
@@ -779,10 +736,7 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
       nzWidth: 820,
       nzCentered: true,
       nzFooter: null,
-      /*
-      Le X sert de "retour" tant qu'on est sur la vue détail (pas de bouton dédié) - ne
-      referme réellement la modale que depuis la vue grille.
-      */
+      /* Le X sert de "retour" depuis la vue détail, ne referme la modale que depuis la vue grille. */
       nzOnCancel: () => {
         if (this.selectedRecipe) { this.backToRecipesGrid(); return false; }
         return true;
@@ -790,10 +744,7 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
     });
   }
 
-  /* Construit l'onglet "Depuis les indicateurs existants" : un pipeline par groupe
-   d'indicateurs (actifs uniquement) partageant EXACTEMENT le même contenu de pipeline
-   (type+params de chaque étape - l'id et le label affiché n'entrent pas dans la comparaison).
-  */
+  /* Un pipeline par groupe d'indicateurs actifs partageant le même contenu (type+params, hors id/label). */
   private loadExistingPipelines(): void {
     if (this.existingPipelinesLoaded) return;
     this.indicatorSvc.loadIndicators().subscribe(indicators => {
@@ -963,9 +914,7 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
     this.importText = this.pipelineToText(this.pipeline, mode);
   }
 
-  /** Réindente le texte collé dans le langage du mode actif, sans jamais convertir d'un format
-   à l'autre. N'écrase le texte que si le parsing réussit.
-  */
+  /** Réindente dans le format actif sans jamais convertir ; n'écrase que si le parsing réussit. */
   formatImportText(): void {
     if (this.importMode === 'json') {
       try {
@@ -988,10 +937,7 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
     }
   }
 
-  /* Sérialise l'indicateur courant (nom, description, événements, seuils, visualisations et
-   pipeline) en YAML/JSON pour ré-édition - un export produit ici doit pouvoir être
-   ré-importé à l'identique par parseStep3Text().
-  */
+  /* Sérialise l'indicateur en YAML/JSON pour ré-édition - doit rester ré-importable à l'identique. */
   private pipelineToText(pipeline: PipelineStep[], mode: 'yaml' | 'json'): string {
     if (!pipeline.length) return '';
     const raw: Record<string, unknown> = {
@@ -1028,10 +974,7 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
     }
   }
 
-  /* Applique les champs (hors pipeline) d'un import à `def`/`vizList` - un champ absent de
-   l'import (donc non présent dans `meta`) laisse la valeur déjà saisie dans le formulaire
-   inchangée, seul `name` est toujours écrasé puisqu'il est obligatoire dans l'import.
-  */
+  /* Applique les champs d'un import à `def`/`vizList` - un champ absent laisse le formulaire inchangé, `name` est toujours écrasé. */
   private applyImportedMeta(meta: ImportedIndicatorMeta): void {
     this.def.name = meta.name;
     if (meta.description !== undefined) this.def.description = meta.description;
@@ -1126,18 +1069,12 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
       this.messageSvc.error('Sélectionnez au moins un événement, ou désactivez "Activer des événements déclencheurs".');
       return;
     }
-    /*
-    Le pipeline peut rester vide ou partiel (brouillon) - seules les étapes déjà ajoutées
-    doivent être complètes, pour ne pas enregistrer un step à moitié rempli en silence.
-    */
+    /* Le pipeline peut rester partiel (brouillon), mais chaque étape déjà ajoutée doit être complète. */
     for (let i = 0; i < this.pipeline.length; i++) {
       const err = validatePipelineStepComplete(this.pipeline[i], i);
       if (err) { this.messageSvc.error(err); return; }
     }
-    /*
-    Ordre attendu par indicator-card.component.ts#statusColor : val<=good -> vert,
-    val<=warning -> orange, sinon rouge.
-    */
+    /* Ordre attendu par indicator-card.component.ts#statusColor : good ≤ warning ≤ critical. */
     const { good, warning, critical } = this.def.thresholds ?? {};
     if (good != null && warning != null && good > warning) {
       this.messageSvc.error('Le seuil "Bon" doit être inférieur ou égal au seuil "Attention".');
@@ -1166,10 +1103,7 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
       interpretationHint: this.def.interpretationHint.trim() || null,
       contextType: this.def.contextType,
       requiredEvents: this.def.requiredEvents,
-      /*
-      En édition normale (hors wizard famille), on conserve le familyName existant de l'indicateur
-      pour ne pas l'effacer accidentellement à chaque sauvegarde.
-      */
+      /* Hors wizard famille, on garde le familyName existant pour ne pas l'effacer à chaque sauvegarde. */
       familyName: this.modalData?.familyPreset?.familyName
         ?? this.modalData?.indicator?.familyName
         ?? null,
@@ -1189,10 +1123,7 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
         id: v.id,
         label: v.label,
         type: v.type,
-        /*
-        Icône toujours dérivée du contexte à l'enregistrement - jamais un choix manuel
-        (voir contextIcon()) ; ignore toute valeur importée/héritée dans v.icon.
-        */
+        /* Icône toujours dérivée du contexte (contextIcon()), jamais un choix manuel - ignore v.icon importé. */
         icon: this.contextIcon(this.def.contextType),
         color: v.color,
         unit: v.unit,
@@ -1233,10 +1164,7 @@ export class IndicatorBuilderComponent implements OnInit, AfterViewInit {
   private extractParams(s: PipelineStep): Record<string, any> {
     switch (s.type) {
       case 'fetch': {
-        /*
-        On retire 'group_id' de la sélection brute puis on le réinjecte uniquement si le switch est actif,
-        sinon désactiver le switch après l'avoir activé une fois ne le retirait jamais de contextFields.
-        */
+        /* Retire puis réinjecte 'group_id' selon le switch - sinon le désactiver ne le retirait jamais de contextFields. */
         const fields = (s.contextFields ?? []).filter((f: string) => f !== 'group_id');
         if (s.useGroupContext) fields.unshift('group_id');
         return { table: s.table, contextFields: fields };

@@ -100,19 +100,14 @@ export class EventRulesService {
     await this.repo.save(rule);
   }
 
-  /* Réactive une règle désactivée. Ne réinstalle pas le trigger tout seul si `triggerInstalled`
-   est déjà à false (l'admin doit relancer "Installer" explicitement, comme pour une nouvelle règle).
-  */
+  /* Réactive une règle désactivée - ne réinstalle pas le trigger tout seul, l'admin doit relancer "Installer". */
   async reactivate(id: string): Promise<IndicatorEventRule> {
     const rule = await this.findOne(id);
     rule.isActive = true;
     return this.repo.save(rule);
   }
 
-  /*
-  Suppression définitive (distincte de remove() ci-dessus, qui ne fait que désactiver)
-  Désinstalle le trigger s'il est installé, puis supprime la ligne. Jamais automatique.
-  */
+  /* Suppression définitive (distincte de remove(), simple désactivation) : désinstalle le trigger puis supprime la ligne. */
 
   async previewHardDeleteSql(id: string): Promise<{ sql: string }> {
     const rule = await this.findOne(id);
@@ -143,11 +138,7 @@ export class EventRulesService {
     return { success: true, sql: '' };
   }
 
-  /*
-   uppression + désinstallation du trigger (jamais automatique)
-  Contrairement à remove() (désactivation simple), retire aussi le trigger PostgreSQL réel :
-  supprimé s'il n'est plus utilisé par aucune autre règle active, sinon réduit.
-  */
+  /* Désinstalle le trigger PostgreSQL réel : supprimé si plus utilisé par aucune autre règle active, sinon réduit. */
 
   async previewUninstallSql(id: string): Promise<{ sql: string }> {
     const rule = await this.findOne(id);
@@ -219,11 +210,7 @@ export class EventRulesService {
     return `Échec de l'installation : ${err.message}`;
   }
 
-  /*
-  Exécution du DDL (installation ou désinstallation)
-  Avec PLATON_DB_ADMIN_USERNAME/PASSWORD configurés, le DDL passe par cette connexion.
-  Sinon, tentative avec la connexion applicative habituelle.
-  */
+  /* Exécution du DDL : via PLATON_DB_ADMIN_USERNAME/PASSWORD si configuré, sinon connexion applicative habituelle. */
   private async execDdl(sql: string): Promise<void> {
     const adminUsername = this.config.get<string>('platonDatabaseAdmin.username');
     const adminPassword = this.config.get<string>('platonDatabaseAdmin.password');
@@ -313,9 +300,7 @@ export class EventRulesService {
     ].join('\n');
   }
 
-  /* DDL de retrait : si d'autres règles partagent le trigger, on le recrée sans les colonnes
-   de `rule` plutôt que de le supprimer complètement.
-  */
+  /* DDL de retrait : si d'autres règles partagent le trigger, le recrée sans les colonnes de `rule` plutôt que le supprimer. */
   private async buildUninstallDdl(rule: IndicatorEventRule): Promise<string> {
     const siblingRules = await this.repo.find({ where: { sourceTable: rule.sourceTable, isActive: true } });
     const remaining = siblingRules.filter(r => r.id !== rule.id && r.triggerInstalled);

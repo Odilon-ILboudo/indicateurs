@@ -89,10 +89,7 @@ export class CourseActivityPage implements OnInit, OnDestroy {
   protected adminContext: DashboardContext | null = null
   protected indicatorQueryParams: Record<string, string> = {}
 
-  /*
-  Indicateurs figés (pins enseignant) sur cette activité - indépendant des
-  préférences perso, cf. IndicatorPinsService côté backend.
-  */
+  /* Indicateurs figés (pins enseignant) sur cette activité - indépendant des préférences perso. */
   protected pinsByIndicatorId = new Map<string, IndicatorPin>()
   protected canManagePins = false
   private currentActivityId: string | null = null
@@ -201,9 +198,7 @@ export class CourseActivityPage implements OnInit, OnDestroy {
     )
   }
 
-  /** contextType passé explicitement : contrairement aux indicateurs `activity`, celui d'une
-   carte personnelle dépend de l'indicateur cliqué, pas fixe.
-  */
+  /** contextType passé explicitement : pour une carte personnelle il dépend de l'indicateur cliqué, pas fixe. */
   protected personalIndicatorQueryParams(contextType: string): Record<string, string> {
     return { ...this.indicatorQueryParams, from: 'activity-personal', contextType }
   }

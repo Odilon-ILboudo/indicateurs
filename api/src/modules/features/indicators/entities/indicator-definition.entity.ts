@@ -53,17 +53,11 @@ export class IndicatorDefinition {
   @Column({ default: true })
   isActive: boolean;
 
-  /* Complétude réelle du formulaire, indépendante de `isActive` (interrupteur manuel de
-   publication, toujours false à la création). Reflète l'enregistrement via le bouton final
-   du wizard, plutôt que "Sauvegarder le brouillon".
-  */
+  /* Complétude réelle du formulaire, indépendante de `isActive` - reflète le bouton final du wizard, pas "Sauvegarder le brouillon". */
   @Column({ default: false })
   isComplete: boolean;
 
-  /* Ligne technique qui ne représente aucun indicateur réel, sert à faire exister une famille
-   vide. Toujours isActive=false, jamais affichée aux utilisateurs finaux, supprimée
-   automatiquement dès qu'un premier vrai indicateur rejoint la famille.
-  */
+  /* Ligne technique pour faire exister une famille vide - isActive=false, jamais affichée, supprimée au premier vrai membre. */
   @Column({ default: false })
   isFamilyPlaceholder: boolean;
 
@@ -74,10 +68,7 @@ export class IndicatorDefinition {
   @Column({ type: 'jsonb', nullable: true })
   formula: FormulaDefinition | null;
 
-  /* Seuils de performance partagés par toutes les visualisations (optionnel).
-   `critical` est une borne purement documentaire (légende) : au-delà de
-   `warning`, la carte est de toute façon rouge, avec ou sans `critical`.
-  */
+  /* Seuils de performance partagés par toutes les visualisations - `critical` est une borne purement documentaire. */
   @Column({ type: 'jsonb', nullable: true })
   thresholds: { good?: number; warning?: number; critical?: number } | null;
 
@@ -85,9 +76,7 @@ export class IndicatorDefinition {
   @Column({ type: 'text', nullable: true })
   interpretationHint: string | null;
 
-  /* Restreint la visibilité à des rôles précis, en override de la règle par défaut du
-   contextType - utile pour un résultat nominatif (ex. performance par étudiant).
-  */
+  /* Restreint la visibilité à des rôles précis, en override de la règle par défaut du contextType. */
   @Column({ type: 'jsonb', nullable: true })
   visibilityRoles: string[] | null;
 

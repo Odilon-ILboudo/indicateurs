@@ -1,9 +1,6 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
-/*
-L'unicité est appliquée par deux index uniques partiels en base, pas par @Unique() :
-activityId et courseId sont mutuellement exclusifs, l'un des deux est toujours NULL.
-*/
+/* L'unicité est appliquée par deux index uniques partiels en base (pas @Unique()) - activityId/courseId mutuellement exclusifs. */
 @Entity('indicator_snapshots')
 export class IndicatorSnapshot {
   @PrimaryGeneratedColumn('uuid')

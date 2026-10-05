@@ -58,10 +58,7 @@ export class IndicatorsController {
     return this.indicatorsService.getFullSchema();
   }
 
-  /* Recherche des cours par nom (toutes ressources, pas seulement celles de l'utilisateur
-   courant) pour le sélecteur de contexte du test de formule - 10 résultats par page,
-   `offset` pour charger la suite (pagination "charger plus" côté front).
-  */
+  /* Recherche des cours par nom (tout PLaTon) pour le sélecteur de test de formule - 10 résultats/page. */
   @Get('courses/search')
   async searchCourses(@Query('q') q?: string, @Query('offset') offset?: string) {
     return this.indicatorsService.searchCourses(q ?? '', offset ? parseInt(offset, 10) : 0);
@@ -92,9 +89,7 @@ export class IndicatorsController {
     return this.pinsService.listPins(contextType, contextId);
   }
 
-  /* Nombre de pins par indicateur (tous cours/activités confondus) pour le label "N pins"
-   affiché dans la liste admin des indicateurs.
-  */
+  /* Nombre de pins par indicateur (tous cours/activités confondus) pour le label "N pins" de la liste admin. */
   @Get('pins/counts')
   @UseGuards(AuthGuard)
   async countPinsByIndicator() {
@@ -143,13 +138,7 @@ export class IndicatorsController {
     return this.indicatorsService.create(definition);
   }
 
-  /*
-  Calcule la formule d'un indicateur pour un contexte donné et persiste le résultat.
-  POST /api/indicators/:id/compute-view
-  Body: { contextType, contextId, activityId?, courseId? }
-  `courseId` : uniquement pertinent pour un indicateur `group` course-aware (voir
-  isCourseAware()); ignoré pour tous les autres contextType.
-  */
+  /* POST /:id/compute-view { contextType, contextId, activityId?, courseId? } - courseId pertinent seulement si group course-aware. */
   @Post(':id/compute-view')
   @UseGuards(AuthGuard, IndicatorVisibilityGuard)
   async computeView(
@@ -164,12 +153,7 @@ export class IndicatorsController {
     );
   }
 
-  /*
-  Prévisualise le résultat brut d'un pipeline DSL sans persister.
-  Supporte les contextes learner et group.
-  POST /api/indicators/preview
-  Body: { formula, context: { userId?, groupId?, activityId?, courseId? } }
-  */
+  /* POST /preview { formula, context } : prévisualise un pipeline DSL sans persister (learner/group). */
   @Post('preview')
   async previewFormula(
     @Body() body: {
@@ -275,11 +259,7 @@ export class IndicatorsController {
     return this.indicatorsService.sendNotification(id, body.title, body.message);
   }
 
-  /*
-  Pins (figer un indicateur sur un cours/activité)
-  Pas d'AdminGuard : le contrôle fin (admin OU enseignant avec droit d'écriture
-  sur le cours) est fait dans IndicatorPinsService#assertCanManagePins.
-  */
+  /* Pins : pas d'AdminGuard, le contrôle fin (admin ou enseignant habilité) est fait dans assertCanManagePins. */
 
   @Post(':id/pins')
   @UseGuards(AuthGuard)

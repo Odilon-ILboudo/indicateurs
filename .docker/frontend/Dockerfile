@@ -6,8 +6,7 @@ COPY frontend/package.json frontend/yarn.lock ./
 RUN yarn install --frozen-lockfile
 
 COPY frontend/ .
-# App standalone (admin) et widget embarqué (voir docs/integration-platon.md) : deux cibles
-# du même projet Angular, construites l'une après l'autre pour réutiliser ce même node_modules.
+# App standalone et widget embarqué : deux cibles du même projet Angular, construites l'une après l'autre (même node_modules).
 RUN yarn ng build indicateurs --configuration production
 RUN yarn ng build indicateurs-embed --configuration production
 

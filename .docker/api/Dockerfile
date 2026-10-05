@@ -1,5 +1,5 @@
 # Build stage
-FROM node:20-bullseye-slim AS builder
+FROM node:20-bookworm-slim AS builder
 
 # Outils requis pour compiler les addons natifs (isolated-vm, argon2, bcrypt)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -14,7 +14,7 @@ COPY api/ .
 RUN yarn build
 
 # Production stage
-FROM node:20-bullseye-slim AS production
+FROM node:20-bookworm-slim AS production
 WORKDIR /app
 
 COPY --from=builder /app/dist ./dist

@@ -113,9 +113,7 @@ export class IndicatorConfigModalComponent implements OnInit {
 
   visibleVisualizations: IndicatorVisualization[] = [];
   selectedVizIds = new Set<string>();
-  /** Visualisation dont la couleur/valeur pilote la carte (icône + valeur + graphique) - un
-   seul choix possible, toujours parmi les visualisations actuellement activées.
-  */
+  /** Visualisation qui pilote la carte - un seul choix possible, parmi les visualisations activées. */
   private selectedActiveVizId: string | null = null;
 
   ngOnInit(): void {
@@ -130,9 +128,7 @@ export class IndicatorConfigModalComponent implements OnInit {
       : (this.visibleVisualizations.find(v => this.selectedVizIds.has(v.id))?.id ?? null);
   }
 
-  /** Sous-ensemble de visibleVisualizations réellement cochées - seules celles-ci peuvent
-   piloter la couleur/valeur de la carte (pas de sens de choisir une visualisation masquée).
-  */
+  /** Sous-ensemble de visibleVisualizations réellement cochées - seules celles-ci peuvent piloter la carte. */
   get enabledVisualizations(): IndicatorVisualization[] {
     return this.visibleVisualizations.filter(v => this.selectedVizIds.has(v.id));
   }
@@ -145,10 +141,7 @@ export class IndicatorConfigModalComponent implements OnInit {
     if (this.selectedVizIds.has(vizId)) {
       if (this.selectedVizIds.size === 1) return;
       this.selectedVizIds.delete(vizId);
-      /*
-      La visualisation démasquée ne peut plus piloter la carte - repli sur la première
-      visualisation restée activée.
-      */
+      /* La visualisation démasquée ne peut plus piloter la carte - repli sur la première restée activée. */
       if (this.selectedActiveVizId === vizId) {
         this.selectedActiveVizId = this.visibleVisualizations.find(v => this.selectedVizIds.has(v.id))?.id ?? null;
       }
@@ -165,9 +158,7 @@ export class IndicatorConfigModalComponent implements OnInit {
     return this.selectedActiveVizId === vizId;
   }
 
-  /** Choix unique (case cochée = celle-ci, les autres se décochent) - pas de retour à un mode
-   "automatique" : il y a toujours exactement une visualisation active.
-  */
+  /** Choix unique (les autres se décochent) - pas de mode "automatique", toujours exactement une visualisation active. */
   selectActiveViz(vizId: string): void {
     this.selectedActiveVizId = vizId;
   }

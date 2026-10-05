@@ -154,13 +154,7 @@ export class IndicatorService {
 
   // Calcul de vue
 
-  /*
-  Calcule la formule d'un indicateur pour un contexte donné et persiste le résultat.
-  - learner  : contextId = userId
-  - group    : contextId = groupId, activityId OU courseId (voir isCourseAware)
-  - course   : contextId = courseId, activityId requis
-  - activity : contextId = activityId
-  */
+  /* Calcule la formule d'un indicateur pour un contexte donné et persiste le résultat (contextId selon le type). */
   computeView(
     indicatorId: string,
     contextType: string,
@@ -178,10 +172,7 @@ export class IndicatorService {
     });
   }
 
-  /* Recherche des cours par nom (toutes ressources PLaTon, pas seulement celles de
-   l'utilisateur courant) - 10 résultats par page côté backend. `query` vide renvoie les
-   premiers cours par ordre alphabétique. `offset` pour charger la page suivante.
-  */
+  /* Recherche des cours par nom (tout PLaTon), 10 résultats/page, `offset` pour la page suivante. */
   searchCourses(query: string, offset = 0): Observable<TeacherCourse[]> {
     return this.http.get<TeacherCourse[]>(`${this.apiUrl}/courses/search?q=${encodeURIComponent(query)}&offset=${offset}`);
   }
@@ -190,16 +181,9 @@ export class IndicatorService {
     return this.http.get<CourseActivity[]>(`${this.apiUrl}/course/${courseId}/activities`);
   }
 
-  /* Groupes de TP du cours - endpoint déjà utilisé pour la gestion des membres (courses.service.ts
-   côté API), réutilisé ici plutôt que de dépendre du cache de recherche de cours (qui peut ne
-   plus contenir le cours sélectionné une fois la liste rechargée).
-  */
+  /* Groupes de TP du cours - endpoint existant réutilisé plutôt que de dépendre du cache de recherche de cours. */
   getCourseGroups(courseId: string): Observable<{ id: string; name: string }[]> {
-    /*
-    "id" ici = CourseGroups.id (même champ que renvoyait déjà PlatonService#searchCourses
-    pour ses groupes en cache) - pas group_id, un identifiant différent.
-    L'endpoint renvoie { resources, total } (comme searchMembers) - pas un tableau brut.
-    */
+    /* "id" ici = CourseGroups.id (pas group_id) - l'endpoint renvoie { resources, total }, pas un tableau brut. */
     return this.http.get<{ resources: { id: string; groupId: string; courseId: string; name: string }[]; total: number }>(
       `${environment.apiUrl}/v1/courses/${courseId}/groups`,
     ).pipe(
@@ -242,11 +226,7 @@ export class IndicatorService {
     return this.http.delete<void>(`${this.apiUrl}/${indicatorId}/snapshots/${snapshotId}`);
   }
 
-  /*
-  Pins (figer un indicateur sur un cours/activité)
-  Totalement indépendant des préférences perso (ci-dessous) : aucune écriture
-  croisée entre les deux, cf. IndicatorPinsService côté backend.
-  */
+  /* Pins (figer un indicateur) - totalement indépendant des préférences perso, aucune écriture croisée (voir IndicatorPinsService). */
 
   listPins(contextType: IndicatorPinContextType, contextId: string): Observable<IndicatorPin[]> {
     return this.http.get<IndicatorPin[]>(

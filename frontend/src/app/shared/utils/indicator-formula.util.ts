@@ -8,9 +8,7 @@ function usesContextField(formula: IndicatorFormula | null | undefined, field: s
   );
 }
 
-/** "activity-aware" : la formule filtre par activity_id, sa valeur ne doit s'afficher que sur
- la page de cette activité précise, jamais comme valeur globale.
-*/
+/** "activity-aware" : la formule filtre par activity_id, sa valeur ne doit s'afficher que sur cette activité précise. */
 export function isActivityAware(formula: IndicatorFormula | null | undefined): boolean {
   return usesContextField(formula, 'activity_id');
 }

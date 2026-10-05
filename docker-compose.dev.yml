@@ -1,20 +1,63 @@
-# Mode développement : infrastructure uniquement
-# L'API tourne localement :    cd api && yarn start:dev
-# Le frontend tourne localement : cd frontend && yarn start
-#
-# Prérequis : le projet PLaTon doit tourner (docker compose -f docker-compose.dev.yml up)
-# car on partage son réseau, son PostgreSQL et son Redis.
+# Mode développement : infrastructure uniquement. API/frontend tournent nativement (yarn start:dev / yarn start).
+# Prérequis : PLaTon démarré (partage son réseau, son PostgreSQL et son Redis).
 
 services:
+  # Service éphémère : crée la base "indicators" si absente (idempotent, même logique que docker-compose.prod.yml).
+  init-db:
+    image: postgres:13-alpine
+    container_name: indicateurs_init_db
+    env_file:
+      - .env
+    environment:
+      PLATON_DB_HOST: platon_postgres
+      PGPASSWORD: ${PLATON_DB_PASSWORD}
+    entrypoint:
+      - sh
+      - -c
+      - |
+        until pg_isready -h "$$PLATON_DB_HOST" -U "$$PLATON_DB_USERNAME" -q; do
+          echo "En attente de Postgres ($$PLATON_DB_HOST)..."
+          sleep 2
+        done
+        exists=$$(psql -h "$$PLATON_DB_HOST" -U "$$PLATON_DB_USERNAME" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$$INDICATORS_DB_NAME'")
+        if [ "$$exists" = "1" ]; then
+          echo "Base $$INDICATORS_DB_NAME déjà présente."
+        else
+          echo "Création de la base $$INDICATORS_DB_NAME..."
+          psql -h "$$PLATON_DB_HOST" -U "$$PLATON_DB_USERNAME" -d postgres -c "CREATE DATABASE \"$$INDICATORS_DB_NAME\""
+        fi
+    networks:
+      - platon-network
+    restart: "no"
+
+  # Service éphémère : applique les migrations TypeORM (build de l'image API pour cette seule étape, API native sinon).
+  migrate:
+    image: indicateurs-api
+    build:
+      context: .
+      dockerfile: .docker/api/Dockerfile
+    container_name: indicateurs_migrate
+    env_file:
+      - .env
+    environment:
+      PLATON_DB_HOST: platon_postgres
+      INDICATORS_DB_HOST: platon_postgres
+    command: yarn migration:run
+    depends_on:
+      init-db:
+        condition: service_completed_successfully
+    networks:
+      - platon-network
+    restart: "no"
+
   rabbitmq:
     image: rabbitmq:3-management
     container_name: indicateurs_rabbitmq
     environment:
-      # Ne prend effet qu'au premier démarrage sur un volume vierge - ce volume
-      # est partagé avec docker-compose.prod.yml (même nom de projet Compose),
-      # donc déjà initialisé si la stack prod a tourné au moins une fois.
+      # Ne prend effet qu'au premier démarrage sur volume vierge (partagé avec prod) - "rabbitmq-init" corrige sinon.
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-indicateurs}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_NODENAME: rabbit@indicateurs_rabbitmq
     ports:
       - "5672:5672"
       - "15672:15672"   # UI de gestion : http://localhost:15672 (voir .env pour les identifiants)
@@ -28,12 +71,52 @@ services:
       timeout: 5s
       retries: 5
 
+  # Service éphémère : crée/corrige le compte RabbitMQ même sur un volume déjà initialisé - voir docs/docker-migration.md.
+  rabbitmq-init:
+    image: rabbitmq:3-management
+    container_name: indicateurs_rabbitmq_init
+    env_file:
+      - .env
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq:ro
+    entrypoint:
+      - sh
+      - -c
+      - |
+        NODE=rabbit@indicateurs_rabbitmq
+        USER="$${RABBITMQ_USER:-indicateurs}"
+        PASS="$$RABBITMQ_PASSWORD"
+        i=0
+        until rabbitmqctl -n "$$NODE" status >/dev/null 2>&1; do
+          i=$$((i+1))
+          if [ "$$i" -ge 15 ]; then
+            echo "RabbitMQ ($$NODE) injoignable après 30s." >&2
+            exit 1
+          fi
+          echo "En attente de RabbitMQ ($$NODE)..."
+          sleep 2
+        done
+        if rabbitmqctl -n "$$NODE" list_users | awk '{print $$1}' | grep -qx "$$USER"; then
+          echo "Compte $$USER déjà présent, mise à jour du mot de passe."
+          rabbitmqctl -n "$$NODE" change_password "$$USER" "$$PASS"
+        else
+          echo "Création du compte $$USER."
+          rabbitmqctl -n "$$NODE" add_user "$$USER" "$$PASS"
+        fi
+        rabbitmqctl -n "$$NODE" set_user_tags "$$USER" administrator
+        rabbitmqctl -n "$$NODE" set_permissions -p / "$$USER" ".*" ".*" ".*"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - platon-network
+    restart: "no"
+
 volumes:
   rabbitmqdata:
 
 networks:
   platon-network:
     external: true
-    # Voir la remarque dans docker-compose.prod.yml - PLATON_NETWORK_NAME est
-    # détecté automatiquement par bin/docker/up.sh, ce nom n'est qu'un repli.
+    # Voir docker-compose.prod.yml - PLATON_NETWORK_NAME détecté par bin/docker/up.sh, ce nom n'est qu'un repli.
     name: ${PLATON_NETWORK_NAME:-platon_platon-network}

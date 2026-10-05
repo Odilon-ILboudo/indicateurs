@@ -10,11 +10,7 @@ import { NzSpinModule } from 'ng-zorro-antd/spin';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { IndicatorService } from '../../core/services/indicator.service';
 
-/*
-Modale "Schéma PLaTon" - autonome : charge elle-même son schéma complet (avec relations,
-distinct de `platonSchema` chargé par IndicatorBuilderComponent pour les pickers de table du
-pipeline), ouverte via NzModalService.create({ nzContent: SchemaExplorerModalComponent }).
-*/
+/* Modale "Schéma PLaTon" autonome - charge son propre schéma complet, distinct de `platonSchema` du builder. */
 @Component({
   selector: 'ui-schema-explorer-modal',
   standalone: true,

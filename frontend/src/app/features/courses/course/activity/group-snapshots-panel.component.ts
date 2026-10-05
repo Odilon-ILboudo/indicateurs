@@ -84,11 +84,7 @@ interface IndicatorPanel {
 })
 export class GroupSnapshotsPanelComponent implements OnInit, OnChanges {
   @Input() groupIndicators: IndicatorDefinition[] = [];
-  /*
-  Absent = mode cours entier (toutes activités agrégées, isCourseAware) ; présent = mode
-  activité précise (comportement historique). `courseId` reste toujours requis (utilisé
-  pour la liste des groupes du cours, indépendamment du mode).
-  */
+  /* Absent = mode cours entier (isCourseAware) ; présent = mode activité précise. `courseId` reste toujours requis. */
   @Input() activityId?: string;
   @Input() courseId!: string;
   @Input() activityName = '';
@@ -125,10 +121,7 @@ export class GroupSnapshotsPanelComponent implements OnInit, OnChanges {
   private readonly apiBase = `${environment.apiUrl}/v1`;
 
   ngOnInit(): void {
-    /*
-    Le *ngIf parent garantit que groupIndicators.length > 0 à la création du composant.
-    On charge toujours groupes + snapshots à l'init.
-    */
+    /* Le *ngIf parent garantit groupIndicators.length > 0 à la création - on charge toujours groupes + snapshots à l'init. */
     this.loadAll();
   }
 
@@ -363,11 +356,7 @@ export class GroupSnapshotsPanelComponent implements OnInit, OnChanges {
           const key = `${row.snapshot.contextId}__${viz.id}`;
           const structuredValue = res.structuredValue ?? (res as any).metadata?.structuredValue;
           this.compResults.set(key, { value: res.value, structuredValue });
-          /*
-          Même rendu ECharts que la page détail (indicator-chart-options.util.ts) - calculé
-          une seule fois ici plutôt qu'à chaque cycle de détection pour éviter de recréer
-          l'objet d'options à chaque fois (ngx-echarts recompare par référence).
-          */
+          /* Calculé une seule fois (pas à chaque cycle de détection) pour éviter de recréer l'objet - ngx-echarts compare par référence. */
           const options = buildIndicatorChartOptions(viz, { value: res.value, structuredValue }, panel.indicator.thresholds);
           if (options) this.compChartOptions.set(key, options);
         }).catch(() => {

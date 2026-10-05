@@ -6,6 +6,8 @@ Le microservice indicateurs s'appuie sur l'infrastructure Docker de PLaTon (Post
 
 **Prérequis** : le projet PLaTon doit tourner (`bin/docker/up.sh` dans le dossier `platon/`).
 
+Sur une nouvelle machine, voir [platon-local-setup.md](platon-local-setup.md) pour les réglages locaux à refaire dans la copie de `platon/` (non versionnés, propres à chaque environnement).
+
 Pour migrer une base Postgres native (hors Docker) vers `platon_postgres`, voir le guide de reproduction [docker-migration.md](docker-migration.md).
 
 Pour explorer les bases Postgres via l'interface web pgAdmin, voir [pgadmin.md](pgadmin.md).
@@ -25,22 +27,38 @@ Pour explorer les bases Postgres via l'interface web pgAdmin, voir [pgadmin.md](
 
 ## Mode développement
 
+**Point d'entrée recommandé, sur une nouvelle machine** : `./bin/setup.sh`
+(depuis `indicateurs/`) - démarre PLaTon, attend Postgres, génère `api/.env`,
+lance tout ce qui suit automatiquement, et s'arrête avec une erreur claire si
+une étape échoue plutôt que de continuer en silence. Accepte en option le
+dossier `platon/` (défaut `../platon`) et un dossier de dump à restaurer
+(voir [docker-migration.md](docker-migration.md)).
+
+Au quotidien (la copie `platon/` est déjà configurée), la commande plus
+légère suffit :
+
 ```bash
 ./bin/docker/up.sh        # démarre l'infrastructure locale
 ```
 
-Docker démarre **un seul service** :
+Docker démarre :
 
 ```
-Docker lance :
-  └ indicateurs_rabbitmq  (port 5672 + UI de gestion port 15672)
+  ├ indicateurs_init_db      (éphémère - crée la base "indicators" si absente)
+  ├ indicateurs_migrate      (éphémère - applique les migrations TypeORM en attente)
+  ├ indicateurs_rabbitmq     (port 5672 + UI de gestion port 15672)
+  └ indicateurs_rabbitmq_init (éphémère - corrige le compte RabbitMQ si besoin)
 
 Tu lances manuellement :
   ├ cd api && yarn start:dev     → NestJS sur localhost:3001
   └ cd frontend && yarn start   → Angular sur localhost:4200
 ```
 
-RabbitMQ est le seul service qu'on ne peut pas lancer avec une commande npm - il a besoin d'un daemon. Le reste tourne en local pour avoir le **hot-reload** (modification du code → rechargement immédiat).
+`api`/`frontend` tournent en local (pas en conteneur) pour avoir le
+**hot-reload** (modification du code → rechargement immédiat) - `yarn
+install` doit compiler `isolated-vm` nativement sur cette machine à cette
+étape, voir [platon-local-setup.md](platon-local-setup.md#0-prérequis-système-avant-tout-le-reste)
+en cas d'échec.
 
 PostgreSQL et Redis ne sont pas dans ce compose car ils appartiennent à PLaTon. On se branche dessus via `platon-network`.
 
@@ -114,7 +132,25 @@ Variables importantes à adapter :
 | `PLATON_DB_PASSWORD` | Mot de passe PostgreSQL (même que dans `platon/.env`) |
 | `JWT_SECRET` | Doit être identique au `SECRET_KEY` du PLaTon déployé aux côtés de cette instance (utilisé uniquement en `NODE_ENV=production`, voir readme.md section 12 - sans effet en dev, où les utilisateurs s'authentifient sur le PLaTon universitaire) |
 | `INDICATEURS_PORT` | Port exposé pour le frontend (défaut : `4300`) |
-| `PLATON_DB_ADMIN_USERNAME`/`PASSWORD` | Optionnel - identifiant Postgres à privilèges élevés pour l'installation des déclencheurs dynamiques (readme.md section 6bis). **Absent de `.env.example`** : à ajouter manuellement dans `.env` si besoin - `env_file: .env` sur le service `api` transmet n'importe quelle variable ajoutée là, pré-listée ou non. |
+| `PLATON_DB_ADMIN_USERNAME`/`PASSWORD` | Optionnel - identifiant Postgres à privilèges élevés pour l'installation des déclencheurs dynamiques (readme.md section 6bis). Commenté dans `.env.example` : décommenter dans `.env` si besoin - `env_file: .env` sur le service `api` transmet n'importe quelle variable ajoutée là, pré-listée ou non. Repris automatiquement dans `api/.env` par `bin/generate-api-env.sh` s'il est renseigné (voir plus bas). |
+
+### `api/.env` - généré, pas édité à la main
+
+En mode dev, l'API tourne nativement (`yarn start:dev`, hors Docker) et lit
+`api/.env`, pas le `.env` racine - deux fichiers distincts, avec des valeurs
+qui diffèrent sur certains points (`platon_postgres`/`indicateurs_rabbitmq`
+ne résolvent à rien hors du réseau Docker, remplacés par `localhost`). Les
+maintenir à la main en double est une source réelle de désynchronisation (un
+mot de passe changé d'un côté, oublié de l'autre).
+
+```bash
+./bin/generate-api-env.sh
+```
+
+Régénère entièrement `api/.env` à partir du `.env` racine - à relancer après
+toute modification du `.env` racine (mot de passe RabbitMQ, etc.). Le fichier
+généré porte un en-tête qui le rappelle ; ne pas l'éditer directement, les
+changements seraient écrasés au prochain lancement du script.
 
 **Pas une variable d'environnement, un fichier à éditer avant de builder** :
 `frontend/src/environments/environment.embed.prod.ts` contient un placeholder

@@ -1,8 +1,6 @@
 import { PipelineStep } from './pipeline-import-types';
 
-/* Détail complet d'une étape pour la vue "Pipeline" des cartes (Prédéfinis / Existants) - le
- type JS est traité à part dans le template (bloc de code en lecture seule).
-*/
+/* Détail complet d'une étape pour la vue "Pipeline" - le type JS est traité à part dans le template. */
 export function stepDetails(s: PipelineStep): { label: string; value: string }[] {
   switch (s.type) {
     case 'fetch':
@@ -53,9 +51,7 @@ const CONTEXT_FIELD_PATTERNS: { label: string; patterns: string[] }[] = [
   { label: 'Session',              patterns: ['session_id'] },
 ];
 
-/** Suggère une configuration de règle event-rule à partir du pipeline courant (table,
- colonnes, mapping de contexte) - une suggestion à vérifier, jamais une garantie.
-*/
+/** Suggère une configuration d'event-rule à partir du pipeline courant - une suggestion à vérifier, jamais une garantie. */
 export function eventRuleHint(pipeline: PipelineStep[]): {
   tables: string[];
   columns: string[];

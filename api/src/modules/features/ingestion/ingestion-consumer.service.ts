@@ -16,13 +16,7 @@ export class IngestionConsumerService {
     private readonly classifier: EventClassifierService,
   ) {}
 
-  /*
-  Le relais (côté LMS hôte, voir docs/integration-platon-relay.md) transmet les lignes de
-  l'outbox telles quelles, sans les interpréter - `event_type` reste préfixé `raw:<Table>`
-  pour tout déclencheur générique installé depuis l'admin. La classification en événement(s)
-  métier réel(s) se fait donc ici, juste avant traitement, plutôt que dans le relais : les
-  règles (`IndicatorEventRule`) vivent dans la base Indicateurs, pas celle du LMS hôte.
-  */
+  /* Le relais transmet les lignes brutes (`raw:<Table>`) - la classification se fait ici, les règles vivant côté Indicateurs. */
   private async resolveEvents(raw: Record<string, any>): Promise<RawEvent[]> {
     if (typeof raw?.type === 'string' && raw.type.startsWith('raw:')) {
       const classified = await this.classifier.classify(raw);
@@ -39,11 +33,7 @@ export class IngestionConsumerService {
     return [raw as RawEvent];
   }
 
-  /*
-  Consumer 1 : indicateurs Apprenant
-  Reçoit tous les événements (routing '#'), filtrage fin fait dans IngestionService
-  via requiredEvents.
-  */
+  /* Consumer 1 : indicateurs Apprenant - reçoit tout (routing '#'), filtrage fin fait dans IngestionService. */
   @RabbitSubscribe({
     exchange: PLATON_EXCHANGE,
     routingKey: '#',
@@ -64,17 +54,11 @@ export class IngestionConsumerService {
         firstError ??= err as Error;
       }
     }
-    /*
-    Un seul throw, après avoir tenté tous les événements classifiés de ce message - sinon
-    l'échec du premier empêcherait les suivants d'être traités.
-    */
+    /* Un seul throw après avoir tenté tous les événements classifiés, sinon le premier échec bloquerait les suivants. */
     if (firstError) throw firstError;
   }
 
-  /*
-  Consumer 2 : indicateurs Agrégats (tous les autres contextTypes)
-  Séparé du consumer learner pour que les calculs lourds ne bloquent pas le score individuel.
-  */
+  /* Consumer 2 : indicateurs Agrégats - séparé du consumer learner pour que les calculs lourds ne bloquent pas le score individuel. */
   @RabbitSubscribe({
     exchange: PLATON_EXCHANGE,
     routingKey: '#',

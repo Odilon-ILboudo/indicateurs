@@ -34,10 +34,7 @@ export const STEP_TYPE_LABELS: Record<StepType, string> = {
   aggregate: 'Agréger', round: 'Arrondir', divide: 'Diviser', js: 'Code JS',
 };
 
-/** Champs de l'indicateur reconnus au niveau racine d'un import YAML/JSON, en plus du
- pipeline. `name` est le seul obligatoire avec `pipeline` - le reste garde les valeurs déjà
- présentes dans le formulaire si absent de l'import.
-*/
+/** Champs reconnus à la racine d'un import, en plus du pipeline - `name` seul obligatoire, le reste garde le formulaire si absent. */
 export interface ImportedIndicatorMeta {
   name: string;
   description?: string;
@@ -58,9 +55,7 @@ export class PipelineError extends Error {
   ) { super(message); }
 }
 
-/** Forme d'affichage d'une erreur de `parseIndicatorImport()`, partagée par tous les panneaux
- d'import (wizard étape 3, modale de choix initial) pour un rendu cohérent.
-*/
+/** Forme d'affichage d'une erreur de `parseIndicatorImport()`, partagée par tous les panneaux d'import. */
 export interface ImportErrorDisplay {
   main: string;
   available?: string[];           // valeurs à insérer au clic
@@ -76,9 +71,7 @@ export function toImportErrorDisplay(e: unknown): ImportErrorDisplay {
   return { main: e instanceof Error ? e.message : String(e) };
 }
 
-/** Remplace la valeur fautive par la suggestion choisie dans le texte importé (clic sur une
- valeur proposée) - utilisé par le bouton "cliquer pour corriger" des panneaux d'import.
-*/
+/** Remplace la valeur fautive par la suggestion choisie - utilisé par "cliquer pour corriger" des panneaux d'import. */
 export function replaceValueInText(text: string, wrongValue: string, suggestion: string): string {
   const escaped = wrongValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const re = new RegExp(`(["']?)\\b${escaped}\\b\\1`);

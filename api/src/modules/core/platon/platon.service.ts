@@ -17,9 +17,7 @@ export class PlatonService {
     private dataSource: DataSource,
   ) {}
 
-  /*
-  Récupère les SessionData d'un utilisateur
-  */
+  /* Récupère les SessionData d'un utilisateur */
   async getUserSessionData(userId: string) {
     return this.dataSource.query(
       `SELECT
@@ -69,9 +67,7 @@ export class PlatonService {
     }
   }
 
-  /*
-  Récupère tous les utilisateurs d'une activité
-  */
+  /* Récupère tous les utilisateurs d'une activité */
   async getUsersByActivity(activityId: string) {
     return this.dataSource.query(
       `SELECT DISTINCT u.id, u.email, u.role, u.first_name, u.last_name
@@ -82,9 +78,7 @@ export class PlatonService {
     );
   }
 
-  /*
-  Récupère les détails d'une activité
-  */
+  /* Récupère les détails d'une activité */
   async getActivityDetails(activityId: string) {
     const result = await this.dataSource.query(
       `SELECT a.id,
@@ -98,9 +92,7 @@ export class PlatonService {
     return result[0];
   }
 
-  /*
-  Récupère un utilisateur par son ID (tous les champs sauf password)
-  */
+  /* Récupère un utilisateur par son ID (tous les champs sauf password) */
   async getUserById(userId: string) {
     const result = await this.dataSource.query(
       `SELECT 
@@ -124,9 +116,7 @@ export class PlatonService {
     return result[0];
   }
 
-  /*
-  Récupère tous les étudiants d'un enseignant
-  */
+  /* Récupère tous les étudiants d'un enseignant */
   async getStudentsByTeacher(teacherId: string) {
     return this.dataSource.query(
       `SELECT u.id, u.email, u.first_name, u.last_name
@@ -138,9 +128,7 @@ export class PlatonService {
     );
   }
 
-  /*
-  Récupère tous les étudiants d'un cours
-  */
+  /* Récupère tous les étudiants d'un cours */
   async getStudentsByCourse(courseId: string) {
     return this.dataSource.query(
       `SELECT u.id, u.email, u.first_name, u.last_name
@@ -151,9 +139,7 @@ export class PlatonService {
     );
   }
 
-  /*
-  Récupère tous les IDs des utilisateurs (pour recalcule masse)
-  */
+  /* Récupère tous les IDs des utilisateurs (pour recalcule masse) */
   async getAllUserIds(): Promise<string[]> {
     const result = await this.dataSource.query(
       `SELECT id FROM "Users" WHERE active = true`,
@@ -174,9 +160,7 @@ export class PlatonService {
     return map;
   }
 
-  /*
-  Récupère tous les IDs des enseignants
-  */
+  /* Récupère tous les IDs des enseignants */
   async getAllTeacherIds(): Promise<string[]> {
     const result = await this.dataSource.query(
       `SELECT id FROM "Users" WHERE role = 'teacher' AND active = true`,
@@ -184,9 +168,7 @@ export class PlatonService {
     return result.map((row: { id: string }) => row.id);
   }
 
-  /*
-  Récupère tous les IDs des cours
-  */
+  /* Récupère tous les IDs des cours */
   async getAllCourseIds(): Promise<string[]> {
     const result = await this.dataSource.query(
       `SELECT id FROM "Courses"`,
@@ -210,9 +192,7 @@ export class PlatonService {
     return rows[0]?.course_id ?? null;
   }
 
-  /*
-  Récupère toutes les activités
-  */
+  /* Récupère toutes les activités */
   async getAllActivities(): Promise<any[]> {
     return this.dataSource.query(
       `SELECT a.id,
@@ -237,9 +217,7 @@ export class PlatonService {
     return rows.map((r: { user_id: string }) => r.user_id);
   }
 
-  /*
-  Retourne les groupes de TP d'un enseignant (via owner_id sur Courses).
-  */
+  /* Retourne les groupes de TP d'un enseignant (via owner_id sur Courses). */
   async getGroupsForTeacher(teacherId: string): Promise<{
     id: string;
     name: string;

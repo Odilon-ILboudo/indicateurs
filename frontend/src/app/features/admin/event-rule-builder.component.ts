@@ -261,9 +261,7 @@ export class EventRuleBuilderComponent implements OnInit {
     this.contextMapping = { userId: '' };
   }
 
-  /* Si la colonne surveillée actuelle n'est plus proposée pour la nouvelle condition
-   (ex. bascule vers "franchit un seuil" avec une colonne texte sélectionnée), la réinitialiser.
-  */
+  /* Si la colonne surveillée n'est plus proposée pour la nouvelle condition (ex. colonne texte + "franchit un seuil"), la réinitialiser. */
   onConditionKindChange(): void {
     if (!this.watchedColumn) return;
     const stillValid = this.watchableColumns(this.sourceTable).some(c => c.name === this.watchedColumn);
@@ -279,11 +277,7 @@ export class EventRuleBuilderComponent implements OnInit {
     return cols;
   }
 
-  /* Colonnes proposées pour "Colonne surveillée" - filtrées aux colonnes numériques
-   quand la condition est "franchit un seuil" (comparaison `>`/`<` n'a de sens que sur du
-   numérique). Les autres sélecteurs (contexte) utilisent columnsOf() directement, sans
-   rapport avec la condition.
-  */
+  /* Colonnes proposées pour "Colonne surveillée" - filtrées au numérique si la condition est "franchit un seuil". */
   watchableColumns(table: string | null): { name: string; type: string }[] {
     const cols = this.columnsOf(table);
     if (this.condition.kind !== 'threshold_crossed') return cols;

@@ -1,14 +1,7 @@
 # Mode production : stack complète (RabbitMQ + API + Frontend Nginx)
-#
-# Prérequis : le projet PLaTon doit tourner sur le même hôte avec le réseau
-# platon-network. Les containers platon_postgres et platon_redis doivent
-# être accessibles via ce réseau.
+# Prérequis : PLaTon tourne sur le même hôte, platon_postgres/platon_redis accessibles via platon-network.
 
-# Rotation des logs Docker (json-file) : sans ça, les logs de chaque service
-# s'accumulent indéfiniment sur le disque du serveur. Plafonne à 5 fichiers de
-# 10 Mo max par service (50 Mo). Ne couvre pas la centralisation/recherche
-# après coup (Loki/ELK) ni les alertes (Sentry) - volontairement hors scope
-# tant que la charge ne le justifie pas.
+# Rotation des logs Docker (json-file, 5x10 Mo/service) - pas de centralisation/alerting, hors scope pour l'instant.
 x-logging: &default-logging
   driver: json-file
   options:
@@ -16,10 +9,7 @@ x-logging: &default-logging
     max-file: "5"
 
 services:
-  # Service éphémère (tourne une fois, s'arrête) : crée la base "indicators" sur
-  # le Postgres de PLaTon si elle n'existe pas encore. PLaTon ne provisionne que
-  # sa propre base (POSTGRES_DB) - on ne modifie jamais ses fichiers, donc cette
-  # étape se fait ici plutôt qu'un CREATE DATABASE manuel oublié en déploiement.
+  # Service éphémère : crée la base "indicators" si absente (PLaTon ne provisionne que POSTGRES_DB).
   init-db:
     image: postgres:13-alpine
     container_name: indicateurs_init_db
@@ -54,10 +44,10 @@ services:
     container_name: indicateurs_rabbitmq
     logging: *default-logging
     environment:
-      # Ne prend effet qu'au premier démarrage sur un volume vierge - sinon
-      # (volume déjà initialisé avec guest) sans effet, voir docker-migration.md.
+      # Ne prend effet qu'au premier démarrage sur volume vierge - "rabbitmq-init" ci-dessous corrige sinon.
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-indicateurs}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_NODENAME: rabbit@indicateurs_rabbitmq
     volumes:
       - rabbitmqdata:/var/lib/rabbitmq
     networks:
@@ -68,9 +58,49 @@ services:
       timeout: 5s
       retries: 5
 
-  # Service éphémère : applique les migrations TypeORM en attente (voir
-  # api/src/migrations/ et bin/migration/*.sh) avant que l'API ne démarre.
-  # Réutilise la même image que le service "api" (voir sa note "image:").
+  # Service éphémère : crée/corrige le compte RabbitMQ même sur un volume déjà initialisé - voir docs/docker-migration.md.
+  rabbitmq-init:
+    image: rabbitmq:3-management
+    container_name: indicateurs_rabbitmq_init
+    logging: *default-logging
+    env_file:
+      - .env
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq:ro
+    entrypoint:
+      - sh
+      - -c
+      - |
+        NODE=rabbit@indicateurs_rabbitmq
+        USER="$${RABBITMQ_USER:-indicateurs}"
+        PASS="$$RABBITMQ_PASSWORD"
+        i=0
+        until rabbitmqctl -n "$$NODE" status >/dev/null 2>&1; do
+          i=$$((i+1))
+          if [ "$$i" -ge 15 ]; then
+            echo "RabbitMQ ($$NODE) injoignable après 30s." >&2
+            exit 1
+          fi
+          echo "En attente de RabbitMQ ($$NODE)..."
+          sleep 2
+        done
+        if rabbitmqctl -n "$$NODE" list_users | awk '{print $$1}' | grep -qx "$$USER"; then
+          echo "Compte $$USER déjà présent, mise à jour du mot de passe."
+          rabbitmqctl -n "$$NODE" change_password "$$USER" "$$PASS"
+        else
+          echo "Création du compte $$USER."
+          rabbitmqctl -n "$$NODE" add_user "$$USER" "$$PASS"
+        fi
+        rabbitmqctl -n "$$NODE" set_user_tags "$$USER" administrator
+        rabbitmqctl -n "$$NODE" set_permissions -p / "$$USER" ".*" ".*" ".*"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - platon-network
+    restart: "no"
+
+  # Service éphémère : applique les migrations TypeORM en attente avant que l'API ne démarre.
   migrate:
     image: indicateurs-api
     build:
@@ -93,8 +123,7 @@ services:
 
   api:
     restart: always
-    # Nom stable pour que le service "migrate" ci-dessus réutilise la même
-    # image sans la reconstruire (Compose ne rebuild qu'une fois, même build:).
+    # Nom stable pour que "migrate" réutilise la même image sans la reconstruire.
     image: indicateurs-api
     build:
       context: .
@@ -104,10 +133,7 @@ services:
     env_file:
       - .env
     environment:
-      # NODE_ENV vient de .env (pas figé ici) : AuthGuard vérifie
-      # cryptographiquement la signature JWT en production, ce qui échoue
-      # systématiquement en local puisqu'on s'authentifie sur le vrai PLaTon
-      # universitaire (secret de signature inconnu ici) - voir auth.guard.ts.
+      # NODE_ENV vient de .env : en local, "production" fait échouer la vérif JWT (secret universitaire inconnu).
       # Hosts Docker : remplacent les valeurs localhost du .env
       PLATON_DB_HOST: platon_postgres
       INDICATORS_DB_HOST: platon_postgres
@@ -120,6 +146,8 @@ services:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
+      rabbitmq-init:
+        condition: service_completed_successfully
     networks:
       - platon-network
 
@@ -143,9 +171,5 @@ volumes:
 networks:
   platon-network:
     external: true
-    # Compose ne fixe pas de `name:` côté PLaTon, donc le réseau qu'il crée
-    # réellement est préfixé par le nom du projet (dérivé du nom du dossier).
-    # On ne modifie jamais les fichiers PLaTon : PLATON_NETWORK_NAME est détecté
-    # automatiquement par bin/docker/up.sh (docker network ls), avec ce nom par
-    # défaut comme repli si la détection échoue - voir docker.md.
+    # PLaTon ne fixe pas de `name:`, le réseau est donc préfixé par son projet - détecté par bin/docker/up.sh, voir docker.md.
     name: ${PLATON_NETWORK_NAME:-platon_platon-network}

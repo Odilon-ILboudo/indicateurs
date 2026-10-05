@@ -158,8 +158,7 @@
       line-height: 1 !important;
     }
     .compare-sections { display: flex; flex-direction: column; gap: 16px; }
-    /* Même motif que .wizard-section (indicator-builder) : bordure bleue, coins arrondis -
-       une vraie boîte par visualisation, plus seulement un espacement + un liseré sous le titre. */
+    /* Même motif que .wizard-section : une vraie boîte par visualisation, pas juste un liseré sous le titre. */
     .compare-section { border: 1px solid #1890ff; border-radius: 10px; padding: 16px 18px; background: #fff; }
     .compare-section-title {
       display: flex; align-items: center; gap: 6px;
@@ -195,7 +194,6 @@
       display: flex; align-items: baseline; gap: 6px;
     }
     .compare-unit { font-size: 15px; font-weight: 400; }
-    /* Format compact pour tenir dans une carte de la grille (3 colonnes max) - même rendu
-       ECharts que la page détail, juste redimensionné. */
+    /* Format compact pour tenir dans une carte de la grille - même rendu ECharts que la page détail, redimensionné. */
     .compare-chart { width: 100%; height: 200px; }
     .compare-loading-cell { padding: 24px; }

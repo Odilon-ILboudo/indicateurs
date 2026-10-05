@@ -108,11 +108,7 @@ export function withAuthGuard(route: Record<string, unknown>, _roles?: string[])
   return route
 }
 
-/*
----- UserSearchModalComponent ----
-La barre <user-search-bar> pilote la sélection via [(ngModel)] ; "confirm" émet cette
-sélection - sans elle, "closed" émettait toujours [] au clic.
-*/
+/* UserSearchModalComponent : <user-search-bar> pilote la sélection via [(ngModel)], "confirm" émet cette sélection. */
 
 @Component({
   standalone: true,
@@ -168,11 +164,7 @@ export class UserSearchModalComponent {
     return !this.multi ? n === 1 : n > 0
   }
 
-  /*
-  `open()` est appelé depuis le template du PARENT (via une référence #addModal), pas par un
-  événement interne à ce composant OnPush : sans markForCheck() ici, Angular ne re-vérifie
-  jamais ce composant et la modale reste invisible malgré `visible = true`.
-  */
+  /* `open()` est appelé depuis le PARENT, pas un événement interne OnPush : sans markForCheck(), la modale reste invisible. */
   open(): void {
     this.visible = true
     this.selection = []
