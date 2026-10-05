@@ -1,12 +1,7 @@
 # Reproduire l'environnement de dev sur une nouvelle machine
 
-Document autonome : tout ce qu'il faut pour repartir de zéro sur une nouvelle
-machine est ici, dans l'ordre, sans avoir à ouvrir un autre fichier. `platon/`
-n'est jamais modifié par ce projet et n'est pas un dépôt git suivi par
-Indicateurs - les réglages des étapes 3 et 4 vivent uniquement dans la copie
-locale de `platon/` présente sur cette machine, jamais versionnés, jamais
-transmis automatiquement d'une machine à l'autre : à refaire à la main à
-chaque nouvelle machine.
+Tout ce qu'il faut pour repartir de zéro sur une nouvelle
+machine est ici, dans l'ordre. Les réglages des étapes 3 et 4 sont à refaire à la main.
 
 ## 0. Prérequis système
 
@@ -18,7 +13,7 @@ chaque nouvelle machine.
   `isolated-vm` (utilisé par `indicateurs/api`) : `python3`, `make`, `g++` sur
   Linux (`build-essential`), Xcode Command Line Tools sur Mac
   (`xcode-select --install`). Sans ça, `yarn install` échoue sur `isolated-vm`
-  avec une erreur de compilation - ou pire, réussit mais produit un binaire qui
+  avec une erreur de compilation, ou au pire, réussit mais produit un binaire qui
   plante au runtime (`Cannot find module './out/isolated_vm'`) si un ancien
   binaire d'une autre machine a été copié au lieu d'être recompilé ici.
 
@@ -38,9 +33,6 @@ Si le fichier reste absent, voir l'erreur réelle de compilation :
 cd node_modules/isolated-vm && npx node-gyp rebuild --release -j max
 ```
 
-Rien de tout ça n'est scriptable sans droits root/sudo et sans dépendre de
-l'OS - à vérifier à la main avant de commencer.
-
 ## 1. Cloner les deux dépôts, en dossiers frères
 
 ```
@@ -50,8 +42,7 @@ un-dossier-parent/
 ```
 
 Les scripts d'Indicateurs (`bin/setup.sh`, etc.) supposent `platon/` au même
-niveau qu'`indicateurs/` par défaut - un autre emplacement reste possible, en
-l'indiquant explicitement en argument de ces scripts.
+niveau qu'`indicateurs/` par défaut.
 
 ## 2. PLaTon : `bin/install.sh` - une fois
 
@@ -119,12 +110,12 @@ Variables importantes à renseigner :
 | Variable | Description |
 |---|---|
 | `PLATON_DB_PASSWORD` | Mot de passe PostgreSQL (même que dans `platon/.env`) |
-| `JWT_SECRET` | Identique au `SECRET_KEY` du PLaTon déployé aux côtés de cette instance (utilisé seulement en `NODE_ENV=production` - sans effet en dev, où l'authentification se fait sur le vrai PLaTon universitaire) |
+| `JWT_SECRET` | Identique au `SECRET_KEY` du PLaTon déployé aux côtés de cette instance (utilisé seulement en `NODE_ENV=production`, sans effet en dev, où l'authentification se fait sur le vrai PLaTon universitaire) |
 | `INDICATEURS_PORT` | Port exposé pour le frontend en prod (défaut : `4300`) |
 | `PLATON_DB_ADMIN_USERNAME`/`PASSWORD` | Optionnel - identifiant Postgres à privilèges élevés pour l'installation des déclencheurs dynamiques. Commenté dans `.env.example` : décommenter si besoin. |
 
 `api/.env` (utilisé par l'API en mode natif, `yarn start:dev`) ne se modifie
-jamais à la main - il se régénère depuis ce `.env` racine :
+jamais à la main. Il se régénère depuis ce `.env` racine :
 
 ```bash
 ./bin/generate-api-env.sh
@@ -185,7 +176,7 @@ d'`indicators` contient déjà la table `typeorm_migrations` à jour.
 
 **Ce qui ne change pas d'une machine à l'autre** : les mots de passe Postgres
 (`POSTGRES_PASSWORD`/`DB_PASSWORD`) peuvent différer entre la machine source
-et la nouvelle sans conséquence - ce sont des identifiants de connexion,
+et la nouvelle sans conséquence. Ce sont des identifiants de connexion,
 indépendants du contenu restauré par `pg_restore`.
 
 ## 8. Installer les dépendances et lancer
@@ -206,7 +197,7 @@ http://localhost:5050
 Identifiants : définis dans `platon/.env` (`PGADMIN_DEFAULT_EMAIL`/`PASSWORD`,
 par défaut `test@test.com`/`test`). La connexion **"PLaTon (Docker)"** est
 pré-configurée automatiquement dès le premier démarrage (grâce aux étapes 3 et
-4) - aucune manipulation manuelle. Au premier clic dessus, renseigner le mot
+4). Aucune manipulation manuelle. Au premier clic dessus, renseigner le mot
 de passe Postgres (`POSTGRES_PASSWORD` dans `platon/.env`, pas celui de
 pgAdmin) ; cocher "Save Password" pour ne plus le retaper. Toutes les bases du
 serveur (`platon_db`, `indicators`, `postgres`) apparaissent sous cette même
@@ -217,18 +208,11 @@ connexion, pas besoin d'en créer une seconde.
 - **`platon/package.json`**, script `serve:web` : ajouter
   `cross-env NODE_OPTIONS=--max-old-space-size=4096` devant la commande
   existante, si `nx serve web` crashe par manque de mémoire sur la machine.
-- **`platon/start-web.sh`** (script à créer, pas fourni par PLaTon) : regroupe
-  `nvm use` + `NX_DAEMON=false` + la même limite mémoire, pour ne pas les
-  taper à chaque lancement :
+- **`platon/start-web.sh`** (pas fourni par PLaTon) : regroupe `nvm use` +
+  `NX_DAEMON=false` + la même limite mémoire, pour ne pas les taper à chaque
+  lancement. Fichier prêt à copier :
   ```bash
-  #!/bin/bash
-  cd "$(dirname "$0")"
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-  nvm use
-  export NX_DAEMON=false
-  export NODE_OPTIONS="--max-old-space-size=4048"
-  yarn serve:web
+  cp docs/platon-integration/start-web.sh ../platon/start-web.sh
   ```
 - **`platon/bin/docker/down.sh`** : commenter `docker volume rm platon_dist`
   pour éviter de perdre ce volume à chaque arrêt - sans impact sur les
@@ -236,12 +220,6 @@ connexion, pas besoin d'en créer une seconde.
   à refaire.
 
 ## À ne jamais reproduire
-
-Un script de nettoyage de commentaires/caractères spéciaux (suppression
-d'emojis, de tirets cadratins) destiné à `indicateurs/` a un jour balayé une
-partie de `platon/` par erreur, corrompant du texte réellement affiché aux
-utilisateurs de PLaTon (tutoriels interactifs notamment). Tout script de ce
-type doit explicitement exclure `platon/` de son périmètre, sans exception.
 
 **`docker start` sur un conteneur `platon_postgres` existant plutôt que
 `docker compose up`** : peut le laisser détaché de `platon-network` sans
