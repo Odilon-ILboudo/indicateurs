@@ -150,9 +150,19 @@ qui ne relance que les services Docker, sans réappliquer les réglages.
 Par défaut, `init-db`/`migrate` créent une base `indicators` **vide**
 (schéma seul, aucune donnée), et `platon_db` reste celle du dump restauré via
 `platon/bin/install.sh` (aucune, sauf si un dump a déjà été restauré à la
-main). Pour récupérer les vraies données d'une autre machine :
+main). Si une base vide suffit, **ignore toute cette étape et passe
+directement à l'étape 8**.
 
-**Sur la machine source** :
+Pour récupérer les vraies données d'une machine qui les a déjà : cette étape
+se fait à deux endroits différents, pas le même ordinateur. La partie "sur
+la machine source" ne te concerne **que si c'est toi qui envoies tes
+données** (sur l'ancienne machine, avant de la supprimer, par exemple) - si
+tu es seulement en train de préparer la nouvelle machine et que quelqu'un
+d'autre t'envoie les fichiers, saute directement à "sur la nouvelle machine"
+ci-dessous, une fois les deux fichiers reçus.
+
+**Sur la machine source** (celle qui a déjà les données - à ignorer si ce
+n'est pas celle-ci) :
 ```bash
 cd indicateurs
 ./bin/platon-db/export.sh
@@ -164,7 +174,9 @@ peu importe - deux fichiers autonomes), à placer dans `indicateurs/dumps/`
 sur la nouvelle machine (créer le dossier s'il n'existe pas : `mkdir dumps`
 - il est gitignored, jamais versionné).
 
-**Sur la nouvelle machine**, une fois l'étape 6 terminée :
+**Sur la nouvelle machine** (celle que tu prépares - commence ici si les
+fichiers t'ont été envoyés), une fois l'étape 6 terminée et les deux
+fichiers bien présents dans `indicateurs/dumps/` :
 ```bash
 cd indicateurs
 ./bin/platon-db/import.sh   # lit ./dumps par défaut
