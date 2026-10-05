@@ -138,20 +138,16 @@ compte RabbitMQ même sur un volume déjà initialisé avec un autre compte).
 S'arrête avec une erreur claire à la première étape qui échoue, plutôt que de
 continuer en silence.
 
-Accepte deux arguments optionnels : `./bin/setup.sh [chemin/vers/platon]
-[chemin/vers/dumps]` (voir étape 7).
-
 Au quotidien, une fois `platon/` déjà configuré (étapes 2 à 4 déjà faites),
 la commande plus légère suffit : `./bin/docker/up.sh` (depuis `indicateurs/`),
 qui ne relance que les services Docker, sans réappliquer les réglages.
 
-## 7. Restaurer de vraies données (optionnel)
+## 7. Restaurer de vraies données
 
 Par défaut, `init-db`/`migrate` créent une base `indicators` **vide**
 (schéma seul, aucune donnée), et `platon_db` reste celle du dump restauré via
 `platon/bin/install.sh` (aucune, sauf si un dump a déjà été restauré à la
-main). Si une base vide suffit, **ignore toute cette étape et passe
-directement à l'étape 8**.
+main).
 
 Pour récupérer les vraies données d'une machine qui les a déjà : cette étape
 se fait à deux endroits différents, pas le même ordinateur. La partie "sur
