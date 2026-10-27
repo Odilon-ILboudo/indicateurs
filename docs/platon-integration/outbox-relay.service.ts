@@ -6,7 +6,7 @@ import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 
 export const PLATON_EXCHANGE = 'platon.events';
 
-/** Relais platon_outbox_events → RabbitMQ, republie chaque ligne telle quelle ; prérequis détaillés dans docs/integration-platon-relay.md. */
+/** Relais platon_outbox_events → RabbitMQ, republie chaque ligne telle quelle ; prérequis détaillés dans docs/platon-integration/integration-platon-relay.md. */
 @Injectable()
 export class OutboxRelayService {
   private readonly logger = new Logger(OutboxRelayService.name);

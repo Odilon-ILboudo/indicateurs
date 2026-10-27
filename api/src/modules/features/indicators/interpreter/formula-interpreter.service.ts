@@ -130,7 +130,7 @@ export class FormulaInterpreterService {
     return result;
   }
 
-  /* Formule éligible au calcul incrémental : fetch(user_id)+[join]*+[filter]*+[groupBy]?+extract+aggregate+[round|divide]* ; null si findFirst/js. */
+  /* Formule éligible au calcul incrémental : fetch(SessionData, user_id)+[join]*+[filter]*+[groupBy]?+[findFirst]?+extract+1 aggregate+[round|divide|js]* ; null sinon. */
   getIncrementalShape(formula: FormulaDefinition): IncrementalShape | null {
     const pipeline = formula?.pipeline ?? [];
     if (pipeline.length < 3) return null;
@@ -585,7 +585,7 @@ export class FormulaInterpreterService {
     return by !== 0 ? value / by : 0;
   }
 
-  /* Patterns interdits dans le code JS des formules - bloque les vecteurs d'évasion connus du module `vm` Node.js. */
+  /* Filet avant exécution : refuse les mots dangereux courants, la vraie protection est l'isolate d'executeJs. */
   private static readonly JS_FORBIDDEN_PATTERNS: { pattern: RegExp; label: string }[] = [
     { pattern: /\bprocess\b/,                          label: '"process" (accès système interdit)' },
     { pattern: /\brequire\s*\(/,                       label: '"require()" (import de module interdit)' },

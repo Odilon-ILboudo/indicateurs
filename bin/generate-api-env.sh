@@ -2,7 +2,7 @@
 
 # Génère api/.env à partir du .env racine - une seule source de vérité pour
 # les identifiants partagés entre les deux fichiers (voir
-# docs/platon-local-setup.md). api/.env sert au mode natif (yarn start:dev,
+# docs/deploiement/platon-local-setup.md). api/.env sert au mode natif (yarn start:dev,
 # hors Docker) : les noms de conteneurs Docker (platon_postgres,
 # indicateurs_rabbitmq...) n'y résolvent à rien, remplacés ici par
 # "localhost".
@@ -28,7 +28,7 @@ OUT=api/.env
 cat > "$OUT" <<EOF
 # Généré par bin/generate-api-env.sh depuis le .env racine - ne pas éditer à la main.
 
-# BASE DE DONNEES PLATON (lecture seule)
+# BASE DE DONNEES PLATON (surtout lue)
 PLATON_DB_HOST=localhost
 PLATON_DB_PORT=${PLATON_DB_PORT}
 PLATON_DB_USERNAME=${PLATON_DB_USERNAME}

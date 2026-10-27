@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-# Exporte platon_db et indicators depuis platon_postgres en .dump, pour transférer vers une autre machine - voir docs/docker-migration.md.
+# Exporte platon_db et indicators depuis platon_postgres en .dump, pour transférer vers une autre machine - voir docs/deploiement/platon-local-setup.md, étape 7.
 # Usage : ./bin/platon-db/export.sh [dossier_de_sortie]   (défaut : ./dumps)
 
 OUT_DIR="${1:-./dumps}"

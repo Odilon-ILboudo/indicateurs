@@ -35,13 +35,13 @@ seul à connaître les règles configurées par son administration
   `api/scripts/migrations/platon-outbox.sql` du dépôt Indicateurs (à exécuter
   une fois sur la BDD PLaTon, sans changement lié à ce document).
 - `indicateurs_outbox_cursor` : nouvelle table, à créer via
-  [`outbox-cursor.sql`](./platon-integration/outbox-cursor.sql) (ce dossier),
+  [`outbox-cursor.sql`](./outbox-cursor.sql) (ce dossier),
   une seule ligne, suit la position déjà relayée.
 
 ### 2. Le service de relais
 
-[`outbox-relay.service.ts`](./platon-integration/outbox-relay.service.ts) et
-[`outbox-relay.module.ts`](./platon-integration/outbox-relay.module.ts), à
+[`outbox-relay.service.ts`](./outbox-relay.service.ts) et
+[`outbox-relay.module.ts`](./outbox-relay.module.ts), à
 copier dans le dépôt PLaTon. `apps/api/src/app/` ne contient que
 `app.module.ts` et `commands/` : chaque fonctionnalité de PLaTon vit dans sa
 propre lib Nx sous `libs/feature/<nom>/server/` (voir par exemple
@@ -95,14 +95,10 @@ rester cohérent) est réellement nouveau.
 
 ### 4. Accès réseau à RabbitMQ
 
-**Point à trancher avec l'équipe Indicateurs avant de déployer en prod** :
 RabbitMQ est hébergé par Indicateurs (`indicateurs_rabbitmq`, voir
 `docker-compose.*.yml` côté Indicateurs), PLaTon doit pouvoir l'atteindre en
-réseau (host, port, identifiants) depuis son propre serveur. En production,
-ça suppose soit un réseau partagé équivalent, soit d'exposer RabbitMQ
-publiquement avec des identifiants dédiés au relais, pas encore décidé
-(même statut que l'hébergement du widget embarqué, voir
-`integration-platon.md`).
+réseau (host, port, identifiants) depuis son propre serveur. Le choix du
+réseau en production est listé au §13.10 du `readme.md`.
 
 ## Ce qu'Indicateurs fournit de son côté (pour information, pas à faire par PLaTon)
 
@@ -113,6 +109,7 @@ publiquement avec des identifiants dédiés au relais, pas encore décidé
   administration Indicateurs), faite dans les consumers, pour ne jamais
   dépendre d'une lecture de la base Indicateurs depuis PLaTon.
 - La purge des événements de plus de 7 jours dans `platon_outbox_events`
-  (`OutboxMaintenanceService`, cron quotidien côté Indicateurs, connexion en
-  écriture déjà existante pour l'installation des déclencheurs), PLaTon n'a
-  rien à faire pour ça.
+  (`OutboxMaintenanceService`, chaque nuit à minuit, côté Indicateurs) : elle
+  passe par la connexion habituelle d'Indicateurs à la base PLaTon, qui doit
+  donc avoir le droit de supprimer des lignes dans cette table. PLaTon n'a
+  rien d'autre à faire pour ça.

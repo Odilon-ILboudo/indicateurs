@@ -1,17 +1,20 @@
-# Guide pratique - Créer les indicateurs "Tentatives avant première réussite"
+# Guide de création d'un indicateur
 
-Ce guide couvre tous les cas raisonnables de l'indicateur **« Nombre moyen de
-tentatives avant première réussite »** (mesure : `attempts_at_success` sur
-`SessionData`), déclinés selon deux axes :
+Ce guide explique comment créer un indicateur : le format du JSON à importer,
+les règles à respecter (une formule par indicateur, les visualisations
+possibles, la famille), puis un exemple complet pour chaque `contextType`.
 
-- **le périmètre** (`contextType` + portée activité/cours/plateforme),
-- **la déclinaison** (moyenne globale / moyenne détaillée / répartition
-  détaillée / répartition globale).
+**L'exemple suivi tout au long du guide** est l'indicateur « Nombre moyen de
+tentatives avant première réussite » (mesure : `attempts_at_success` sur
+`SessionData`). Il est décliné en 22 cas selon deux axes :
 
-Contrairement à la version précédente de ce guide (construction pas-à-pas dans
-le builder visuel), chaque cas est donné ici sous forme de **JSON complet, prêt
-à coller** via le panneau **Import** du builder (bouton "Import" → mode JSON →
-coller → "Appliquer" → "Créer"). Le format exact est celui validé par
+- **le périmètre** (`contextType` et portée : activité, cours ou plateforme) ;
+- **la déclinaison** (moyenne globale, moyenne détaillée, répartition
+  détaillée, répartition globale).
+
+Chaque cas est donné sous forme de **JSON complet, prêt à coller** dans le
+panneau **Import** du builder (bouton « Import », mode JSON, coller,
+« Appliquer », puis « Créer »). Le format exact est celui que valide
 `pipeline-import.util.ts` :
 
 ```json
@@ -28,65 +31,69 @@ coller → "Appliquer" → "Créer"). Le format exact est celui validé par
 ```
 
 > **1 indicateur = 1 formule.** Deux déclinaisons différentes de la même mesure
-> (ex. "moyenne globale" et "par exercice") sont donc **deux indicateurs
-> distincts**, jamais deux visualisations d'un seul indicateur.
+> (par exemple « moyenne globale » et « par exercice ») sont donc **deux
+> indicateurs distincts**, jamais deux visualisations d'un seul indicateur.
 
-> **Plusieurs visualisations, seulement si la formule produit un scalaire.**
-> `card` et `gauge` affichent toutes les deux un simple nombre - la même
+> **Plusieurs visualisations, seulement si la formule produit un nombre.**
+> `card` et `gauge` affichent toutes les deux un simple nombre : la même
 > formule peut donc avoir les deux à la fois (deux façons de regarder la même
 > valeur). `bar-chart` (objet `{clé: valeur}`) et `histogram` (tableau
-> `[{bucket, count}]`) produisent une donnée structurée qu'une `card`/`gauge`
-> ne sait pas afficher : ces cas restent à une seule visualisation, ce n'est
-> pas un oubli. Dans ce guide, tous les cas "moyenne globale" (1, 3, 5, 9, 13,
-> 17, 21, 22) ont donc une seconde visualisation `gauge` en plus de la `card`
-> ; les cas "par exercice/activité" et "répartition" n'en ont qu'une.
+> `[{bucket, count}]`) attendent une donnée structurée, qu'une `card` ou une
+> `gauge` ne sait pas afficher : ces cas restent à une seule visualisation, ce
+> n'est pas un oubli. Dans ce guide, tous les cas « moyenne globale » (1, 3, 5,
+> 9, 13, 17, 21, 22) ont donc une seconde visualisation `gauge` en plus de la
+> `card` ; les cas « par exercice ou par activité » et « répartition » n'en
+> ont qu'une.
 
 ---
 
 ## Regrouper les 22 cas en une famille
 
-`familyName` **n'est pas** un champ importable via JSON (absent des clés
-reconnues par `parseIndicatorImport` - voir le gabarit plus haut) : il faut le
-renseigner à la main, indicateur par indicateur, dans l'étape 1 du wizard
-après import, ou en renommant depuis la table de gestion admin (icône crayon
-sur la ligne de famille). Nom et description à utiliser pour les 22 cas de ce
-guide :
+`familyName` **n'est pas** un champ importable en JSON (il ne fait pas partie
+des clés reconnues par `parseIndicatorImport` ; voir le gabarit plus haut), et
+le wizard d'un indicateur n'a pas de champ pour le régler. On le règle depuis
+l'administration (onglet « Familles ») : soit en créant la famille avec
+« Créer une famille », qui enchaîne un wizard par contexte, soit, pour des
+indicateurs déjà importés, avec l'action « Ajouter un indicateur existant »
+d'une famille. L'icône crayon d'une famille permet de la renommer. Nom et
+description à utiliser pour les 22 cas de ce guide :
 
 | Champ | Valeur |
 |---|---|
 | Nom de la famille | `Tentatives avant réussite` |
-| Description | Nombre moyen de tentatives avant la première réussite (`attempts_at_success`), décliné selon le public (apprenant, groupe de TP, activité, cours, enseignant, admin), le périmètre (une activité ou un cours entier) et la représentation (moyenne globale, détail par exercice/activité, répartition des effectifs) - voir `docs/guide.md` pour les 22 cas. |
+| Description | Nombre moyen de tentatives avant la première réussite (`attempts_at_success`), décliné selon le public (apprenant, groupe de TP, activité, cours, enseignant, admin), le périmètre (une activité ou un cours entier) et la représentation (moyenne globale, détail par exercice ou par activité, répartition des effectifs). Voir `docs/guides/guide-creation-indicateur.md` pour les 22 cas. |
 
 ---
 
 ## 0. Événement déclencheur requis pour ce guide
 
 **Tous les indicateurs de ce guide dépendent d'une règle installée depuis
-l'admin** (`/dashboard/indicators`, rôle Admin → **"Événements &
-déclencheurs"**) - aucun déclencheur n'est jamais codé en dur dans une
-migration SQL (voir `docs/ingestion.md`). La règle attendue :
-**"Exercice complet"** / `exercice.completed`, sur `SessionData.attempts_at_success`,
-mapping de contexte complet userId/courseId/activityId/sessionId. Vérifier
-que son badge affiche "Installé" avant de suivre ce guide.
+l'admin**, dans l'écran **« Événements & déclencheurs »** : il s'ouvre depuis
+le wizard d'indicateur, par l'option « Autres (configurer un nouvel
+événement…) » de la liste des événements déclencheurs (étape 3). Aucun
+déclencheur d'événement n'est codé en dur dans une migration SQL (voir
+`docs/fonctionnement/ingestion-evenements.md`). La règle attendue :
+**« Exercice complet »** / `exercice.completed`, sur
+`SessionData.attempts_at_success`, avec un mapping du contexte complet
+(`userId`, `courseId`, `activityId`, `sessionId`). Vérifiez que son badge
+affiche « Installé » avant de suivre ce guide.
 
-**Tous** les indicateurs de ce guide utilisent
-`requiredEvents: ["exercice.completed"]` - ne créez pas de règle
-supplémentaire pour ce même besoin, ni ne réutilisez `exercise.answered`
-(événement historique, payload sans `attempts_at_success`, incompatible avec
-ces indicateurs).
+**Tous** les indicateurs de ce guide (sauf le cas 3) utilisent
+`requiredEvents: ["exercice.completed"]`. Ne créez pas de règle
+supplémentaire pour ce même besoin, et ne réutilisez pas `exercise.answered` :
+cet événement surveille `grade`, il ne se déclenche donc pas quand
+`attempts_at_success` change.
 
-> Sans cette règle installée, les indicateurs se calculent quand même à la
-> première consultation ou via **"Recalculer"** (icône replay, table de
-> gestion) - mais jamais automatiquement quand un étudiant répond à un
-> exercice.
+> Sans cette règle installée, un indicateur qui cite `exercice.completed` peut
+> être enregistré, mais pas activé : l'API refuse d'activer un indicateur dont
+> un événement requis n'a aucun déclencheur installé.
 
 ---
 
 ## Tableau des 22 cas
 
-Les 22 cas existent tous en base, actifs, avec `requiredEvents:
-["exercice.completed"]` (sauf le cas 3, volontairement sans déclencheur -
-recalcul périodique) :
+Les 22 cas utilisent `requiredEvents: ["exercice.completed"]`, sauf le
+cas 3, volontairement sans déclencheur (recalcul périodique) :
 
 | # | `contextType` | Périmètre | Déclinaison |
 |---|---|---|---|
@@ -113,26 +120,26 @@ recalcul périodique) :
 | 21 | `teacher` | plateforme entière | moyenne globale (seule variante possible) |
 | 22 | `admin` | plateforme entière | moyenne globale (seule variante possible) |
 
-**Limite 2D** (cas 7, 11, 15, 19) : aucun type de visualisation actuel
-(`card`/`gauge`/`line-chart`/`bar-chart`/`histogram`) ne représente nativement
-deux dimensions (exercice/activité **et** nombre de tentatives) - `bar-chart`
-attend un objet plat `{clé: valeur}`, `histogram` un tableau `[{bucket,
-count}]` à une seule dimension. Le JSON donné pour ces 4 cas est un
-**contournement** (clé composite `"Exercice (N tentatives)"`), pas une vraie
-répartition facettée - à valider avant usage réel.
+**Limite à deux dimensions** (cas 7, 11, 15, 19) : aucun type de
+visualisation actuel (`card`, `gauge`, `line-chart`, `bar-chart`, `histogram`)
+ne représente deux dimensions à la fois (exercice ou activité **et** nombre de
+tentatives) : `bar-chart` attend un objet plat `{clé: valeur}`, et `histogram`
+un tableau `[{bucket, count}]` à une seule dimension. Le JSON donné pour ces 4
+cas est un **contournement** (clé composite `"Exercice (N tentatives)"`), pas
+une vraie répartition sur deux axes : à valider avant un usage réel.
 
-**Nominatif** (cas 15, 16, 19, 20) : `activity`/`course` sont visibles à tous
-les rôles par défaut (`RoleService.INDICATOR_VISIBILITY`), y compris les
-étudiants. Une répartition liste des noms d'étudiants (`userIds` résolus en
-noms par `computeView`) - **restreindre `visibilityRoles` à `["teacher",
-"admin"]`** après création (non réglable via l'import JSON, à faire depuis la
-table de gestion).
+**Nominatif** (cas 15, 16, 19, 20) : `activity` et `course` sont visibles par
+tous les rôles par défaut (`RoleService.INDICATOR_VISIBILITY`), y compris les
+étudiants. Une répartition liste des noms d'étudiants (`userIds` remplacés par
+des noms par `computeView`) : **restreignez `visibilityRoles` à
+`["teacher", "admin"]`** après création. Ce réglage ne passe pas par l'import
+JSON : il se fait dans le wizard (étape 3, « Restreindre la visibilité »).
 
 ---
 
-## Cas 1 à 4 - `learner` (rôle Étudiant)
+## Cas 1 à 4 : `learner` (rôle Étudiant)
 
-### Cas 1 - moyenne globale, sur l'activité
+### Cas 1 : moyenne globale, sur l'activité
 
 ```json
 {
@@ -156,7 +163,7 @@ table de gestion).
 }
 ```
 
-### Cas 2 - détaillée par exercice, sur l'activité
+### Cas 2 : détaillée par exercice, sur l'activité
 
 ```json
 {
@@ -173,29 +180,29 @@ table de gestion).
   ]
 }
 ```
-`resource_name` est directement disponible sur `SessionData` (dénormalisé) -
-pas besoin de `join` vers `Resources`, contrairement à ce que suggérait la
-version précédente de ce guide.
+`resource_name` est directement disponible sur `SessionData` (table
+dénormalisée) : pas besoin de `join` vers `Resources`.
 
-### Cas 3 - moyenne globale, sur tout le cours
+### Cas 3 : moyenne globale, sur tout le cours
 
-**Volontairement sans déclencheur** (`requiredEvents: []`) - c'est le cas
+**Volontairement sans déclencheur** (`requiredEvents: []`) : c'est le cas
 choisi pour tester le recalcul périodique plutôt que le temps réel.
 `AggregationService.recalculateTriggerlessIndicators()` tourne à la fréquence
-définie par la variable d'environnement `TRIGGERLESS_RECALC_CRON` (défaut :
-toutes les minutes) et appelle `IndicatorsService.recalculate()` sur tout
+définie par la variable d'environnement `TRIGGERLESS_RECALC_CRON` (par défaut
+chaque minute) et appelle `IndicatorsService.recalculate()` sur tout
 indicateur actif sans déclencheur, quel que soit son `contextType`.
-`recalculate()` gère correctement les trois contextTypes personnels
-(`learner`/`teacher`/`admin`), y compris quand leur formule est restreinte à
-une activité ou à un cours (une valeur est recalculée par activité/cours
-concerné, pas une seule valeur globale). Les contextTypes `group`/`activity`/
-`course` n'ont pas de notion d'utilisateur "abonné" au sens de
-`UserIndicatorPreference` et ne sont donc jamais concernés par ce recalcul
-périodique - ils ont besoin d'un déclencheur réel pour être mis à jour.
+`recalculate()` traite correctement les trois contextTypes personnels
+(`learner`, `teacher`, `admin`), y compris quand leur formule est restreinte à
+une activité ou à un cours (une valeur par activité ou cours concerné, pas une
+seule valeur globale), pour chaque utilisateur qui a une préférence pour
+l'indicateur. Pour `group`, `activity` et `course`, en revanche, il passe
+l'identifiant de l'utilisateur comme contexte, ce qui ne produit pas de
+valeur utile : ces types ont besoin d'un vrai déclencheur pour être tenus à
+jour (readme, section 13.10).
 
 Pour observer le recalcul périodique : créez l'indicateur, activez-le depuis
-un compte étudiant (`UserIndicatorPreference`), puis attendez jusqu'à une
-minute (ou cliquez "Recalculer" côté admin pour ne pas attendre).
+un compte étudiant, puis attendez au plus une minute (ou cliquez
+« Recalculer » côté admin pour ne pas attendre).
 
 ```json
 {
@@ -219,7 +226,7 @@ minute (ou cliquez "Recalculer" côté admin pour ne pas attendre).
 }
 ```
 
-### Cas 4 - détaillée par activité, sur tout le cours
+### Cas 4 : détaillée par activité, sur tout le cours
 
 ```json
 {
@@ -236,23 +243,24 @@ minute (ou cliquez "Recalculer" côté admin pour ne pas attendre).
   ]
 }
 ```
-**Limite trouvée** : `Activities` n'a pas de colonne `name`, et son `id` ne
-correspond pas à `Resources.id` (vérifié, jointure directe infructueuse). Ce
-pipeline affiche donc les activités par **identifiant brut** (UUID), pas par
-nom lisible - à améliorer si besoin (probablement en résolvant les noms côté
-frontend plutôt que dans la formule).
+**Limite** : `Activities` n'a pas de colonne `name` (le titre est dans
+`source->'variables'->>'title'`), et son `id` ne correspond pas à
+`Resources.id` : une jointure directe ne donne pas de nom. Ce pipeline affiche
+donc les activités par **identifiant brut** (UUID), pas par nom lisible. On
+pourrait améliorer cela, probablement en cherchant les noms côté frontend
+plutôt que dans la formule.
 
 ---
 
-## Cas 5 à 12 - `group` (rôle Chargé de TP / Enseignant)
+## Cas 5 à 12 : `group` (rôle Chargé de TP / Enseignant)
 
-### Cas 5 - moyenne globale, sur l'activité
+### Cas 5 : moyenne globale, sur l'activité
 
 ```json
 {
   "name": "Tentatives avant réussite - Groupe (activité, moyenne globale)",
   "description": "Nombre moyen de tentatives avant la première réussite, tous étudiants et exercices du groupe confondus, sur cette activité.",
-  "interpretationHint": "Moyenne unique pour ce groupe sur cette activité, tous exercices confondus. Une valeur élevée peut indiquer que le groupe a besoin d'un accompagnement supplémentaire - voir la variante \"par exercice\" pour savoir si la difficulté est répartie ou concentrée sur un exercice précis.",
+  "interpretationHint": "Moyenne unique pour ce groupe sur cette activité, tous exercices confondus. Une valeur élevée peut indiquer que le groupe a besoin d'un accompagnement supplémentaire : voir la variante \"par exercice\" pour savoir si la difficulté est répartie ou concentrée sur un exercice précis.",
   "contextType": "group",
   "requiredEvents": ["exercice.completed"],
   "thresholds": { "good": 2, "warning": 4 },
@@ -270,7 +278,7 @@ frontend plutôt que dans la formule).
 }
 ```
 
-### Cas 6 - détaillée par exercice, sur l'activité
+### Cas 6 : détaillée par exercice, sur l'activité
 
 ```json
 {
@@ -288,7 +296,7 @@ frontend plutôt que dans la formule).
 }
 ```
 
-### Cas 7 - répartition détaillée par exercice (contournement 2D)
+### Cas 7 : répartition détaillée par exercice (contournement à deux dimensions)
 
 ```json
 {
@@ -306,7 +314,7 @@ frontend plutôt que dans la formule).
 }
 ```
 
-### Cas 8 - répartition globale, tous exercices confondus
+### Cas 8 : répartition globale, tous exercices confondus
 
 ```json
 {
@@ -323,10 +331,10 @@ frontend plutôt que dans la formule).
   ]
 }
 ```
-`userIds` (identifiants bruts) suffit - `computeView` résout les noms
-automatiquement, pas besoin de `join` sur `Users`.
+`userIds` (identifiants bruts) suffit : `computeView` les remplace par des
+noms, pas besoin de `join` sur `Users`.
 
-### Cas 9 - moyenne globale, sur tout le cours
+### Cas 9 : moyenne globale, sur tout le cours
 
 ```json
 {
@@ -350,7 +358,7 @@ automatiquement, pas besoin de `join` sur `Users`.
 }
 ```
 
-### Cas 10 - détaillée par activité, sur tout le cours
+### Cas 10 : détaillée par activité, sur tout le cours
 
 ```json
 {
@@ -367,10 +375,10 @@ automatiquement, pas besoin de `join` sur `Users`.
   ]
 }
 ```
-Regroupé par `activity_id` brut (UUID) - même limite d'absence de nom
-lisible qu'au cas 4 (`Activities` n'a pas de colonne `name` exploitable).
+Regroupé par `activity_id` brut (UUID) : même absence de nom lisible qu'au
+cas 4.
 
-### Cas 11 - répartition détaillée par activité (contournement 2D)
+### Cas 11 : répartition détaillée par activité (contournement à deux dimensions)
 
 ```json
 {
@@ -390,7 +398,7 @@ lisible qu'au cas 4 (`Activities` n'a pas de colonne `name` exploitable).
 Même contournement que le cas 7 (clé composite) et même limite de nom
 lisible que le cas 10.
 
-### Cas 12 - répartition globale, toutes activités confondues
+### Cas 12 : répartition globale, toutes activités confondues
 
 ```json
 {
@@ -410,17 +418,16 @@ lisible que le cas 10.
 
 ---
 
-## Cas 13 à 16 - `activity` (tous rôles, tous groupes confondus)
+## Cas 13 à 16 : `activity` (tous rôles, tous groupes confondus)
 
-### Cas 13 - moyenne globale
+### Cas 13 : moyenne globale
 
-**Existe déjà** (`Tentatives avant réussite - Activité`). Formule de
-référence :
+Formule de référence :
 ```json
 {
   "name": "Tentatives avant réussite - Activité",
   "description": "Nombre moyen de tentatives avant la première réussite, tous étudiants et groupes confondus, sur cette activité.",
-  "interpretationHint": "Moyenne unique sur toute l'activité : tous les exercices, tous les groupes et tous les étudiants sont mélangés dans un seul chiffre. Donne une vue d'ensemble rapide, mais masque si la difficulté vient d'un exercice précis ou est répartie uniformément - voir \"Tentatives avant réussite - Activité (par exercice)\" pour ce détail.",
+  "interpretationHint": "Moyenne unique sur toute l'activité : tous les exercices, tous les groupes et tous les étudiants sont mélangés dans un seul chiffre. Donne une vue d'ensemble rapide, mais masque si la difficulté vient d'un exercice précis ou est répartie uniformément : voir \"Tentatives avant réussite - Activité (par exercice)\" pour ce détail.",
   "contextType": "activity",
   "requiredEvents": ["exercice.completed"],
   "thresholds": { "good": 2, "warning": 4 },
@@ -438,7 +445,7 @@ référence :
 }
 ```
 
-### Cas 14 - détaillée par exercice
+### Cas 14 : détaillée par exercice
 
 ```json
 {
@@ -456,7 +463,7 @@ référence :
 }
 ```
 
-### Cas 15 - répartition détaillée par exercice (contournement 2D, nominatif)
+### Cas 15 : répartition détaillée par exercice (contournement à deux dimensions, nominatif)
 
 ```json
 {
@@ -473,17 +480,17 @@ référence :
   ]
 }
 ```
-**Nominatif indirectement** (les barres regroupent des étudiants, sans lister
-leurs noms ici - contrairement au cas 16) mais reste une donnée fine sur
-l'activité entière : à restreindre à `teacher`/`admin` par prudence.
+**Nominatif indirectement** (les barres regroupent des étudiants sans lister
+leurs noms, contrairement au cas 16), mais c'est une donnée fine sur
+l'activité entière : à restreindre à `teacher` et `admin` par prudence.
 
-### Cas 16 - répartition globale, tous exercices confondus (nominatif)
+### Cas 16 : répartition globale, tous exercices confondus (nominatif)
 
 ```json
 {
   "name": "Tentatives avant réussite - Activité (répartition globale)",
   "description": "Répartition des étudiants par nombre moyen de tentatives avant la première réussite, tous exercices et groupes confondus.",
-  "interpretationHint": "Chaque étudiant est regroupé selon sa propre moyenne de tentatives (arrondie à l'entier) sur l'ensemble des exercices de l'activité, tous groupes confondus, puis les étudiants sont répartis en tranches. Donnée nominative : chaque tranche liste les étudiants concernés - réservé aux enseignants/admin.",
+  "interpretationHint": "Chaque étudiant est regroupé selon sa propre moyenne de tentatives (arrondie à l'entier) sur l'ensemble des exercices de l'activité, tous groupes confondus, puis les étudiants sont répartis en tranches. Donnée nominative : chaque tranche liste les étudiants concernés, réservé aux enseignants et aux administrateurs.",
   "contextType": "activity",
   "requiredEvents": ["exercice.completed"],
   "visualizations": [{ "label": "Répartition des effectifs", "type": "histogram", "unit": "tentatives" }],
@@ -494,27 +501,25 @@ l'activité entière : à restreindre à `teacher`/`admin` par prudence.
   ]
 }
 ```
-**Nominatif direct** (`userIds` → noms résolus au survol) : restreindre
+**Nominatif direct** (`userIds` → noms affichés au survol) : restreignez
 `visibilityRoles` à `["teacher", "admin"]` après création, sinon tout étudiant
 voit les noms de ses camarades.
 
 ---
 
-## Cas 17 à 20 - `course` (tous rôles, tout le cours)
+## Cas 17 à 20 : `course` (tous rôles, tout le cours)
 
-> **Noms volontairement différents** de l'indicateur `Tentatives avant
-> réussite - Cours` déjà en base (son pipeline actuel regroupe par nom de
-> ressource via un `js` - ce n'est pas une vraie moyenne globale au sens du
-> cas 17 ci-dessous) - le nom est une colonne `UNIQUE`, coller un JSON avec un
-> nom déjà pris échoue avec un conflit (`409`).
+> **Le nom d'un indicateur est unique** (colonne `UNIQUE`) : coller un JSON
+> dont le nom est déjà pris échoue à l'enregistrement avec un conflit (`409`).
+> Renommez le cas avant de l'importer si un indicateur de ce nom existe déjà.
 
-### Cas 17 - moyenne globale, sur tout le cours
+### Cas 17 : moyenne globale, sur tout le cours
 
 ```json
 {
   "name": "Tentatives avant réussite - Cours (moyenne globale)",
   "description": "Nombre moyen de tentatives avant la première réussite, tous étudiants, groupes et activités confondus, sur tout le cours.",
-  "interpretationHint": "Moyenne unique sur tout le cours : toutes les activités, tous les groupes et tous les étudiants sont mélangés dans un seul chiffre. Vue rapide qui masque si la difficulté vient d'une activité précise - voir \"Tentatives avant réussite - Cours (par activité)\" pour ce détail.",
+  "interpretationHint": "Moyenne unique sur tout le cours : toutes les activités, tous les groupes et tous les étudiants sont mélangés dans un seul chiffre. Vue rapide qui masque si la difficulté vient d'une activité précise : voir \"Tentatives avant réussite - Cours (par activité)\" pour ce détail.",
   "contextType": "course",
   "requiredEvents": ["exercice.completed"],
   "thresholds": { "good": 2, "warning": 4 },
@@ -532,7 +537,7 @@ voit les noms de ses camarades.
 }
 ```
 
-### Cas 18 - détaillée par activité, sur tout le cours
+### Cas 18 : détaillée par activité, sur tout le cours
 
 ```json
 {
@@ -549,10 +554,10 @@ voit les noms de ses camarades.
   ]
 }
 ```
-Regroupé par `activity_id` brut (UUID) - même limite d'absence de nom
-lisible qu'au cas 4 et au cas 10.
+Regroupé par `activity_id` brut (UUID) : même absence de nom lisible qu'aux
+cas 4 et 10.
 
-### Cas 19 - répartition détaillée par activité (contournement 2D, nominatif)
+### Cas 19 : répartition détaillée par activité (contournement à deux dimensions, nominatif)
 
 ```json
 {
@@ -569,17 +574,17 @@ lisible qu'au cas 4 et au cas 10.
   ]
 }
 ```
-Même contournement (clé composite) que les cas 7/11/15. Nominatif
+Même contournement (clé composite) que les cas 7, 11 et 15. Nominatif
 indirectement (pas de nom listé, mais donnée fine) : à restreindre à
-`teacher`/`admin` par prudence.
+`teacher` et `admin` par prudence.
 
-### Cas 20 - répartition globale, toutes activités confondues (nominatif)
+### Cas 20 : répartition globale, toutes activités confondues (nominatif)
 
 ```json
 {
   "name": "Tentatives avant réussite - Cours (répartition globale)",
   "description": "Répartition des étudiants par nombre moyen de tentatives avant la première réussite, toutes activités et groupes confondus, sur tout le cours.",
-  "interpretationHint": "Chaque étudiant du cours est regroupé selon sa propre moyenne de tentatives (arrondie à l'entier) sur l'ensemble des activités, puis réparti en tranches. Donnée nominative : chaque tranche liste les étudiants concernés - réservé aux enseignants/admin.",
+  "interpretationHint": "Chaque étudiant du cours est regroupé selon sa propre moyenne de tentatives (arrondie à l'entier) sur l'ensemble des activités, puis réparti en tranches. Donnée nominative : chaque tranche liste les étudiants concernés, réservé aux enseignants et aux administrateurs.",
   "contextType": "course",
   "requiredEvents": ["exercice.completed"],
   "visualizations": [{ "label": "Répartition des effectifs", "type": "histogram", "unit": "tentatives" }],
@@ -590,18 +595,18 @@ indirectement (pas de nom listé, mais donnée fine) : à restreindre à
   ]
 }
 ```
-**Nominatif direct** (`userIds` → noms résolus au survol) : restreindre
+**Nominatif direct** (`userIds` → noms affichés au survol) : restreignez
 `visibilityRoles` à `["teacher", "admin"]` après création.
 
 ---
 
-## Cas 21 - `teacher`, plateforme entière
+## Cas 21 : `teacher`, plateforme entière
 
 Seule variante possible pour ce contextType : aucun mécanisme actuel ne
-permet de filtrer "les cours d'un enseignant précis" (`CONTEXT_FIELD_MAP` ne
-mappe que `user_id`/`activity_id`/`course_id`, pas de `course_owner_id` - vu
-sur les indicateurs `teacher` réels déjà en base, qui ont tous
-`contextFields: []`).
+permet de filtrer « les cours d'un enseignant précis » (`CONTEXT_FIELD_MAP` ne
+relie que `user_id`, `activity_id` et `course_id`, il n'y a pas de
+`course_owner_id`). La formule n'a donc pas de champ de contexte
+(`contextFields: []`) et calcule une valeur pour toute la plateforme.
 
 ```json
 {
@@ -625,7 +630,7 @@ sur les indicateurs `teacher` réels déjà en base, qui ont tous
 }
 ```
 
-## Cas 22 - `admin`, plateforme entière
+## Cas 22 : `admin`, plateforme entière
 
 Même limite et même pipeline que le cas 21, seul `contextType` change :
 
@@ -653,35 +658,36 @@ Même limite et même pipeline que le cas 21, seul `contextType` change :
 
 ---
 
-## Référence - Rôles et visibilité (`RoleService.INDICATOR_VISIBILITY`)
+## Référence : rôles et visibilité (`RoleService.INDICATOR_VISIBILITY`)
 
 | `contextType` | Rôle(s) qui voient l'indicateur par défaut |
 |---|---|
 | `learner` | `student` uniquement |
 | `teacher` | `teacher` uniquement |
 | `admin` | `admin` uniquement |
-| `course` | tout le monde (`student`/`teacher`/`admin`/`demo`) |
-| `activity` | tout le monde |
+| `course` | `student`, `teacher`, `admin` (l'API accepte aussi `demo`) |
+| `activity` | `student`, `teacher`, `admin` (l'API accepte aussi `demo`) |
 | `group` | `teacher` + `admin` |
 
-`visibilityRoles` (sur l'indicateur, pas importable en JSON) surcharge cette
-règle par défaut - à utiliser pour les cas 15, 16, 19, 20 (nominatifs).
+`visibilityRoles` (réglage de l'indicateur, non importable en JSON) remplace
+cette règle par défaut : à utiliser pour les cas 15, 16, 19 et 20 (nominatifs).
 
-Appliquée aussi côté backend (`IndicatorVisibilityGuard`, voir `readme.md`
-section « Visibilité par rôle ») - pas seulement en affichage, un appel API direct
-avec le bon rôle réel (table `Users`) est requis.
+La règle est aussi appliquée côté backend (`IndicatorVisibilityGuard`, voir
+`readme.md`, section 8 « Visibilité par rôle ») : elle ne se limite pas à
+l'affichage, et un appel direct à l'API exige aussi le bon rôle réel (table
+`Users`).
 
 ---
 
-## Référence - Outils admin
+## Référence : outils d'administration
 
 Toujours dans `/dashboard/indicators` (rôle Admin), table de gestion :
 
-- **Import** (bouton, panneau builder étape 3) : coller un des JSON ci-dessus,
-  "Appliquer" charge le pipeline et les métadonnées dans le formulaire -
-  vérifier/compléter les champs non couverts par l'import (`familyName`,
-  `baseIndicatorId`, `visibilityRoles`, `isFamilyPlaceholder` : à régler depuis
-  le formulaire, pas dans le JSON).
+- **Import** (bouton, panneau du builder à l'étape 3) : coller un des JSON
+  ci-dessus ; « Appliquer » charge le pipeline et les métadonnées dans le
+  formulaire. Vérifiez ensuite les réglages que l'import ne couvre pas :
+  `visibilityRoles` se règle dans le wizard, `familyName` depuis l'onglet
+  « Familles » (voir plus haut).
 - **Modifier** (crayon) → rouvre le builder hydraté.
 - **Logs d'exécution** (document) → `GET /indicators/:id/logs?limit=100`.
 - **Recalculer** (replay, popconfirm) → `POST /indicators/:id/recalculate`.
@@ -690,16 +696,16 @@ Toujours dans `/dashboard/indicators` (rôle Admin), table de gestion :
 
 ### Note sur le type de visualisation "Graphique ligne"
 
-`line-chart` affiche `result.metadata.history`, alimenté par `computeView`
-(chaque calcul en cache ajoute une entrée `{value, timestamp}` à l'historique
-stocké en base). Seul le tout premier calcul d'un indicateur (aucune ligne en
-cache) n'a pas encore d'historique - la courbe se remplit dès la deuxième
-consultation.
+`line-chart` affiche `metadata.history`. Chaque calcul enregistré (premier
+calcul, événement, recalcul) ajoute une entrée `{value, timestamp}` à cet
+historique. Une simple consultation qui lit la valeur en cache n'ajoute rien :
+la courbe se remplit au fil des recalculs, pas des visites.
 
 ### Note sur le format attendu par `bar-chart` et `histogram`
 
 - `bar-chart` : objet plat `{ "clé": valeur }` (ou tableau
-  `[{key, value}]`) - une barre par clé.
-- `histogram` : tableau `[{ bucket, count, userIds? }]` - une barre par
-  `bucket`, `userIds` (identifiants bruts) résolus en noms par `computeView`
-  via `getUserNameMap` (pas besoin de `join` sur `Users` dans la formule).
+  `[{key, value}]`), une barre par clé.
+- `histogram` : tableau `[{ bucket, count, userIds? }]`, une barre par
+  `bucket`. Les `userIds` (identifiants bruts) sont remplacés par des noms par
+  `computeView` via `getUserNameMap` (pas besoin de `join` sur `Users` dans la
+  formule).

@@ -155,6 +155,7 @@ export class IndicatorsController {
 
   /* POST /preview { formula, context } : prévisualise un pipeline DSL sans persister (learner/group). */
   @Post('preview')
+  @UseGuards(AuthGuard, AdminGuard)
   async previewFormula(
     @Body() body: {
       formula: any;
@@ -165,6 +166,7 @@ export class IndicatorsController {
   }
 
   @Post('preview-steps')
+  @UseGuards(AuthGuard, AdminGuard)
   async previewFormulaSteps(
     @Body() body: {
       formula: any;

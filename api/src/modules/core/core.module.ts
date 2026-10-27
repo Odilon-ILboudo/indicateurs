@@ -4,7 +4,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { PlatonModule } from './platon/platon.module';
 import { AuthModule } from './auth/auth.module';
 import configuration from './config/configuration';
-import { DatabaseModule } from './database/database.module';
 
 @Global()
 @Module({
@@ -37,10 +36,9 @@ import { DatabaseModule } from './database/database.module';
       inject: [ConfigService],
     }),
     
-    DatabaseModule,
     PlatonModule,
     AuthModule,
   ],
-  exports: [DatabaseModule, PlatonModule, AuthModule],
+  exports: [PlatonModule, AuthModule],
 })
 export class CoreModule {}

@@ -1,6 +1,6 @@
-# Calcul différentiel et recalcul total - Documentation technique
+# Calcul différentiel et recalcul total : documentation technique
 
-Ce document explique en détail comment le système calcule la valeur d'un indicateur lorsqu'un événement PLaTon arrive (ex : un étudiant répond à un exercice). Il couvre les deux modes : **calcul différentiel** (mise à jour partielle, sans SQL) et **recalcul total** (pipeline DSL complet depuis la base de données).
+Ce document explique en détail comment le système calcule la valeur d'un indicateur lorsqu'un événement PLaTon arrive (par exemple, un étudiant répond à un exercice). Il couvre les deux modes : **calcul différentiel** (mise à jour partielle, sans SQL) et **recalcul total** (pipeline DSL complet depuis la base de données).
 
 ---
 
@@ -16,7 +16,7 @@ fetch(SessionData) → filter → extract → aggregate   → SQL sur toutes les
 
 Pour 100 étudiants × 10 exercices = 1 000 sessions, chaque réponse d'étudiant déclencherait une requête SQL qui lit toutes les 1 000 lignes. Avec 10 indicateurs actifs = 10 000 lignes lues par événement.
 
-La solution : **mémoriser l'état intermédiaire** entre deux événements. Quand une nouvelle session arrive, on met à jour uniquement la session concernée en mémoire, et on recalcule l'agrégat sur ce petit dictionnaire - **zéro SQL**.
+La solution : **mémoriser l'état intermédiaire** entre deux événements. Quand une nouvelle session arrive, on met à jour uniquement la session concernée, et on recalcule l'agrégat sur ce petit dictionnaire, **sans requête SQL vers PLaTon**.
 
 ---
 
@@ -74,7 +74,7 @@ Cette frontière détermine ce qui peut être mis en cache et ce qui ne peut pas
 
 ---
 
-## 4. Détection de la forme incrémentable - `getIncrementalShape`
+## 4. Détection de la forme incrémentable : `getIncrementalShape`
 
 **Fichier** : `api/src/modules/features/indicators/interpreter/formula-interpreter.service.ts`
 
@@ -95,7 +95,7 @@ fetch(SessionData, contextFields ∋ user_id)
 
 ### Forme rejetée (retourne `null`)
 
-- Pipeline qui ne commence pas par `fetch(SessionData)`
+- Pipeline de moins de 3 étapes, ou qui ne commence pas par `fetch(SessionData)` (les anciens noms `sessions` et `activities` sont d'abord traduits)
 - `fetch` sans `user_id` dans `contextFields`
 - `js` **avant** `extract` (opère sur des rows qu'on ne cache pas)
 - Absence de `aggregate` ou plus d'un `aggregate`
@@ -123,9 +123,9 @@ interface IncrementalShape {
 
 ## 5. Les 4 structures de métadonnées
 
-Selon la forme du pipeline, un état intermédiaire différent est stocké dans la colonne `metadata` de la table `indicator_values` (sous la clé `incremental`). Ces 4 structures sont **mutuellement exclusives** - une seule est présente à la fois.
+Selon la forme du pipeline, un état intermédiaire différent est stocké dans la colonne `metadata` de la table `indicator_values` (sous la clé `incremental`). Ces 4 structures sont **mutuellement exclusives** : une seule est présente à la fois.
 
-### 5.1 `rowValues` - pipeline sans groupBy ni findFirst
+### 5.1 `rowValues` : pipeline sans groupBy ni findFirst
 
 **Exemple de pipeline** : `fetch → [filter*] → extract → aggregate`
 
@@ -147,7 +147,7 @@ Chaque clé est un `sessionId`, chaque valeur est la valeur extraite (`row[extra
 
 ---
 
-### 5.2 `groupRowValues` - pipeline avec groupBy, sans findFirst
+### 5.2 `groupRowValues` : pipeline avec groupBy, sans findFirst
 
 **Exemple de pipeline** : `fetch → [filter*] → groupBy(resource_id) → extract → aggregate`
 
@@ -173,11 +173,12 @@ Chaque clé est un `sessionId`, chaque valeur est la valeur extraite (`row[extra
 2. `allValues = flatMap(groupRowValues, g => values(g))` → `[nouvValeur, 60, 75, 45]`
 3. `aggregate(allValues)` → résultat final
 
-Seule la copie du groupe `resource-uuid-A` est nécessaire - les autres groupes sont inchangés.
+Seule la copie du groupe `resource-uuid-A` est nécessaire : les autres groupes sont inchangés. Un groupe vidé de toutes ses sessions est supprimé.
+Le résultat est un agrégat sur **toutes** les valeurs de tous les groupes : `groupBy` sert ici à ranger les valeurs, comme dans le calcul complet, où `extract` aplatit aussi les groupes.
 
 ---
 
-### 5.3 `candidateRows` - pipeline avec findFirst, sans groupBy
+### 5.3 `candidateRows` : pipeline avec findFirst, sans groupBy
 
 **Exemple de pipeline** : `fetch → [filter*] → findFirst(sortField: grade) → extract → aggregate`
 
@@ -194,21 +195,22 @@ Seule la copie du groupe `resource-uuid-A` est nécessaire - les autres groupes 
 ```
 
 Chaque entrée contient :
-- `sortValue` : valeur du champ de tri (ex: `grade`) - pour trouver le "premier"
+- `sortValue` : valeur du champ de tri (par exemple `grade`), pour trouver le « premier »
 - `extractedValue` : valeur à extraire après findFirst
-- `passes` : `true` si la ligne satisfait la condition `whereField == whereValue` (ou toujours `true` si pas de condition)
+- `passes` : `true` si la ligne satisfait la condition `whereField == whereValue` (toujours `true` s'il n'y a pas de condition)
+
+Seules les sessions qui passent les filtres et dont la valeur extraite est un nombre sont gardées.
 
 **Sur événement pour session-2** (nouvelle note = 90) :
 1. `candidateRows["session-2"] = { sortValue: 90, extractedValue: 90, passes: true }`
-2. **Trouver le gagnant** : scan O(n) de toutes les entrées où `passes = true`, trier par `sortValue` ascending, prendre le premier → `session-2` (sortValue = 90... wait, ascending = session-1 avec 80 serait premier)
-   - Exemple avec ascending : session-1 (80) est le premier → `winner = 80`
+2. **Trouver le gagnant** : parcourir toutes les entrées où `passes = true`, les trier par `sortValue` croissant, prendre la première. Ici session-1 (80) passe avant session-2 (90) : `winner = 80`.
 3. `applyPostSteps([80], postSteps)` → résultat
 
-**Note** : le "premier" est le **minimum** du `sortField` (tri ascending). Pour le maximum, les utilisateurs doivent adapter leur pipeline.
+**Note** : le « premier » est celui qui a la **plus petite** valeur de `sortField` (tri croissant). Pour prendre la plus grande, il faut adapter le pipeline.
 
 ---
 
-### 5.4 `groupCandidateRows` - pipeline avec groupBy ET findFirst
+### 5.4 `groupCandidateRows` : pipeline avec groupBy ET findFirst
 
 **Exemple de pipeline** : `fetch → [filter*] → groupBy(resource_id) → findFirst(sortField: grade) → extract → aggregate`
 
@@ -236,7 +238,7 @@ Chaque entrée contient :
 
 ---
 
-## 6. La méthode `applyPostSteps` - post-traitement asynchrone
+## 6. La méthode `applyPostSteps` : post-traitement asynchrone
 
 **Fichier** : `formula-interpreter.service.ts`
 
@@ -244,7 +246,7 @@ Chaque entrée contient :
 async applyPostSteps(values: number[], postSteps: FormulaStep[]): Promise<number>
 ```
 
-Applique en séquence toutes les étapes qui viennent après `extract`. Les étapes supportées :
+Applique dans l'ordre toutes les étapes qui viennent après `extract`, et renvoie 0 si le résultat final n'est pas un nombre. Les étapes prises en charge :
 
 | Type | Entrée | Sortie | Description |
 |---|---|---|---|
@@ -255,7 +257,7 @@ Applique en séquence toutes les étapes qui viennent après `extract`. Les éta
 
 ### Pourquoi `js` est autorisé ici
 
-Le `js` après `extract` ne reçoit que des nombres - il n'a pas besoin des rows SessionData. Il s'exécute dans un isolate V8 (sans accès à la BDD) et transforme le résultat numérique. Donc : **0 SQL supplémentaire**, compatible avec le calcul différentiel.
+Le `js` après `extract` ne reçoit que des nombres : il n'a pas besoin des lignes de `SessionData`. Il s'exécute dans un isolate V8 (sans accès à la BDD) et transforme le résultat numérique. Il ne demande donc **aucune requête SQL supplémentaire**, et reste compatible avec le calcul différentiel.
 
 ---
 
@@ -295,7 +297,7 @@ computeViewIncremental(indicator, event)
 
 Trois sous-chemins selon les étapes du pipeline :
 
-#### Sous-chemin A : pas de join, pas de filter (0 SQL)
+#### Sous-chemin A : pas de join, pas de filter (aucune requête vers PLaTon)
 
 ```
 event.payload["grade"] = 85
@@ -303,7 +305,7 @@ rowValues["session-42"] = 85
 newValue = applyPostSteps(Object.values(rowValues), postSteps)
 ```
 
-#### Sous-chemin B : filter sans join (0 SQL)
+#### Sous-chemin B : filter sans join (aucune requête vers PLaTon)
 
 ```
 évalue filter(grade > 0) sur event.payload :
@@ -321,6 +323,9 @@ fetchSingleSessionRow("session-42", context, shape)
   → met à jour ou supprime rowValues["session-42"]
 newValue = applyPostSteps(Object.values(rowValues), postSteps)
 ```
+
+Si la valeur extraite n'est pas un nombre, l'entrée n'est ni ajoutée ni
+modifiée, et le résultat est recalculé avec les valeurs déjà gardées.
 
 ### 7.2 Chemin `groupRowValues`
 
@@ -363,13 +368,18 @@ newValue = computeResultFromGroupCandidates(groupCandidateRows, shape)
   → applyPostSteps([winner_A, winner_B, ...], postSteps)
 ```
 
+Différence avec les chemins 7.1 et 7.2 : si la ligne de l'événement ne passe
+pas les filtres, ou si sa valeur extraite n'est pas un nombre, il n'y a pas de
+mise à jour partielle : le code fait un recalcul complet (section 7.4).
+
 ### 7.4 Recalcul total (fallback)
 
 **Déclencheurs** :
-- `shape = null` (pipeline non incrémentable : `js` avant `extract`, pipeline inconnu)
-- Aucune métadonnée existante en BDD pour cet `(indicatorId, contextType, contextId)` = **premier événement**
+- `shape = null` (pipeline non incrémentable : `js` avant `extract`, forme non reconnue)
+- Aucun état intermédiaire en BDD pour ce `(indicatorId, contextType, contextId)` : c'est le **premier calcul** pour cette clé
 - `event.sessionId` absent
-- Valeur non extractible du payload
+- Ligne de l'événement introuvable (ni dans le message, ni par la requête ciblée)
+- Chemin `findFirst` seulement : ligne qui ne passe pas les filtres, ou valeur extraite qui n'est pas un nombre
 
 **Ce qui se passe** :
 
@@ -385,7 +395,7 @@ shape = null → interpret(formula, context)
   → aucun état stocké (pas de calcul différentiel possible)
 ```
 
-**Important** : le premier événement déclenche toujours un recalcul total. C'est ce recalcul qui initialise l'état intermédiaire en BDD, permettant aux événements suivants d'être différentiels.
+**Important** : le premier calcul pour une clé est toujours complet, qu'il vienne d'un événement ou d'une consultation de la page. C'est lui qui initialise l'état intermédiaire en BDD, ce qui permet aux événements suivants d'être différentiels.
 
 ---
 
@@ -397,9 +407,9 @@ shape = null → interpret(formula, context)
 |---|---|
 | `indicatorId` | ID de l'indicateur |
 | `contextType` | `'learner'` (ou `'course'`, `'group'`, etc.) |
-| `contextId` | `userId` pour learner, `courseId:activityId` pour course/group |
-| `value` | La valeur scalaire calculée (ex: `82.5`) |
-| `metadata` | JSONB : `{ incremental: { rowValues/groupRowValues/... }, structuredValue? }` |
+| `contextId` | clé de cache : `userId` (ou `userId:activityId`, `userId:courseId`) pour un indicateur personnel, `courseId:activityId` pour course, `groupId:activityId` ou `groupId:courseId` pour group (détail dans le readme, section 5) |
+| `value` | La valeur scalaire calculée (par exemple `82.5`) |
+| `metadata` | JSONB : `{ lastUpdate, history, incremental: { rowValues | groupRowValues | … }, structuredValue? }` |
 
 À chaque mise à jour, on fait un `UPSERT` sur `(indicatorId, contextType, contextId)`.
 
@@ -412,7 +422,7 @@ shape = null → interpret(formula, context)
 ### Coût du JSONB vs coût SQL
 
 À chaque événement incrémental :
-- **Lecture** : 1 SELECT pour récupérer `indicator_values` (valeur + metadata)
+- **Lecture** : 1 SELECT pour la définition de l'indicateur, et 1 SELECT pour récupérer `indicator_values` (valeur + metadata), dans la base `indicators`
 - **Écriture** : 1 UPSERT (valeur mise à jour + metadata mise à jour)
 - **SQL PLaTon** : 0 (sauf si `needsTargetedFetch = true` → 1 SELECT ciblé sur 1 ligne)
 
@@ -423,14 +433,13 @@ vs recalcul total :
 
 ## 9. Invalidation et recalcul forcé
 
-Le calcul différentiel n'est **jamais** utilisé dans ces cas :
-
 | Cas | Mécanisme |
 |---|---|
-| Admin clique "Recalculer" | `POST /indicators/:id/recalculate` → `computeView(forceRefresh=true)` |
-| `computeView(forceRefresh=true)` | ignore le cache, recalcule depuis zéro via le chemin SQL complet correspondant (`computeWithRowMap`/`computeWithGroupRowMap`/`computeWithCandidateRows` si le pipeline est incrémentable, `interpret()` générique sinon), écrase le JSONB |
-| `refreshSnapshots` (refresh d'un snapshot épinglé) | passe `deltaEvent` → tente différentiel, sinon `computeView(forceRefresh=true)` |
-| `refreshActivityViews` (toutes les vues cachées d'une activité) | idem |
+| Admin clique « Recalculer » | `POST /indicators/:id/recalculate` → `computeView(forceRefresh=true)` : toujours complet |
+| Recalcul périodique des indicateurs sans événement | même chemin que « Recalculer » : toujours complet |
+| `computeView(forceRefresh=true)` | ignore le cache et recalcule depuis zéro par le chemin SQL complet correspondant (`computeWithRowMap`, `computeWithGroupRowMap` ou `computeWithCandidateRows` si le pipeline est incrémentable, `interpret()` sinon), puis remplace le JSONB |
+| `refreshSnapshots` (rafraîchir un snapshot épinglé) | avec un `deltaEvent`, tente le différentiel ; sans, `computeView(forceRefresh=true)` |
+| `refreshActivityViews`, `refreshCourseGroupViews`, `refreshCachedContextValues` | idem |
 
 ---
 
@@ -440,11 +449,11 @@ Le calcul différentiel n'est **jamais** utilisé dans ces cas :
 |---|---|---|
 | `js` avant `extract` | Opère sur des rows entières | Les rows ne sont pas cachées (trop volumineuses pour JSONB) |
 
-Tout le reste est maintenant incrémentable :
+Tout le reste est incrémentable, à condition que `fetch` porte sur `SessionData` avec `user_id` dans ses champs de contexte :
 - `groupBy` → `groupRowValues` (mise à jour du groupe touché uniquement)
 - `findFirst` → `candidateRows` / `groupCandidateRows` (scan O(n) sans SQL)
 - `js` après `extract` → `postSteps` asynchrones (0 SQL, juste CPU dans l'isolate V8)
-- `filter`, `join`, `round`, `divide` → déjà pris en charge
+- `filter`, `join`, `round`, `divide` → pris en charge
 
 ---
 
@@ -500,7 +509,7 @@ fetch(SessionData, [user_id, activity_id])
 - `avg([90, 70]) = 80`
 - `round(80, 1) = 80.0`
 
-**Résultat** : `80.0` - **0 SQL PLaTon**, 1 UPSERT `indicator_values`
+**Résultat** : `80.0`, **sans requête vers PLaTon**, avec 1 UPSERT dans `indicator_values`.
 
 ---
 
@@ -508,7 +517,7 @@ fetch(SessionData, [user_id, activity_id])
 
 | Fichier | Rôle |
 |---|---|
-| `interpreter/formula-interpreter.service.ts` | Analyse le pipeline (`getIncrementalShape`), calculs complets (`computeWithRowMap` etc.), calcul des résultats depuis l'état (`computeResultFrom*`), `applyPostSteps` async |
-| `ingestion/ingestion.service.ts` | Reçoit l'événement (`ingestForContext`/`processAggregateIndicator`) et appelle `computeViewIncremental` avec le bon contexte selon le `contextType` |
-| `indicators/indicators.service.ts` | `computeView` (calcul à la demande), `computeViewIncremental` (orchestre la décision différentiel vs total pour chaque événement), `recalculate` (recalcul périodique/manuel) |
-| `indicators/entities/indicator-value.entity.ts` | Table `indicator_values` qui stocke valeur + métadonnées |
+| `api/src/modules/features/indicators/interpreter/formula-interpreter.service.ts` | Analyse le pipeline (`getIncrementalShape`), calculs complets (`computeWithRowMap` etc.), calcul des résultats depuis l'état (`computeResultFrom*`), `applyPostSteps` async |
+| `api/src/modules/features/ingestion/ingestion.service.ts` | Reçoit l'événement (`ingestForContext`/`processAggregateIndicator`) et appelle `computeViewIncremental` avec le bon contexte selon le `contextType` |
+| `api/src/modules/features/indicators/indicators.service.ts` | `computeView` (calcul à la demande), `computeViewIncremental` (décide entre différentiel et total pour chaque événement), `recalculate` (recalcul périodique/manuel) |
+| `api/src/modules/features/indicators/entities/indicator-value.entity.ts` | Table `indicator_values` qui stocke valeur + métadonnées |

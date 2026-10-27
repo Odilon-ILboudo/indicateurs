@@ -1,6 +1,6 @@
 # Intégration dans PLaTon : ce qui existe côté Indicateurs
 
-Symétrique de [`docs/integration-platon.md`](./integration-platon.md).
+Symétrique de [`docs/platon-integration/integration-platon.md`](./integration-platon.md).
 `<indicateurs-app>` s'affiche, se connecte à l'API, et respecte la
 séparation admin/non-admin sans aucune modification du code métier de
 l'application autonome. L'application autonome (utilisée par les
@@ -9,19 +9,20 @@ s'ajoute, `ng build indicateurs` continue de fonctionner à l'identique.
 
 ## Ce que PLaTon doit fournir à `<indicateurs-app>` (rappel du contrat)
 
-`access-token` et `user` (JSON, champs `id`, `username`, `firstName`,
-`lastName`, `email`, `role`, `active`, `createdAt`, `updatedAt`) sont les
-deux seuls attributs requis. `initial-view` et `context-*` (voir plus bas)
-sont optionnels, voir `integration-platon.md` pour l'exemple complet côté
-PLaTon.
+`access-token` est le seul attribut obligatoire. `user` (JSON, champs `id`,
+`username`, `firstName`, `lastName`, `email`, `role`, `active`, `createdAt`,
+`updatedAt`) est indispensable pour que le widget connaisse le rôle (sans
+lui, il suppose `student`). `initial-view` et `context-*` (voir plus bas)
+sont facultatifs. Voir `docs/platon-integration/integration-platon.md` pour
+l'exemple complet côté PLaTon.
 
 ## Écrans réutilisés tel quel
 
 Les écrans concernés (`overview.page.ts`, `indicators.page.ts`,
 `selector-family-indicators.page.ts`, `indicator-detail.component.ts`,
 `indicator-card.component.ts`, `indicator-config-modal.component.ts`,
-`pin-indicator-modal.component.ts`) n'importent rien depuis `@platon/*`,
-aucune réécriture nécessaire, seul leur assemblage change.
+`pin-indicator-modal.component.ts`) n'importent rien depuis `@platon/*` : ils
+sont réutilisés sans réécriture, seul leur assemblage change.
 
 `family-indicators.page.ts` est explicitement exclu des routes embarquées
 (voir section « Routes réduites » ci-dessous) : ce fichier enveloppe directement un
@@ -33,8 +34,9 @@ non-admin.
 
 Plus légère que `app.ts` : `app.ts` n'est qu'un `<router-outlet />` nu, mais
 tout ce qui est routé en dessous passe par `DashboardPage`
-(`dashboard.page.ts`), qui porte la sidebar/toolbar/tiroir Material propres à
-l'app autonome, volontairement absents ici.
+(`dashboard.page.ts`), qui porte la sidebar, la toolbar et le tiroir Material
+de l'application autonome, volontairement absents ici. Extrait, avec des
+commentaires ajoutés :
 
 ```ts
 @Component({
@@ -61,8 +63,7 @@ export class EmbedRootComponent implements OnInit, OnChanges {
   private navigated = false;
 
   ngOnInit(): void {
-    // createCustomElement() ne passe pas par ApplicationRef.bootstrap() : la navigation
-    // initiale du routeur, normalement automatique, ne se déclenche jamais sans cet appel.
+    /* createCustomElement() ne passe pas par le bootstrap standard : la navigation initiale ne se déclenche jamais sans cet appel. */
     this.router.initialNavigation();
     this.navigateToInitialViewIfNeeded();
   }
@@ -81,16 +82,14 @@ export class EmbedRootComponent implements OnInit, OnChanges {
         console.error('[indicateurs-app] attribut "user" invalide, JSON attendu.');
       }
     }
-    // context-type/initial-view peuvent changer après le montage initial (navigation
-    // PLaTon vers une autre page cours/activité sans démonter le widget) : on renavigue.
+    // context-type ou initial-view peuvent changer sans que le widget soit démonté : on renavigue.
     if ((changes['contextType'] || changes['initialView']) && this.navigated) {
       this.navigated = false;
       this.navigateToInitialViewIfNeeded();
     }
   }
 
-  // contextType prend le pas sur initialView si les deux sont fournis, voir section
-  // « Points d'entrée sidebar » plus bas.
+  // contextType prend le pas sur initialView (voir « Points d'entrée sidebar » plus bas).
   private navigateToInitialViewIfNeeded(): void {
     if (this.navigated) return;
     this.navigated = true;
@@ -127,14 +126,15 @@ attribut `initial-view`) plutôt que par un bandeau dupliqué à l'intérieur du
 widget.
 
 En écrivant dans les mêmes clés `localStorage` que le flux de connexion de
-l'app autonome (`authentification.page.ts:110-135`), `AuthGuard` et
-`AuthInterceptor` fonctionnent sans modification.
+l'application autonome (`authentification.page.ts`, lignes 108 à 133),
+l'intercepteur `authInterceptor` fonctionne sans modification. Les routes
+embarquées n'ont pas de garde de connexion.
 
 ## Routes réduites : `src/embed/embed.routes.ts`
 
-Reprises de `dashboard.routes.ts`, moins deux routes (`indicators/family/:name`
-et `courses`, voir plus bas), plus une route ajoutée spécifiquement pour
-l'embarqué (`context`) :
+Reprises de `dashboard.routes.ts`, moins trois routes (`indicators/family/:name`
+et `courses`, voir plus bas, et la page de diagnostic `embed-test`), plus une
+route ajoutée pour l'embarqué (`context`) :
 
 ```ts
 export const embedRoutes: Routes = [
@@ -236,12 +236,11 @@ createApplication(embedConfig)
           "src/app/shared/styles/app.scss", // normalize + police d'icônes + variables
           "src/app/shared/styles/ng-zorro/light.less",
           "src/app/shared/styles/material/light.scss"
-          // pas de bundleName/inject:false : Angular concatène les trois dans un seul
-          // styles.css, dans cet ordre, voir section « CSS » plus bas
+          // concaténés dans cet ordre en un seul styles.css (voir « CSS » plus bas)
         ]
       },
       "configurations": {
-        "production": { "outputHashing": "none" } // nom de fichier stable, pas de hash, voir Ouvert
+        "production": { "outputHashing": "none" } // nom de fichier stable, sans empreinte (voir le §13.10 du readme)
       }
     }
   }
@@ -259,7 +258,7 @@ fois par l'élément) ne pose aucun problème.
 
 L'app standalone (`environment.prod.ts`, `apiUrl: '/api'`) et le widget embarqué
 ne peuvent pas partager le même fichier d'environnement en production : le
-widget est servi par le domaine d'Indicateurs (voir `integration-platon.md`,
+widget est servi par le domaine d'Indicateurs (voir `docs/platon-integration/integration-platon.md`,
 section « Décisions ») mais **exécuté dans une page PLaTon**, un chemin relatif
 `/api` s'y résoudrait contre le domaine de PLaTon, pas celui d'Indicateurs.
 
@@ -271,18 +270,18 @@ déploiement réel du widget**, inconnu à ce jour.
 
 ## CSS : un seul fichier, fusionné
 
-`styles.material.light.css` (Material utilisé via `mat-icon` dans 6 des 8
-écrans) et `styles.ng-zorro.light.css` sont nécessaires, ainsi qu'un
-troisième bloc : `app.scss` (normalize, police d'icônes Material,
-variables CSS), sans lui, les icônes Material s'affichent en texte brut
-(`info` au lieu du glyphe).
+Le thème Material (utilisé notamment par `mat-icon` dans la plupart des
+écrans) et le thème ng-zorro sont nécessaires, ainsi qu'un troisième bloc :
+`app.scss` (remise à zéro, police d'icônes Material, variables CSS). Sans
+lui, les icônes Material s'affichent en texte brut (`info` au lieu du
+dessin).
 
 Les trois entrées `styles` de la configuration `production`/`development`
 d'`indicateurs-embed` dans `angular.json` n'ont pas de
 `bundleName`/`inject: false` propre : Angular les concatène automatiquement
 dans un seul bundle, **dans l'ordre où elles sont listées** (`app.scss` puis
 `ng-zorro/light.less` puis `material/light.scss`, cet ordre conditionne le
-rendu, à ne pas changer sans revalider visuellement).
+rendu : à ne pas changer sans revérifier l'affichage).
 
 ## Jeton expiré (401) en mode embarqué
 
@@ -323,14 +322,12 @@ fil d'Ariane et bouton retour d'`indicator-detail.component.html`) construit
 ses chemins avec `` `${routeBasePath}/indicators/...` `` plutôt qu'un chemin
 en dur, fonctionne identiquement dans les deux contextes.
 
-**Cas non couvert par ce mécanisme** : les bannières de contexte
-cours/activité dans `indicator-detail.component.html` (liens « Retour à
-l'activité »/« Retour au cours ») pointent vers `/dashboard/courses/...`, une
-route absente de l'embarqué et hors périmètre de `ROUTE_BASE_PATH`. Faute
-d'un contrat de lien vers les pages natives de PLaTon, ces liens sont
-**masqués** en mode embarqué (`*ngIf="!embedded"`), les puces d'information
-(nom du cours/activité) restent visibles, seul le lien de retour disparaît.
-Voir Ouvert.
+**Cas particulier** : les bannières de contexte cours et activité de
+`indicator-detail.component.html` (liens « Retour à l'activité » et « Retour
+au cours ») pointent, dans l'application autonome, vers les pages Cours
+(`${routeBasePath}/courses/...`), qui n'existent pas dans l'embarqué. En mode
+embarqué, ces liens sont remplacés par un lien vers la route interne
+`/context`, avec le même contexte (voir « Décisions »).
 
 ## `OnPush`, recommandé, pas indispensable
 
@@ -351,7 +348,7 @@ Résolu en deux parties :
   `ActivityPresenter`/`CoursePresenter` (dépendent de `@platon/*`, sans
   objet ici puisque les identifiants arrivent déjà de PLaTon).
 - **Attributs `context-*`** sur `<indicateurs-app>` (voir
-  `integration-platon.md` section 6) : `EmbedRootComponent` navigue automatiquement
+  `docs/platon-integration/integration-platon.md`, section 3) : `EmbedRootComponent` navigue automatiquement
   vers `/context` avec les bons query params dès que `context-type` est
   fourni, après `router.initialNavigation()` (l'ordre importe : appeler
   `router.navigate()` avant démarrerait un routeur pas encore initialisé).
@@ -372,10 +369,10 @@ du lien « Voir les indicateurs » sur une page cours/activité PLaTon).
 
 ## Ce que produit le build
 
-`ng build indicateurs-embed` produit `main.js` + un chunk lazy par route +
-`polyfills.js` + `styles.css` (fusion des trois blocs CSS, voir plus haut) +
-`fonts/`/`icons/` : tout le dossier `dist/indicateurs-embed/browser/` doit
-être hébergé et servi ensemble.
+`ng build indicateurs-embed` produit `main.js`, des fichiers `chunk-*.js`
+chargés à la demande, `polyfills.js`, `styles.css` (fusion des trois blocs CSS,
+voir plus haut), et les dossiers `fonts/`, `icons/` et `media/` : tout le
+dossier `dist/indicateurs-embed/browser/` doit être hébergé et servi ensemble.
 
 ## Décisions
 
@@ -385,10 +382,11 @@ du lien « Voir les indicateurs » sur une page cours/activité PLaTon).
   de l'app standalone dans la même image Nginx). Choix indépendant du LMS
   hôte (PLaTon aujourd'hui, potentiellement un autre demain) : un seul
   endroit sert n'importe quel LMS, sans configuration nginx à refaire côté
-  hôte à chaque nouvelle intégration. Le CORS se règle côté API Indicateurs
-  (`api/src/main.ts`, `origin: true` en prod), pas côté hébergement des
-  fichiers statiques (charger un `<script>`/`<link>` cross-origin n'est pas
-  soumis au CORS).
+  hôte à chaque nouvelle intégration. Le CORS des appels de données
+  se règle côté API Indicateurs (`api/src/main.ts`, `origin: true` en prod).
+  Les fichiers du widget, eux, sont servis par nginx : les
+  `<script type="module">` chargés depuis un autre domaine y exigent un
+  en-tête CORS (voir le §13.10 du `readme.md`).
 - Pas de lien externe vers les vraies pages PLaTon (`/courses/:id`,
   `/activities/:courseId/:activityId`) depuis les bannières de contexte :
   « Retour au cours »/« Retour à l'activité » navigue **en interne** vers
@@ -399,17 +397,4 @@ du lien « Voir les indicateurs » sur une page cours/activité PLaTon).
 
 ## Ouvert / à trancher
 
-- `outputHashing: "none"` choisi pour un nom de fichier stable
-  (`main.js`, pas `main.a1b2c3.js`), à reconsidérer si un vrai système de
-  versionnage est mis en place entre les deux équipes.
-- Collision CSS résiduelle une fois inséré dans une vraie page PLaTon,
-  à la charge de l'équipe PLaTon lors de sa propre validation.
-- `MemoryLocationStrategy` : pas de deep-link direct vers une vue précise du
-  widget, pas de bouton précédent/suivant du navigateur à l'intérieur du
-  widget. Si ce besoin apparaît, il faudra reconsidérer, probablement via
-  un préfixe d'URL négocié avec PLaTon plutôt qu'un retour à
-  `withHashLocation()`.
-- Lien vers les vraies pages PLaTon depuis les bannières de contexte
-  (cours/activité) : aujourd'hui masqué faute de contrat (voir
-  `ROUTE_BASE_PATH` plus haut), à trancher avec l'équipe PLaTon si ce lien
-  s'avère nécessaire.
+Les points restant à trancher sont listés au §13.10 du `readme.md`.

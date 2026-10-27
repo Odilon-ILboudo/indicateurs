@@ -71,7 +71,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Service éphémère : crée/corrige le compte RabbitMQ même sur un volume déjà initialisé - voir docs/docker-migration.md.
+  # Service éphémère : crée/corrige le compte RabbitMQ même sur un volume déjà initialisé.
   rabbitmq-init:
     image: rabbitmq:3-management
     container_name: indicateurs_rabbitmq_init

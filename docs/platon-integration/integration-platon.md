@@ -10,7 +10,7 @@ modifications du code de PLaTon, qui appartiennent à son équipe.
 **Tâche distincte, non couverte ici** : le relais d'événements
 (`platon_outbox_events` → RabbitMQ), nécessaire pour que les indicateurs se
 mettent à jour en temps réel, vit lui aussi côté PLaTon, voir
-[`docs/integration-platon-relay.md`](./integration-platon-relay.md) pour ce
+[`docs/platon-integration/integration-platon-relay.md`](./integration-platon-relay.md) pour ce
 second ajout, indépendant de l'onglet « Indicateurs » décrit ici.
 
 ## Principe
@@ -93,6 +93,8 @@ complet, tout regroupé :
 @Component({
   standalone: true,
   selector: 'app-indicateurs-page',
+  // Sans ce schéma, Angular refuse la balise inconnue <indicateurs-app>.
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
     <indicateurs-app
       #el
@@ -106,7 +108,7 @@ complet, tout regroupé :
     </indicateurs-app>
   `,
 })
-export class IndicateursPage implements OnInit, AfterViewInit {
+export class IndicateursPage implements OnInit, AfterViewInit, OnDestroy {
   private readonly authService = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   @ViewChild('el') el!: ElementRef<HTMLElement & { user?: string }>;
@@ -119,33 +121,48 @@ export class IndicateursPage implements OnInit, AfterViewInit {
   protected contextActivityName?: string;
   protected contextCourseName?: string;
 
+  private currentUser?: User;
+  private querySubscription?: Subscription;
   private readonly base = 'https://<domaine-indicateurs>/embed';
 
   async ngOnInit() {
-    const token = await this.authService.token();
-    this.accessToken = token?.accessToken;
-
-    const q = this.route.snapshot.queryParams;
-    this.initialView = q['view'];
-    this.contextType = q['contextType'];
-    this.contextActivityId = q['activityId'];
-    this.contextCourseId = q['courseId'];
-    this.contextActivityName = q['activityName'];
-    this.contextCourseName = q['courseName'];
+    // Composant réutilisé entre les deux liens de la barre latérale : on suit les paramètres, pas une seule lecture.
+    this.querySubscription = this.route.queryParams.subscribe((q) => {
+      this.initialView = q['view'];
+      this.contextType = q['contextType'];
+      this.contextActivityId = q['activityId'];
+      this.contextCourseId = q['courseId'];
+      this.contextActivityName = q['activityName'];
+      this.contextCourseName = q['courseName'];
+    });
 
     this.loadEmbedAssets();
+
+    const token = await this.authService.token();
+    this.accessToken = token?.accessToken;
+    this.currentUser = await this.authService.ready();
+    this.passUserToWidget();
   }
 
   ngAfterViewInit() {
-    // Requis : sans lui, RoleService démarre sur 'student' par défaut.
-    this.el.nativeElement.user = JSON.stringify(this.currentUser);
+    this.passUserToWidget();
 
-    // L'élément embarqué ne peut pas rediriger lui-même vers un écran de connexion
-    // (son routeur interne ne connaît que les pages Indicateurs).
+    // Le widget ne peut pas afficher de connexion : c'est à PLaTon de réagir au jeton expiré.
     this.el.nativeElement.addEventListener('indicateurs-token-expired', () => {
-      // rafraîchir le jeton PLaTon puis re-fournir `access-token`, ou
-      // rediriger l'utilisateur vers la connexion PLaTon, au choix de l'équipe.
+      /* Rafraîchir le jeton PLaTon puis redonner `access-token`,
+         ou renvoyer vers la connexion PLaTon : au choix de l'équipe. */
     });
+  }
+
+  ngOnDestroy() {
+    this.querySubscription?.unsubscribe();
+  }
+
+  // Requis : sans l'utilisateur, le widget suppose le rôle 'student'.
+  private passUserToWidget(): void {
+    if (this.el && this.currentUser) {
+      this.el.nativeElement.user = JSON.stringify(this.currentUser);
+    }
   }
 
   private loadEmbedAssets(): void {
@@ -158,7 +175,7 @@ export class IndicateursPage implements OnInit, AfterViewInit {
     link.href = `${this.base}/styles.css`;
     document.head.appendChild(link);
 
-    // polyfills.js avant main.js : zone.js doit être chargé avant le bootstrap du widget.
+    // polyfills.js avant main.js : zone.js doit être chargé avant le démarrage du widget.
     for (const src of ['polyfills.js', 'main.js']) {
       const script = document.createElement('script');
       script.type = 'module';
@@ -169,17 +186,17 @@ export class IndicateursPage implements OnInit, AfterViewInit {
 }
 ```
 
-`AuthService.token()` existe déjà
-(`libs/core/browser/src/lib/auth/api/auth.service.ts:33`), c'est la même
-méthode que celle déjà utilisée ailleurs dans PLaTon, rien à ajouter de ce
-côté.
+`AuthService.token()` et `AuthService.ready()` (qui renvoie l'utilisateur
+connecté) existent déjà dans PLaTon
+(`libs/core/browser/src/lib/auth/api/auth.service.ts`, lignes 33 et 45) :
+rien à ajouter de ce côté.
 
-**Mécanisme retenu** : `loadEmbedAssets()` crée les balises `<link>`/`<script
-type="module">` par programmation plutôt que d'utiliser un `import()`
-dynamique, cette approche est celle qui a effectivement fonctionné dans le
-simulateur (`platon-simulateur/src/app/indicateurs-page/indicateurs-page.component.ts`).
-Le garde-fou sur `document.querySelector` évite de recharger le script si la
-route est revisitée sans démonter le composant.
+**Mécanisme retenu** : `loadEmbedAssets()` crée les balises `<link>` et
+`<script type="module">` par programmation plutôt que d'utiliser un
+`import()` dynamique ; c'est l'approche qui fonctionne dans le simulateur
+(`platon-simulateur/src/app/indicateurs-page/indicateurs-page.component.ts`).
+La vérification sur `document.querySelector` évite de recharger le script si
+la route est revisitée sans que le composant soit détruit.
 
 **Point de vigilance pour le déploiement réel** : `<script type="module">`
 est soumis au CORS dès qu'il est chargé depuis un domaine différent,
@@ -192,15 +209,15 @@ depuis sa propre origine.
 Détail des parties de ce composant :
 
 - **La feuille de style** (`<link>`) : posée par `loadEmbedAssets()` en même
-  temps que le script, le CSS n'est pas injecté par `main.js` lui-même. Un
-  seul fichier (`styles.css`, ~900 Ko brut, ~65 Ko compressé), fusionné au
-  build à partir de trois blocs (normalize + police d'icônes
-  Material + variables, thème ng-zorro, thème Material).
-- **`user`** (`ngAfterViewInit`) : posé comme propriété sur l'élément natif
-  (pas un attribut HTML, sa valeur est un objet JSON trop gros pour un
-  attribut) ; indispensable, sans lui `RoleService` démarre sur `'student'`
-  par défaut et les indicateurs teacher/admin restent invisibles, sans
-  erreur.
+  temps que le script, car `main.js` n'injecte pas le CSS lui-même. Un seul
+  fichier, `styles.css` (près de 1 Mo avant compression), assemblé au build à
+  partir de trois feuilles : `app.scss` (remise à zéro, police d'icônes
+  Material, variables), le thème ng-zorro et le thème Material.
+- **`user`** (`passUserToWidget`) : posé comme propriété de l'élément (et non
+  comme attribut HTML, car c'est un objet JSON), une fois l'utilisateur connu
+  et l'élément créé. Il est indispensable : sans lui, le widget suppose le
+  rôle `'student'` et les indicateurs enseignant et admin restent
+  invisibles, sans erreur.
 - **`indicateurs-token-expired`** : évènement DOM bouillonnant émis par le
   widget sur un jeton expiré, à la place d'une navigation qu'il ne peut pas
   faire lui-même.
@@ -214,8 +231,8 @@ Détail des parties de ce composant :
   ci-dessous, qui fournit ces query params). `contextType` vaut `'activity'`
   ou `'course'` (pas de valeur pour un groupe, les indicateurs de groupe
   apparaissent dans les deux cas, dans leur propre section). Sans
-  `context-type`, le widget démarre simplement sur le tableau de bord comme
-  avant. S'il est fourni, il prend le pas sur `initial-view` : le lien
+  `context-type`, le widget démarre simplement sur le tableau de bord. S'il
+  est fourni, il prend le pas sur `initial-view` : le lien
   "Voir les indicateurs" d'une page cours/activité reste prioritaire sur
   n'importe quel lien de sidebar. Depuis la page de détail d'un indicateur
   atteinte ainsi, un lien "Retour au cours"/"Retour à l'activité" ramène à
@@ -249,8 +266,9 @@ this.router.navigate(['/indicateurs'], {
 - Le script `main.js` (et son CSS associé), buildé depuis un second
   point d'entrée du même dépôt Indicateurs, sans le module admin, sans les
   `platon-stubs/`, sans la sidebar/toolbar propre à l'app autonome.
-- Le contrat de la balise `<indicateurs-app>` : un seul attribut/`@Input()`
-  requis, le jeton d'accès (`access-token`) ; `user` fortement recommandé ;
+- Le contrat de la balise `<indicateurs-app>` : un seul attribut obligatoire,
+  le jeton d'accès (`access-token`) ; `user` est indispensable pour que le
+  rôle soit le bon ;
   `initial-view` et `context-*` optionnels (voir section 3). Le routage interne
   reste entièrement géré par Indicateurs lui-même, via une `LocationStrategy`
   purement interne plutôt qu'en hash routing : le routage du widget ne touche
@@ -267,6 +285,8 @@ this.router.navigate(['/indicateurs'], {
   à PLaTon exclusivement, et un hébergement propre à Indicateurs évite de
   reconfigurer un nginx différent à chaque nouvelle intégration. PLaTon
   charge donc le script et le CSS depuis une origine différente de la
-  sienne, ce qui nécessite que l'API Indicateurs autorise ces requêtes
-  cross-origin (CORS), voir `api/src/main.ts`, déjà permissive en prod
-  (`origin: true`).
+  sienne, ce qui demande du CORS à deux endroits : l'API Indicateurs pour les
+  appels de données (`api/src/main.ts`, déjà permissive en prod,
+  `origin: true`), et nginx pour les fichiers du widget, car les
+  `<script type="module">` y sont soumis (voir « Point de vigilance » plus
+  haut et le §13.10 du `readme.md`).

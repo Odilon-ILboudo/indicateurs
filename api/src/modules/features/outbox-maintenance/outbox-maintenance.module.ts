@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
-import { DatabaseModule } from '../../core/database/database.module';
+import { PlatonModule } from '../../core/platon/platon.module';
 import { OutboxMaintenanceService } from './outbox-maintenance.service';
 
 @Module({
   imports: [
-    DatabaseModule,
+    PlatonModule,
     ScheduleModule.forRoot(),
   ],
   providers: [OutboxMaintenanceService],

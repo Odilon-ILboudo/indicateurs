@@ -3,7 +3,7 @@
 # Point d'entrée unique pour préparer une nouvelle machine, dev ou prod : démarre PLaTon,
 # régénère api/.env (dev uniquement, inutile en prod qui lit .env directement), lance
 # Indicateurs (base/migrations/RabbitMQ, + api/nginx en prod), importe un dump si fourni.
-# Les réglages ponctuels de platon/ restent manuels (voir docs/platon-local-setup.md), à faire
+# Les réglages ponctuels de platon/ restent manuels (voir docs/deploiement/platon-local-setup.md), à faire
 # une seule fois avant ce script.
 #
 # Usage : ./bin/setup.sh [-p|--prod] [chemin/vers/platon] [chemin/vers/dumps]
@@ -35,7 +35,7 @@ fi
 if [[ ! -f "$PLATON_DIR/.env" ]]; then
   echo "Erreur : $PLATON_DIR/.env absent." >&2
   echo "Lancer d'abord (cd $PLATON_DIR && ./bin/install.sh), puis appliquer les réglages" >&2
-  echo "manuels de docs/platon-local-setup.md (servers.json, docker-compose.dev.yml)." >&2
+  echo "manuels de docs/deploiement/platon-local-setup.md (servers.json, docker-compose.dev.yml)." >&2
   exit 1
 fi
 
@@ -59,6 +59,13 @@ done
 
 if [[ ! -f .env ]]; then
   echo "Erreur : .env absent - copier .env.example en .env, le renseigner, puis relancer ce script." >&2
+  exit 1
+fi
+
+missing=$(grep -E '^(PLATON_DB_PASSWORD|INDICATORS_DB_PASSWORD|RABBITMQ_PASSWORD)=$' .env | cut -d= -f1)
+if [[ -n "$missing" ]]; then
+  echo "Erreur : champ(s) vide(s) dans .env, à renseigner avant de continuer :" >&2
+  echo "$missing" | sed 's/^/  - /' >&2
   exit 1
 fi
 
