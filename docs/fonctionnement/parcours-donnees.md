@@ -3,7 +3,7 @@
 Pour chaque écran : la chaîne de fichiers d'une requête, de l'écran à la
 base, puis ce qu'elle fait en plus de répondre (effets de bord). Le détail
 (requêtes SQL, paramètres) est dans le code ; les routes et leurs gardes
-sont dans `readme.md`, section 9.
+sont dans [api.md](../reference/api.md).
 
 ## 0. Conventions
 

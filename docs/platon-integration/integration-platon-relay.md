@@ -98,7 +98,7 @@ rester cohérent) est réellement nouveau.
 RabbitMQ est hébergé par Indicateurs (`indicateurs_rabbitmq`, voir
 `docker-compose.*.yml` côté Indicateurs), PLaTon doit pouvoir l'atteindre en
 réseau (host, port, identifiants) depuis son propre serveur. Le choix du
-réseau en production est listé au §13.10 du `readme.md`.
+réseau en production est listé dans [limites-connues.md](../architecture/limites-connues.md).
 
 ## Ce qu'Indicateurs fournit de son côté (pour information, pas à faire par PLaTon)
 

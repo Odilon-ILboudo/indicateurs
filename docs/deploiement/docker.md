@@ -138,10 +138,10 @@ Variables importantes à adapter :
 | `PLATON_DB_PASSWORD` | Mot de passe PostgreSQL (le même que dans `platon/.env`) |
 | `INDICATORS_DB_PASSWORD` | Même serveur et même utilisateur que la base PLaTon, donc en général la même valeur |
 | `RABBITMQ_PASSWORD` | Mot de passe du compte RabbitMQ d'Indicateurs |
-| `NODE_ENV` | `production` active la vérification complète des tokens ; en local, mettre `development` (readme, section 12) |
-| `JWT_SECRET` | Identique au `SECRET_KEY` du PLaTon déployé à côté de cette instance (utilisé seulement avec `NODE_ENV=production`, voir readme section 12) |
+| `NODE_ENV` | `production` active la vérification complète des tokens ; en local, mettre `development` (voir [securite.md](../architecture/securite.md)) |
+| `JWT_SECRET` | Identique au `SECRET_KEY` du PLaTon déployé à côté de cette instance (utilisé seulement avec `NODE_ENV=production`, voir [securite.md](../architecture/securite.md)) |
 | `INDICATEURS_PORT` | Port exposé pour le frontend (défaut : `4300`) |
-| `PLATON_DB_ADMIN_USERNAME`/`PASSWORD` | Optionnel : identifiant Postgres à privilèges élevés pour l'installation des déclencheurs dynamiques (readme section 6bis). Commenté dans `.env.example` : le décommenter dans `.env` si besoin. `env_file: .env` sur le service `api` transmet toute variable ajoutée là, et `bin/generate-api-env.sh` le reprend dans `api/.env` s'il est renseigné (voir plus bas). |
+| `PLATON_DB_ADMIN_USERNAME`/`PASSWORD` | Optionnel : identifiant Postgres à privilèges élevés pour l'installation des déclencheurs dynamiques (voir [ingestion-evenements.md](../fonctionnement/ingestion-evenements.md)). Commenté dans `.env.example` : le décommenter dans `.env` si besoin. `env_file: .env` sur le service `api` transmet toute variable ajoutée là, et `bin/generate-api-env.sh` le reprend dans `api/.env` s'il est renseigné (voir plus bas). |
 
 ### `api/.env` : généré, jamais édité à la main
 

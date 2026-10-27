@@ -240,7 +240,7 @@ createApplication(embedConfig)
         ]
       },
       "configurations": {
-        "production": { "outputHashing": "none" } // nom de fichier stable, sans empreinte (voir le §13.10 du readme)
+        "production": { "outputHashing": "none" } // nom de fichier stable, sans empreinte (voir [limites-connues.md](../architecture/limites-connues.md))
       }
     }
   }
@@ -386,7 +386,7 @@ dossier `dist/indicateurs-embed/browser/` doit être hébergé et servi ensemble
   se règle côté API Indicateurs (`api/src/main.ts`, `origin: true` en prod).
   Les fichiers du widget, eux, sont servis par nginx : les
   `<script type="module">` chargés depuis un autre domaine y exigent un
-  en-tête CORS (voir le §13.10 du `readme.md`).
+  en-tête CORS (voir [limites-connues.md](../architecture/limites-connues.md)).
 - Pas de lien externe vers les vraies pages PLaTon (`/courses/:id`,
   `/activities/:courseId/:activityId`) depuis les bannières de contexte :
   « Retour au cours »/« Retour à l'activité » navigue **en interne** vers
@@ -397,4 +397,4 @@ dossier `dist/indicateurs-embed/browser/` doit être hébergé et servi ensemble
 
 ## Ouvert / à trancher
 
-Les points restant à trancher sont listés au §13.10 du `readme.md`.
+Les points restant à trancher sont listés dans [limites-connues.md](../architecture/limites-connues.md).

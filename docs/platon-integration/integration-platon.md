@@ -289,4 +289,4 @@ this.router.navigate(['/indicateurs'], {
   appels de données (`api/src/main.ts`, déjà permissive en prod,
   `origin: true`), et nginx pour les fichiers du widget, car les
   `<script type="module">` y sont soumis (voir « Point de vigilance » plus
-  haut et le §13.10 du `readme.md`).
+  haut et [limites-connues.md](../architecture/limites-connues.md)).

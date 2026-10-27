@@ -98,7 +98,7 @@ dans le code ou dans une migration SQL. Pour ajouter un nouvel événement
 (nouvelle table, nouvelle colonne, nouvelle condition), il n'y a rien à
 modifier dans le code. (Le déclencheur `trg_platon_attempts_at_success`,
 installé par un script SQL, n'est pas un déclencheur d'événement : il tient à
-jour une colonne de `SessionData`, voir readme section 4.1.)
+jour une colonne de `SessionData`, voir [donnees.md](../architecture/donnees.md).)
 
 ### Principe
 
@@ -161,7 +161,8 @@ Backend : `api/src/modules/features/event-rules/`.
    la même table, ou le supprime entièrement sinon.
 
 Désactiver et supprimer sont refusés tant qu'un indicateur actif utilise
-l'événement de la règle.
+l'événement de la règle. L'API propose aussi `POST /api/event-rules/:id/uninstall`
+(retirer le déclencheur puis désactiver la règle) : l'écran ne l'utilise pas.
 
 ### Droits Postgres requis : `PLATON_DB_ADMIN_USERNAME`/`PASSWORD`
 
@@ -260,6 +261,66 @@ pas `courseId` ne fera jamais recalculer les indicateurs `course` ni
 `teacher`. Toutes ces branches tentent d'abord le calcul différentiel, et ne
 retombent sur un recalcul complet que si le pipeline n'est pas reconnu ou si
 l'état intermédiaire manque (voir `docs/fonctionnement/calcul-differentiel.md`).
+
+### Rafraîchissement des vues (`group` et `admin`)
+
+Après chaque événement, `IngestionService` recalcule les indicateurs
+concernés en passant le `deltaEvent` de l'événement. Avec un `deltaEvent`,
+chaque méthode tente `computeViewIncremental()` (calcul différentiel, voir
+[calcul-differentiel.md](./calcul-differentiel.md)) plutôt que
+`computeView(forceRefresh=true)` (recalcul complet). Pour `group` et `admin`,
+trois méthodes de `IndicatorsService` :
+
+1. `refreshSnapshots(indicatorId, scope, deltaEvent?)` : recalcule **toutes**
+   les `IndicatorSnapshot` épinglées pour ce périmètre, pour chaque
+   visualisation. `scope` est `{ activityId }` (une seule activité) ou
+   `{ courseId }` (indicateur `group` course-aware, voir `isCourseAware()`).
+   Les erreurs par snapshot sont écrites dans les logs sans bloquer les autres.
+2. `refreshActivityViews(indicatorId, activityId, deltaEvent?)` : recalcule
+   toutes les `indicator_values` de type `course`, `group` ou `activity` dont la
+   clé contient cette `activityId` (recherche `LIKE` : la clé est l'activité
+   elle-même, ou commence, finit ou contient `:activityId`). Elle déduit les
+   couples uniques (contextType, identifiant d'origine) et recalcule chaque
+   visualisation. Pour un indicateur `group` course-aware, l'équivalent est
+   `refreshCourseGroupViews(indicatorId, courseId, deltaEvent?)`.
+3. `refreshCachedContextValues(indicatorId, contextType, deltaEvent?)` :
+   utilisée pour `admin`, dont les contextes concernés ne sont pas connus à
+   l'avance. Elle relit toutes les clés déjà en cache pour ce
+   `(indicatorId, contextType)` et les recalcule une par une.
+
+Ces appels sont attendus (`Promise.allSettled`) avant de passer à
+l'indicateur suivant, et un échec n'arrête pas les autres. Seules les valeurs
+déjà calculées une fois sont rafraîchies : une vue jamais consultée n'a pas
+de valeur en cache, et sera calculée à sa première consultation.
+
+**Coût** : chaque événement déclenche le recalcul de toutes les vues déjà
+consultées pour cette activité. Pour une activité avec beaucoup de groupes ou
+de vues, cela peut représenter de nombreux calculs en arrière-plan. Aucune
+limite ni regroupement des événements n'est en place.
+
+### Caches et garde-fou
+
+- Les règles actives sont gardées en mémoire 30 secondes
+  (`RULE_CACHE_TTL_MS`, `EventClassifierService`) : une règle modifiée dans
+  l'admin prend effet au plus 30 s plus tard. Le cache contient toutes les
+  règles actives, que leur déclencheur soit installé ou non.
+- La liste des indicateurs actifs est gardée 60 secondes par
+  `IngestionService` : un indicateur activé reçoit ses premiers événements au
+  plus une minute plus tard.
+- On ne peut pas activer un indicateur dont un événement requis n'a aucun
+  déclencheur installé (`assertRequiredEventsHaveInstalledTriggers`,
+  `indicators.service.ts`). Sinon l'indicateur paraîtrait fonctionnel mais ne
+  se mettrait jamais à jour.
+
+### Indicateurs sans événement
+
+Un indicateur sans `requiredEvents` est recalculé périodiquement
+(`AggregationService.recalculateTriggerlessIndicators`), toutes les minutes par
+défaut (`TRIGGERLESS_RECALC_CRON`, expression cron à 5 ou 6 champs). Ce
+recalcul passe par `recalculate` (voir [moteur-formules.md](./moteur-formules.md)),
+qui ne traite que les utilisateurs ayant une préférence pour l'indicateur : il
+ne convient qu'aux indicateurs personnels (voir
+[limites-connues.md](../architecture/limites-connues.md)).
 
 ---
 
@@ -440,6 +501,7 @@ différentiel.
 Le motif outbox évite de perdre un événement :
 
 - **Si le relais (côté LMS hôte) s'arrête** : les événements s'accumulent dans `platon_outbox_events`. Au redémarrage, il reprend depuis `indicateurs_outbox_cursor.last_id`.
+- **Si Indicateurs est arrêté ou lent** : PLaTon n'attend jamais Indicateurs. Les messages s'accumulent dans les deux files, qui sont durables (`durable: true`), et sont traités au redémarrage.
 - **Si RabbitMQ s'arrête** : le relais ne peut pas publier ; il s'arrête au premier message en erreur sans avancer le curseur. Une fois RabbitMQ revenu, il republie les événements non encore publiés.
-- **Si un consumer (côté Indicateurs) lève une erreur** : la bibliothèque `@golevelup/nestjs-rabbitmq` remet le message dans la file (comportement par défaut), et il est retraité. Il n'y a ni limite de tentatives ni file d'erreurs : un message qui échoue toujours revient sans fin (readme, section 13.10). La plupart des erreurs de calcul sont toutefois interceptées et seulement écrites dans les logs, sans remettre le message en file.
+- **Si un consumer (côté Indicateurs) lève une erreur** : la bibliothèque `@golevelup/nestjs-rabbitmq` remet le message dans la file (comportement par défaut), et il est retraité. Il n'y a ni limite de tentatives ni file d'erreurs : un message qui échoue toujours revient sans fin (voir [limites-connues.md](../architecture/limites-connues.md)). La plupart des erreurs de calcul sont toutefois interceptées et seulement écrites dans les logs, sans remettre le message en file.
 - **Rejeu** : si le même événement est traité deux fois, la valeur est recalculée à partir des mêmes données, donc le résultat est identique.

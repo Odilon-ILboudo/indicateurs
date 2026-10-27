@@ -198,7 +198,7 @@ seule valeur globale), pour chaque utilisateur qui a une préférence pour
 l'indicateur. Pour `group`, `activity` et `course`, en revanche, il passe
 l'identifiant de l'utilisateur comme contexte, ce qui ne produit pas de
 valeur utile : ces types ont besoin d'un vrai déclencheur pour être tenus à
-jour (readme, section 13.10).
+jour (voir [limites-connues.md](../architecture/limites-connues.md)).
 
 Pour observer le recalcul périodique : créez l'indicateur, activez-le depuis
 un compte étudiant, puis attendez au plus une minute (ou cliquez
@@ -673,7 +673,7 @@ Même limite et même pipeline que le cas 21, seul `contextType` change :
 cette règle par défaut : à utiliser pour les cas 15, 16, 19 et 20 (nominatifs).
 
 La règle est aussi appliquée côté backend (`IndicatorVisibilityGuard`, voir
-`readme.md`, section 8 « Visibilité par rôle ») : elle ne se limite pas à
+[modele-indicateur.md](../fonctionnement/modele-indicateur.md)) : elle ne se limite pas à
 l'affichage, et un appel direct à l'API exige aussi le bon rôle réel (table
 `Users`).
 

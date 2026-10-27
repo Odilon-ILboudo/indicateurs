@@ -407,7 +407,7 @@ shape = null → interpret(formula, context)
 |---|---|
 | `indicatorId` | ID de l'indicateur |
 | `contextType` | `'learner'` (ou `'course'`, `'group'`, etc.) |
-| `contextId` | clé de cache : `userId` (ou `userId:activityId`, `userId:courseId`) pour un indicateur personnel, `courseId:activityId` pour course, `groupId:activityId` ou `groupId:courseId` pour group (détail dans le readme, section 5) |
+| `contextId` | clé de cache : `userId` (ou `userId:activityId`, `userId:courseId`) pour un indicateur personnel, `courseId:activityId` pour course, `groupId:activityId` ou `groupId:courseId` pour group (détail dans [donnees.md](../architecture/donnees.md)) |
 | `value` | La valeur scalaire calculée (par exemple `82.5`) |
 | `metadata` | JSONB : `{ lastUpdate, history, incremental: { rowValues | groupRowValues | … }, structuredValue? }` |
 

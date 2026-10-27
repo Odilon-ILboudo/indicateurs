@@ -1,7 +1,6 @@
-# Indicateurs - Frontend (Angular)
+# Indicateurs : Frontend (Angular)
 
-> Documentation complète du projet (architecture, modèle de données, moteur DSL,
-> routes, sécurité) : voir [`../readme.md`](../readme.md).
+> Documentation du projet : voir [`../readme.md`](../readme.md), qui renvoie vers `../docs/`.
 
 This project uses [Angular](https://angular.dev) 18.2.2.
 
@@ -43,7 +42,7 @@ This will compile your project and store the build artifacts in the `dist/` dire
 
 No test runner is installed yet (`ng test` is wired to the
 `@angular/build:unit-test` builder in `angular.json`, but no runner such as
-Vitest or Karma is declared as a dependency) - running `ng test` today fails
+Vitest or Karma is declared as a dependency): running `ng test` today fails
 until one is added.
 
 ## Running end-to-end tests
