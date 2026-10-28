@@ -89,7 +89,7 @@ Onglet « Indicateurs », partie admin :
 | Activer, désactiver | `PATCH /api/indicators/:id/status` | aucun |
 | Supprimer | `DELETE /api/indicators/:id` | supprime aussi préférences, logs et valeurs ; garde snapshots, pins, retours, notifications |
 | Tester, déboguer | `POST /api/indicators/preview`, `preview-steps` | aucun : ni cache ni log |
-| Recalculer | `POST /api/indicators/:id/recalculate` | `compute-view` forcé pour chaque utilisateur ayant une préférence ; écrit `indicator_values` |
+| Recalculer | `POST /api/indicators/:id/recalculate` | `compute-view` forcé : par utilisateur ayant une préférence (indicateur personnel), ou sur les clés déjà en cache (course, activity, group) ; écrit `indicator_values` |
 | Logs | `GET /api/indicators/:id/logs` | aucun |
 | Catalogue des tables | `GET /api/indicators/schema` | aucun ; colonnes sensibles filtrées (`SENSITIVE_COLUMN_PATTERN`, `core/platon/platon.service.ts`) |
 | Notifier | `POST /api/indicators/:id/notify` | écrit `indicator_notifications` |

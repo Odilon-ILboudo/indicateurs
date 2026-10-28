@@ -317,10 +317,10 @@ limite ni regroupement des événements n'est en place.
 Un indicateur sans `requiredEvents` est recalculé périodiquement
 (`AggregationService.recalculateTriggerlessIndicators`), toutes les minutes par
 défaut (`TRIGGERLESS_RECALC_CRON`, expression cron à 5 ou 6 champs). Ce
-recalcul passe par `recalculate` (voir [moteur-formules.md](./moteur-formules.md)),
-qui ne traite que les utilisateurs ayant une préférence pour l'indicateur : il
-ne convient qu'aux indicateurs personnels (voir
-[limites-connues.md](../architecture/limites-connues.md)).
+recalcul passe par `recalculate` (voir [moteur-formules.md](./moteur-formules.md)) :
+un indicateur personnel est recalculé pour les utilisateurs qui ont une
+préférence pour lui, un indicateur `course`, `activity` ou `group` pour les
+clés déjà présentes en cache.
 
 ---
 
@@ -360,9 +360,10 @@ signal générique unique.
 - filtre les événements par `(indicatorId, contextType, contextId)` ;
 - met à jour la valeur de la carte sans rechargement (`markForCheck()`).
 
-Le recalcul périodique des indicateurs sans événement passe par `computeView`,
-qui n'envoie rien par WebSocket : ces valeurs apparaissent au prochain
-affichage de la page.
+Le recalcul périodique d'un indicateur personnel passe par `computeView`, qui
+n'envoie rien par WebSocket : ces valeurs apparaissent au prochain affichage de
+la page. Celui d'un indicateur `course`, `activity` ou `group` passe par
+`refreshCachedContextValues`, qui envoie chaque valeur.
 
 ---
 

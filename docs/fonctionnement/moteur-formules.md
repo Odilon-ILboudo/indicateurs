@@ -111,20 +111,24 @@ Après un événement PLaTon, les valeurs en cache sont recalculées : voir [ing
 
 ## Recalcul (`recalculate`)
 
-`POST /indicators/:id/recalculate` ne recalcule **que** les utilisateurs qui
-ont une préférence enregistrée pour l'indicateur (table
-`user_indicator_preferences`, y compris une préférence désactivée), et non
-tous les utilisateurs. Il délègue toujours à `computeView(forceRefresh=true)` :
+`POST /indicators/:id/recalculate` délègue toujours à
+`computeView(forceRefresh=true)`. Ce qui est recalculé dépend du `contextType` :
 
-- Indicateur personnel (`learner`/`teacher`/`admin`) **non scopé** : une seule
+- Indicateur personnel (`learner`/`teacher`/`admin`) : seulement les
+  utilisateurs qui ont une préférence enregistrée pour l'indicateur (table
+  `user_indicator_preferences`, y compris une préférence désactivée), et non
+  tous les utilisateurs.
+  - **Non scopé** (`learner`/`teacher`/`admin`) **non scopé** : une seule
   valeur globale par utilisateur.
-- Indicateur personnel **scopé** (formule activity-aware ou course-aware) :
-  une valeur par activité ou cours où l'utilisateur a une trace dans
-  `SessionData`, chacune avec la même clé de cache que celle lue par
-  `computeView()`.
-- Indicateur `course`, `activity` ou `group` : le code passe aussi
-  l'identifiant de l'utilisateur comme contexte, ce qui n'a pas de sens pour
-  ces types (voir [limites-connues.md](../architecture/limites-connues.md)).
+  - **Scopé** (formule activity-aware ou course-aware) : une valeur par
+    activité ou cours où l'utilisateur a une trace dans `SessionData`,
+    chacune avec la même clé de cache que celle lue par `computeView()`.
+- Indicateur `course`, `activity` ou `group` : la valeur n'est pas rattachée à
+  un utilisateur. Le recalcul relit les clés déjà présentes dans
+  `indicator_values` pour cet indicateur (`refreshCachedContextValues`) et les
+  recalcule une par une, puis envoie chaque valeur par WebSocket. Une vue
+  jamais consultée n'a pas de clé en cache : elle sera calculée à sa première
+  consultation.
 
 C'est ce même mécanisme qu'utilise le recalcul périodique des indicateurs
 sans déclencheur (`AggregationService.recalculateTriggerlessIndicators()`,

@@ -1,12 +1,13 @@
 # Routes API
 
 Toutes les routes sont préfixées `/api`. Les contrôleurs `courses`,
-`resources` et `user-preferences` exigent un token valide sur toutes leurs
-routes (`AuthGuard`, voir [securite.md](../architecture/securite.md)). `event-rules` exige en plus le rôle
+`resources`, `users` et `user-preferences` exigent un token valide sur toutes
+leurs routes (`AuthGuard`, voir [securite.md](../architecture/securite.md)). `event-rules` exige en plus le rôle
 `admin` (`AdminGuard`) sur **toutes** ses routes, y compris les `GET`. Dans
 `indicators` et `event-types`, chaque route a sa propre protection, indiquée
-ci-dessous ; une route sans annotation n'exige **aucun token**. Le module
-`users` n'a aucune protection.
+ci-dessous ; une route sans annotation n'exige **aucun token** (c'est le cas
+de la liste des indicateurs, d'un indicateur et des types d'événements : des
+définitions, sans donnée personnelle).
 
 Légende : **(admin)** = `AuthGuard` + `AdminGuard` ; **(connecté)** =
 `AuthGuard` seul ; **(rôle visible)** = `AuthGuard` + `IndicatorVisibilityGuard`
@@ -16,19 +17,19 @@ Légende : **(admin)** = `AuthGuard` + `AdminGuard` ; **(connecté)** =
 
 ```
 GET  /indicators                       : indicateurs actifs
-GET  /indicators/all                   : tous, y compris inactifs (ouverte, bien que réservée à l'admin dans l'interface)
-GET  /indicators/search?q=&excludeId=  : recherche par nom ou description (détection de doublons)
-GET  /indicators/schema                : tables et colonnes PLaTon disponibles (colonnes sensibles exclues)
-GET  /indicators/schema/full           : schéma complet avec relations (explorateur de schéma de l'admin)
-GET  /indicators/courses/search?q=&offset=   : recherche de cours (tous les cours) pour le panneau « Tester cette formule »
-GET  /indicators/course/:courseId/activities : activités d'un cours
-GET  /indicators/course/:courseId/students   : étudiants d'un cours (id, e-mail, prénom, nom)
+GET  /indicators/all                   : tous, y compris inactifs (admin)
+GET  /indicators/search?q=&excludeId=  : recherche par nom ou description, détection de doublons (admin)
+GET  /indicators/schema                : tables et colonnes PLaTon disponibles, colonnes sensibles exclues (admin)
+GET  /indicators/schema/full           : schéma complet avec relations, explorateur de schéma (admin)
+GET  /indicators/courses/search?q=&offset=   : recherche de cours (tous les cours) pour le panneau « Tester cette formule » (admin)
+GET  /indicators/course/:courseId/activities : activités d'un cours (admin)
+GET  /indicators/course/:courseId/students   : étudiants d'un cours (id, prénom, nom) (admin)
 GET  /indicators/pins?contextType=&contextId= : indicateurs figés sur un cours ou une activité (connecté)
 GET  /indicators/pins/counts           : nombre de pins par indicateur, tous cours et activités confondus (connecté)
 GET  /indicators/:id
 GET  /indicators/:id/values?contextType=&contextId=&period=&limit= (rôle visible)
-GET  /indicators/:id/usage
-GET  /indicators/:id/logs?limit=
+GET  /indicators/:id/usage            : (admin)
+GET  /indicators/:id/logs?limit=       : (admin)
 
 POST /indicators                       : créer (admin)
 POST /indicators/preview               : { formula, context } → { result }, exécute le DSL (admin)
@@ -44,14 +45,14 @@ DELETE /indicators/:id                 : (admin)
 
 GET    /indicators/:id/snapshots?activityId= ou ?courseId= (rôle visible)
 POST   /indicators/:id/snapshots       : { contextType, contextId, activityId ou courseId, title }, 409 si doublon (rôle visible)
-PATCH  /indicators/:id/snapshots/:snapshotId  : renommer (ouverte)
-DELETE /indicators/:id/snapshots/:snapshotId  : supprimer (ouverte)
+PATCH  /indicators/:id/snapshots/:snapshotId  : renommer (rôle visible)
+DELETE /indicators/:id/snapshots/:snapshotId  : supprimer (rôle visible)
 
 POST   /indicators/:id/notify          : notification liée à l'indicateur (admin)
-GET    /indicators/notifications/all   : toutes les notifications
+GET    /indicators/notifications/all   : toutes les notifications (admin)
 
-POST   /indicators/:id/feedback        : { userId, rating, comment? }, crée un retour (ouverte ; userId vient du corps de la requête)
-GET    /indicators/:id/feedback        : retours d'un indicateur, avec nom de l'auteur
+POST   /indicators/:id/feedback        : { rating, comment? }, crée un retour (connecté ; l'auteur est l'utilisateur du token)
+GET    /indicators/:id/feedback        : retours d'un indicateur, avec nom de l'auteur (admin)
 DELETE /indicators/:id/feedback/:feedbackId : (admin)
 ```
 
@@ -180,7 +181,7 @@ GET /users?search=&roles=&limit= : recherche d'utilisateurs actifs (id, nom d'ut
 GET /users/:id                   : un utilisateur (mêmes champs)
 ```
 
-Aucune protection : ces deux routes répondent sans token (voir [limites-connues.md](../architecture/limites-connues.md)).
+Protégé par `AuthGuard` : un token valide suffit, quel que soit le rôle.
 
 ## Ingestion
 

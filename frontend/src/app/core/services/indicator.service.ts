@@ -192,10 +192,10 @@ export class IndicatorService {
   }
 
   getCourseStudents(courseId: string): Observable<{ id: string; name: string }[]> {
-    return this.http.get<{ id: string; email: string; first_name: string; last_name: string }[]>(
+    return this.http.get<{ id: string; first_name: string; last_name: string }[]>(
       `${this.apiUrl}/course/${courseId}/students`,
     ).pipe(
-      map(students => students.map(s => ({ id: s.id, name: `${s.first_name} ${s.last_name}`.trim() || s.email }))),
+      map(students => students.map(s => ({ id: s.id, name: `${s.first_name} ${s.last_name}`.trim() || s.id }))),
     );
   }
 

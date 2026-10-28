@@ -76,6 +76,7 @@ Les variables d'environnement et la configuration Docker sont dans
 | connaître les bases, ce qui est écrit dans PLaTon, les entités | [donnees.md](docs/architecture/donnees.md) |
 | comprendre qui peut appeler quoi, et l'authentification | [securite.md](docs/architecture/securite.md) |
 | voir ce qui ne va pas encore, avant une mise en production | [limites-connues.md](docs/architecture/limites-connues.md) |
+| voir les choix à faire avec l'équipe PLaTon et l'université | [decisions-a-prendre.md](docs/architecture/decisions-a-prendre.md) |
 | comprendre le modèle d'un indicateur, les familles, la visibilité | [modele-indicateur.md](docs/fonctionnement/modele-indicateur.md) |
 | comprendre le moteur de formules et le bac à sable JavaScript | [moteur-formules.md](docs/fonctionnement/moteur-formules.md) |
 | comprendre le calcul différentiel | [calcul-differentiel.md](docs/fonctionnement/calcul-differentiel.md) |
@@ -93,9 +94,8 @@ Les variables d'environnement et la configuration Docker sont dans
 [limites-connues.md](docs/architecture/limites-connues.md)) :
 
 - Le WebSocket envoie chaque mise à jour à **tous** les navigateurs connectés, sans contrôle du jeton.
-- Plusieurs routes répondent sans token, dont certaines avec des e-mails (`/api/users`, étudiants d'un cours).
+- Les résultats et le CSV d'une activité sont lisibles par tout utilisateur connecté, sans contrôle d'appartenance au cours.
 - Hors production, le jeton n'est pas vérifié cryptographiquement, seulement son expiration.
-- Le recalcul périodique des indicateurs sans événement n'a de sens que pour les indicateurs personnels.
 - Pas de file d'erreurs (DLX) ni de limite de tentatives sur RabbitMQ.
-- Le script embarqué n'envoie pas d'en-tête CORS, et sa mise à jour n'est pas versionnée.
+- Le script embarqué n'a pas de numéro de version, et rien ne prévient PLaTon d'une mise à jour.
 - Installer les déclencheurs demande un compte Postgres propriétaire des tables PLaTon.

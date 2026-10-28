@@ -386,7 +386,8 @@ dossier `dist/indicateurs-embed/browser/` doit être hébergé et servi ensemble
   se règle côté API Indicateurs (`api/src/main.ts`, `origin: true` en prod).
   Les fichiers du widget, eux, sont servis par nginx : les
   `<script type="module">` chargés depuis un autre domaine y exigent un
-  en-tête CORS (voir [limites-connues.md](../architecture/limites-connues.md)).
+  en-tête CORS : `location /embed/` envoie `Access-Control-Allow-Origin: *`
+  (fichiers statiques publics, sans cookie) et `Cache-Control: no-cache`.
 - Pas de lien externe vers les vraies pages PLaTon (`/courses/:id`,
   `/activities/:courseId/:activityId`) depuis les bannières de contexte :
   « Retour au cours »/« Retour à l'activité » navigue **en interne** vers

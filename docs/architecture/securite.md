@@ -55,14 +55,16 @@ introuvable n'est pas refusé ici : le contrôleur renvoie alors 404. Posé sur
 |---|---|
 | Permissions cours et activités | calculées (propriétaire, admin, membre `teacher`), voir [api.md](../reference/api.md) ; l'ajout et le retrait de membres sont refusés aux autres |
 | Permissions ressources | calculées en lecture (propriétaire, admin, membre de cercle), voir [api.md](../reference/api.md) |
-| Écritures sur les indicateurs, les types d'événements et les règles | rôle `admin` vérifié (`AdminGuard`), sauf le renommage et la suppression de snapshots et l'envoi d'un retour, qui sont ouverts |
+| Écritures sur les indicateurs, les types d'événements et les règles | rôle `admin` vérifié (`AdminGuard`) ; les snapshots exigent en plus de pouvoir voir l'indicateur, et l'auteur d'un retour est toujours l'utilisateur du token |
 | Visibilité des indicateurs par rôle et contexte | rôle réel vérifié (`IndicatorVisibilityGuard`), voir [modele-indicateur.md](../fonctionnement/modele-indicateur.md) |
 | Préférences utilisateur | utilisateur toujours tiré de `request.user.id`, jamais accepté depuis le client |
 | Session expirée | 401 → `auth.interceptor.ts` vide le `localStorage`, puis renvoie vers `/authentification` (ou prévient la page hôte en mode embarqué) |
 
-Plusieurs routes de lecture restent ouvertes sans token, dont certaines
-renvoient des données personnelles : voir [api.md](../reference/api.md) et la liste de la
-[limites-connues.md](limites-connues.md).
+Seules restent ouvertes sans token la liste des indicateurs, un indicateur et
+les types d'événements (des définitions, sans donnée personnelle) : voir
+[api.md](../reference/api.md). Les résultats et le CSV d'une activité sont
+lisibles par tout utilisateur connecté, sans contrôle d'appartenance au cours :
+voir [limites-connues.md](limites-connues.md).
 
 ## Limite connue
 

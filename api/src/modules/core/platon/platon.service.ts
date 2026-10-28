@@ -131,7 +131,7 @@ export class PlatonService {
   /* Récupère tous les étudiants d'un cours */
   async getStudentsByCourse(courseId: string) {
     return this.dataSource.query(
-      `SELECT u.id, u.email, u.first_name, u.last_name
+      `SELECT u.id, u.first_name, u.last_name
        FROM "Users" u
        JOIN "CourseMembers" cm ON cm.user_id = u.id
        WHERE cm.course_id = $1 AND u.role = 'student'`,

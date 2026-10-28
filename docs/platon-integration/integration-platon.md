@@ -200,11 +200,11 @@ la route est revisitée sans que le composant soit détruit.
 
 **Point de vigilance pour le déploiement réel** : `<script type="module">`
 est soumis au CORS dès qu'il est chargé depuis un domaine différent,
-contrairement à un `<script>` classique. L'en-tête CORS déjà prévu côté API
-Indicateurs (`api/src/main.ts`, `origin: true`) ne couvre pas ces fichiers
-statiques ; il faut aussi l'ajouter sur le bloc `location /embed/` de
-`nginx.conf`. Non couvert par le test en simulateur, qui charge ces fichiers
-depuis sa propre origine.
+contrairement à un `<script>` classique. L'en-tête CORS côté API Indicateurs
+(`api/src/main.ts`, `origin: true`) ne couvre pas ces fichiers statiques :
+c'est le bloc `location /embed/` de `nginx.conf` qui envoie
+`Access-Control-Allow-Origin: *`. Le test en simulateur ne l'exerce pas, car il
+charge ces fichiers depuis sa propre origine.
 
 Détail des parties de ce composant :
 
@@ -289,4 +289,4 @@ this.router.navigate(['/indicateurs'], {
   appels de données (`api/src/main.ts`, déjà permissive en prod,
   `origin: true`), et nginx pour les fichiers du widget, car les
   `<script type="module">` y sont soumis (voir « Point de vigilance » plus
-  haut et [limites-connues.md](../architecture/limites-connues.md)).
+  haut).

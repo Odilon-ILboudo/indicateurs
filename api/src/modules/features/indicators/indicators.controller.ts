@@ -33,12 +33,14 @@ export class IndicatorsController {
 
   // IMPORTANT : routes littérales avant /:id pour éviter les conflits
   @Get('all')
+  @UseGuards(AuthGuard, AdminGuard)
   async getAllForAdmin() {
     return this.indicatorsService.findAllForAdmin();
   }
 
   // Recherche d'indicateurs similaires par nom/description (pour la détection de doublons)
   @Get('search')
+  @UseGuards(AuthGuard, AdminGuard)
   async searchSimilar(
     @Query('q') q: string,
     @Query('excludeId') excludeId?: string,
@@ -49,29 +51,34 @@ export class IndicatorsController {
 
   // Retourne les tables PLaTon disponibles et leurs colonnes pour le builder
   @Get('schema')
+  @UseGuards(AuthGuard, AdminGuard)
   async getPlatonSchema() {
     return this.indicatorsService.getPlatonSchema();
   }
 
   @Get('schema/full')
+  @UseGuards(AuthGuard, AdminGuard)
   async getFullSchema() {
     return this.indicatorsService.getFullSchema();
   }
 
   /* Recherche des cours par nom (tout PLaTon) pour le sélecteur de test de formule - 10 résultats/page. */
   @Get('courses/search')
+  @UseGuards(AuthGuard, AdminGuard)
   async searchCourses(@Query('q') q?: string, @Query('offset') offset?: string) {
     return this.indicatorsService.searchCourses(q ?? '', offset ? parseInt(offset, 10) : 0);
   }
 
   // Retourne les activités actives d'un cours
   @Get('course/:courseId/activities')
+  @UseGuards(AuthGuard, AdminGuard)
   async getCourseActivities(@Param('courseId') courseId: string) {
     return this.indicatorsService.getCourseActivities(courseId);
   }
 
   // Retourne les étudiants d'un cours (pour le sélecteur de test de formule)
   @Get('course/:courseId/students')
+  @UseGuards(AuthGuard, AdminGuard)
   async getCourseStudents(@Param('courseId') courseId: string) {
     return this.indicatorsService.getCourseStudents(courseId);
   }
@@ -117,12 +124,14 @@ export class IndicatorsController {
   }
 
   @Get(':id/usage')
+  @UseGuards(AuthGuard, AdminGuard)
   async getIndicatorUsage(@Param('id') id: string) {
     const indicator = await this.indicatorsService.findById(id);
     return { usageCount: indicator.usageCount };
   }
 
   @Get(':id/logs')
+  @UseGuards(AuthGuard, AdminGuard)
   async getExecutionLogs(
     @Param('id') id: string,
     @Query('limit') limit = 50,
@@ -230,6 +239,7 @@ export class IndicatorsController {
 
   // Met à jour le titre d'un snapshot
   @Patch(':id/snapshots/:snapshotId')
+  @UseGuards(AuthGuard, IndicatorVisibilityGuard)
   async updateSnapshotTitle(
     @Param('id') id: string,
     @Param('snapshotId') snapshotId: string,
@@ -241,6 +251,7 @@ export class IndicatorsController {
 
   // Supprime un snapshot
   @Delete(':id/snapshots/:snapshotId')
+  @UseGuards(AuthGuard, IndicatorVisibilityGuard)
   async deleteSnapshot(
     @Param('id') id: string,
     @Param('snapshotId') snapshotId: string,
@@ -293,23 +304,27 @@ export class IndicatorsController {
 
   // Liste toutes les notifications (onglet utilisateur à venir)
   @Get('notifications/all')
+  @UseGuards(AuthGuard, AdminGuard)
   async getNotifications() {
     return this.indicatorsService.getNotifications();
   }
 
   // Feedbacks
 
-  // Soumet (ou met à jour) un retour d'expérience pour un indicateur
+  /* Soumet un retour d'expérience ; l'auteur est l'utilisateur du jeton, jamais un userId envoyé par le client. */
   @Post(':id/feedback')
+  @UseGuards(AuthGuard)
   async submitFeedback(
+    @Req() request: AuthenticatedRequest,
     @Param('id') id: string,
-    @Body() body: { userId: string; rating: number; comment?: string },
+    @Body() body: { rating: number; comment?: string },
   ) {
-    return this.indicatorsService.submitFeedback(id, body.userId, body.rating, body.comment);
+    return this.indicatorsService.submitFeedback(id, request.user!.id, body.rating, body.comment);
   }
 
   // Liste tous les retours d'expérience d'un indicateur (admin)
   @Get(':id/feedback')
+  @UseGuards(AuthGuard, AdminGuard)
   async getFeedbacks(@Param('id') id: string) {
     return this.indicatorsService.getFeedbacks(id);
   }

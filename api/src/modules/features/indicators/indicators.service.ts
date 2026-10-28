@@ -225,6 +225,15 @@ export class IndicatorsService {
       throw new BadRequestException(`L'indicateur "${indicator.name}" n'a pas de formule DSL`);
     }
 
+    const isPersonal = indicator.contextType === 'learner' || indicator.contextType === 'teacher' || indicator.contextType === 'admin';
+
+    /* course/activity/group : la valeur n'est pas rattachée à un utilisateur, on recalcule les clés déjà en cache. */
+    if (!isPersonal) {
+      const { processed, failed } = await this.refreshCachedContextValues(id, indicator.contextType);
+      this.logger.log(`Recalcul terminé - processed: ${processed}, updated: ${processed - failed}, failed: ${failed}`);
+      return { processed, updated: processed - failed, failed };
+    }
+
     const prefs = await this.preferenceModel.find({
       where: { indicatorId: id },
       select: ['userId'],
@@ -233,7 +242,6 @@ export class IndicatorsService {
     this.logger.log(`Recalcul de "${indicator.name}" pour ${userIds.length} utilisateurs (ayant activé cet indicateur)`);
 
     /* Un indicateur personnel activity/course-aware a une valeur par (utilisateur, activité/cours), pas par utilisateur seul. */
-    const isPersonal = indicator.contextType === 'learner' || indicator.contextType === 'teacher' || indicator.contextType === 'admin';
     const activityAware = isPersonal && isActivityAware(formula);
     const courseAware = isPersonal && isCourseAware(formula);
 
@@ -824,17 +832,20 @@ export class IndicatorsService {
   }
 
   /* Rafraîchit tous les contextes déjà en cache - utile quand les contextIds pertinents ne sont pas connus d'avance. */
-  async refreshCachedContextValues(indicatorId: string, contextType: string, deltaEvent?: DeltaEvent): Promise<void> {
+  async refreshCachedContextValues(indicatorId: string, contextType: string, deltaEvent?: DeltaEvent): Promise<{ processed: number; failed: number }> {
+    let processed = 0;
+    let failed = 0;
     const indicator = await this.indicatorModel.findOne({ where: { id: indicatorId } });
-    if (!indicator) return;
+    if (!indicator) return { processed, failed };
 
     const rows = await this.indicatorValueModel.find({ where: { indicatorId, contextType } });
-    if (!rows.length) return;
+    if (!rows.length) return { processed, failed };
 
     const vizList = indicator.visualizations ?? [];
     /* Conserve (contextId de base, suffixe) : une ligne en cache peut être globale, scopée activité ou cours. */
     const formula = resolveFormula(indicator);
-    const suffixIsCourse = isCourseAware(formula);
+    /* Pour un indicateur course, le suffixe est toujours une activité ; pour activity, il n'y en a pas. */
+    const suffixIsCourse = contextType !== 'course' && contextType !== 'activity' && isCourseAware(formula);
     const uniqueCacheKeys = [...new Set(rows.map(r => r.contextId))];
 
     for (const cacheKey of uniqueCacheKeys) {
@@ -842,6 +853,7 @@ export class IndicatorsService {
       const activityId = suffixIsCourse ? undefined : suffix;
       const courseId = suffixIsCourse ? suffix : undefined;
       for (const vizId of (vizList.length ? vizList.map(v => v.id) : [undefined])) {
+        processed++;
         try {
           const result = deltaEvent
             ? await this.computeViewIncremental(indicatorId, contextType, contextId, activityId, vizId, deltaEvent, courseId)
@@ -850,12 +862,14 @@ export class IndicatorsService {
             this.emitUpdated(indicatorId, indicator.name, contextType, contextId, result.value);
           }
         } catch (err) {
+          failed++;
           this.logger.warn(
             `refreshCachedContextValues échoué - indicatorId=${indicatorId} contextType=${contextType} contextId=${cacheKey}: ${(err as Error).message}`,
           );
         }
       }
     }
+    return { processed, failed };
   }
 
   // Feedbacks

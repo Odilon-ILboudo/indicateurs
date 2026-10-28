@@ -191,14 +191,12 @@ choisi pour tester le recalcul périodique plutôt que le temps réel.
 définie par la variable d'environnement `TRIGGERLESS_RECALC_CRON` (par défaut
 chaque minute) et appelle `IndicatorsService.recalculate()` sur tout
 indicateur actif sans déclencheur, quel que soit son `contextType`.
-`recalculate()` traite correctement les trois contextTypes personnels
-(`learner`, `teacher`, `admin`), y compris quand leur formule est restreinte à
-une activité ou à un cours (une valeur par activité ou cours concerné, pas une
-seule valeur globale), pour chaque utilisateur qui a une préférence pour
-l'indicateur. Pour `group`, `activity` et `course`, en revanche, il passe
-l'identifiant de l'utilisateur comme contexte, ce qui ne produit pas de
-valeur utile : ces types ont besoin d'un vrai déclencheur pour être tenus à
-jour (voir [limites-connues.md](../architecture/limites-connues.md)).
+`recalculate()` traite les trois contextTypes personnels (`learner`,
+`teacher`, `admin`), y compris quand leur formule est restreinte à une activité
+ou à un cours (une valeur par activité ou cours concerné, pas une seule valeur
+globale), pour chaque utilisateur qui a une préférence pour l'indicateur. Pour
+`group`, `activity` et `course`, il recalcule les valeurs déjà présentes en
+cache : une vue jamais consultée n'a pas encore de valeur à rafraîchir.
 
 Pour observer le recalcul périodique : créez l'indicateur, activez-le depuis
 un compte étudiant, puis attendez au plus une minute (ou cliquez
