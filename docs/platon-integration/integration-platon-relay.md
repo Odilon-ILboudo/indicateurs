@@ -1,4 +1,8 @@
-# Relais d'événements : ce qu'il faut ajouter côté PLaTon
+# Relais d'événements : ce qu'il reste à ajouter côté PLaTon
+
+**État : à faire par l'équipe PLaTon.** Les fichiers du relais (`outbox-relay.service.ts`,
+`outbox-relay.module.ts`, `outbox-cursor.sql`) sont prêts dans ce dossier, à copier
+dans PLaTon ; ils n'y sont pas installés.
 
 Ce document décrit ce que l'équipe PLaTon doit ajouter à son propre dépôt pour
 relayer les événements pédagogiques vers Indicateurs. Rien de ce qui suit ne

@@ -1,6 +1,10 @@
-# Intégration dans PLaTon : ce qui existe côté Indicateurs
+# Widget `<indicateurs-app>` : ce qui est déjà fait côté Indicateurs
 
-Symétrique de [`docs/platon-integration/integration-platon.md`](./integration-platon.md).
+**État : terminé côté Indicateurs, rien à faire ici.** Ce document décrit du code
+qui existe dans ce dépôt. Ce qu'il reste à ajouter dans PLaTon est dans
+[integration-platon.md](./integration-platon.md) et
+[integration-platon-relay.md](./integration-platon-relay.md).
+
 `<indicateurs-app>` s'affiche, se connecte à l'API, et respecte la
 séparation admin/non-admin sans aucune modification du code métier de
 l'application autonome. L'application autonome (utilisée par les
@@ -398,4 +402,4 @@ dossier `dist/indicateurs-embed/browser/` doit être hébergé et servi ensemble
 
 ## Ouvert / à trancher
 
-Les points restant à trancher sont listés dans [limites-connues.md](../architecture/limites-connues.md).
+Les points restant à trancher sont dans [decisions-a-prendre.md](../architecture/decisions-a-prendre.md), et leurs conséquences dans [limites-connues.md](../architecture/limites-connues.md).

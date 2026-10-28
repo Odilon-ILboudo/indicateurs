@@ -1,4 +1,7 @@
-# Intégration dans PLaTon : ce qu'il faut faire côté PLaTon
+# Intégration dans PLaTon : ce qu'il reste à faire côté PLaTon
+
+**État : à faire par l'équipe PLaTon.** Le côté Indicateurs est terminé, voir
+[integration-indicateurs.md](./integration-indicateurs.md).
 
 Ce document décrit précisément ce que l'équipe PLaTon doit ajouter à son propre
 dépôt pour faire apparaître un onglet « Indicateurs » dans sa navigation, visible

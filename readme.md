@@ -75,7 +75,7 @@ Les variables d'environnement et la configuration Docker sont dans
 | trouver un fichier dans `api/` ou `frontend/` | [structure.md](docs/architecture/structure.md) |
 | connaître les bases, ce qui est écrit dans PLaTon, les entités | [donnees.md](docs/architecture/donnees.md) |
 | comprendre qui peut appeler quoi, et l'authentification | [securite.md](docs/architecture/securite.md) |
-| voir ce qui ne va pas encore, avant une mise en production | [limites-connues.md](docs/architecture/limites-connues.md) |
+| voir ce qui ne va pas encore | [limites-connues.md](docs/architecture/limites-connues.md) |
 | voir les choix à faire avec l'équipe PLaTon et l'université | [decisions-a-prendre.md](docs/architecture/decisions-a-prendre.md) |
 | comprendre le modèle d'un indicateur, les familles, la visibilité | [modele-indicateur.md](docs/fonctionnement/modele-indicateur.md) |
 | comprendre le moteur de formules et le bac à sable JavaScript | [moteur-formules.md](docs/fonctionnement/moteur-formules.md) |
@@ -85,8 +85,8 @@ Les variables d'environnement et la configuration Docker sont dans
 | créer un indicateur (22 cas prêts à importer) | [guide-creation-indicateur.md](docs/guides/guide-creation-indicateur.md) |
 | la liste des routes API et leurs gardes | [api.md](docs/reference/api.md) |
 | les écrans et composants Angular | [frontend.md](docs/reference/frontend.md) |
-| intégrer `<indicateurs-app>` dans PLaTon | [integration-indicateurs.md](docs/platon-integration/integration-indicateurs.md) (côté Indicateurs) et [integration-platon.md](docs/platon-integration/integration-platon.md) (côté PLaTon) |
-| installer le relais d'événements côté PLaTon | [integration-platon-relay.md](docs/platon-integration/integration-platon-relay.md) |
+| intégrer `<indicateurs-app>` dans PLaTon | [integration-indicateurs.md](docs/platon-integration/integration-indicateurs.md) (déjà fait côté Indicateurs) et [integration-platon.md](docs/platon-integration/integration-platon.md) (à faire côté PLaTon) |
+| installer le relais d'événements (à faire côté PLaTon) | [integration-platon-relay.md](docs/platon-integration/integration-platon-relay.md) |
 
 ## Limites connues
 
@@ -94,7 +94,6 @@ Les variables d'environnement et la configuration Docker sont dans
 [limites-connues.md](docs/architecture/limites-connues.md)) :
 
 - Le WebSocket envoie chaque mise à jour à **tous** les navigateurs connectés, sans contrôle du jeton.
-- Les résultats et le CSV d'une activité sont lisibles par tout utilisateur connecté, sans contrôle d'appartenance au cours.
 - Hors production, le jeton n'est pas vérifié cryptographiquement, seulement son expiration.
 - Pas de file d'erreurs (DLX) ni de limite de tentatives sur RabbitMQ.
 - Le script embarqué n'a pas de numéro de version, et rien ne prévient PLaTon d'une mise à jour.

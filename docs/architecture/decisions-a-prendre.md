@@ -5,31 +5,10 @@ du code. Pour chacun : l'état actuel, les options, une recommandation et la
 personne qui peut trancher. La liste complète des limites, avec leurs
 conséquences, est dans [limites-connues.md](./limites-connues.md).
 
-Les décisions 1 à 5 concernent le code d'Indicateurs. Les décisions 6 à 13
+Les décisions 1 à 4 concernent le code d'Indicateurs. Les décisions 5 à 12
 demandent l'équipe PLaTon ou l'université.
 
-## 1. Qui peut lire les résultats et le CSV d'une activité ?
-
-**État actuel** : les routes `results`, `results/date` et `csv` de
-`/api/v1/courses/:courseId/activities/:activityId/` exigent un token valide,
-rien de plus. `:courseId` est ignoré, seul `:activityId` compte. Tout
-utilisateur connecté peut donc lire les notes, les tentatives et les e-mails
-des étudiants de n'importe quelle activité.
-
-**Options**
-- **A. Équipe pédagogique seulement** : admin, propriétaire du cours, membre
-  `teacher` du cours. Même règle que `update` d'une activité.
-- **B. A, plus les étudiants du cours pour leurs propres lignes** : demande de
-  filtrer la réponse par utilisateur.
-
-**Recommandation** : A. C'est la règle que PLaTon applique aux modifications,
-et c'est la plus simple à vérifier. À confirmer : un étudiant doit-il voir ces
-résultats dans l'interface d'Indicateurs ?
-
-**Qui décide** : l'équipe PLaTon (règle d'accès aux résultats), puis
-Indicateurs applique.
-
-## 2. Comment sécuriser le WebSocket ?
+## 1. Comment sécuriser le WebSocket ?
 
 **État actuel** : chaque mise à jour est envoyée à **tous** les navigateurs
 connectés (`server.emit`). Aucun jeton n'est demandé à la connexion, et les
@@ -46,12 +25,12 @@ contexte et valeur) qui ne le concernent pas.
   seulement ?), et vérifier l'appartenance à la connexion.
 
 **Recommandation** : A tout de suite, B ensuite. A ferme l'accès anonyme à peu
-de frais. B n'a de sens qu'une fois la décision 1 prise, puisque c'est la même
-règle d'appartenance au cours.
+de frais. B demande une règle d'appartenance à un cours, à définir avec
+l'équipe PLaTon.
 
-**Qui décide** : Indicateurs, avec la règle d'appartenance de la décision 1.
+**Qui décide** : Indicateurs et l'équipe PLaTon (règle d'appartenance à un cours).
 
-## 3. Le rôle `demo` existe-t-il vraiment dans PLaTon ?
+## 2. Le rôle `demo` existe-t-il vraiment dans PLaTon ?
 
 **État actuel** : la table `INDICATOR_VISIBILITY` de l'API
 (`indicator-visibility.util.ts`) ouvre les contextes `course` et `activity` au
@@ -69,7 +48,7 @@ lit) évite que les deux dérivent.
 
 **Qui décide** : l'équipe PLaTon (liste des rôles).
 
-## 4. Faut-il suivre les suppressions de sessions ?
+## 3. Faut-il suivre les suppressions de sessions ?
 
 **État actuel** : les déclencheurs ne surveillent que `INSERT` et `UPDATE`. Une
 session supprimée dans PLaTon reste dans le cache du calcul différentiel
@@ -89,7 +68,7 @@ supprimées en pratique (par exemple à la suppression d'un cours ou d'un
 
 **Qui décide** : l'équipe PLaTon (usage réel), puis Indicateurs.
 
-## 5. Que faire des messages RabbitMQ qui échouent toujours ?
+## 4. Que faire des messages RabbitMQ qui échouent toujours ?
 
 **État actuel** : un message dont le traitement lève une erreur est remis dans
 la file et retraité sans fin. Il n'y a ni file d'erreurs (DLX) ni limite de
@@ -108,7 +87,7 @@ bout en bout. Pas urgent en développement.
 
 **Qui décide** : Indicateurs.
 
-## 6. Comment vérifier le jeton hors production ?
+## 5. Comment vérifier le jeton hors production ?
 
 **État actuel** : hors `NODE_ENV=production`, l'API décode le jeton et vérifie
 seulement son expiration, car le secret du PLaTon universitaire est inconnu.
@@ -127,7 +106,7 @@ suffit si `JWT_SECRET` est identique au `SECRET_KEY` du PLaTon déployé à côt
 
 **Qui décide** : l'équipe PLaTon et l'université (secret, politique de sécurité).
 
-## 7. Qui fournit le compte Postgres pour installer les déclencheurs ?
+## 6. Qui fournit le compte Postgres pour installer les déclencheurs ?
 
 **État actuel** : créer un déclencheur demande d'être propriétaire de la table.
 Sans compte adapté, l'écran d'installation affiche le SQL à faire exécuter.
@@ -144,7 +123,7 @@ et les installations sont rares). A en local.
 
 **Qui décide** : l'administrateur de la base de PLaTon.
 
-## 8. Comment RabbitMQ est-il joint en production ?
+## 7. Comment RabbitMQ est-il joint en production ?
 
 **État actuel** : en local, PLaTon et Indicateurs partagent un réseau Docker. En
 production, ils peuvent être sur des serveurs différents.
@@ -158,7 +137,7 @@ production, ils peuvent être sur des serveurs différents.
 
 **Qui décide** : l'université (réseau) et l'équipe PLaTon.
 
-## 9. Quel est le domaine de production du widget ?
+## 8. Quel est le domaine de production du widget ?
 
 **État actuel** : `frontend/src/environments/environment.embed.prod.ts` contient
 encore `<domaine-indicateurs-a-remplacer>`.
@@ -168,7 +147,7 @@ avant tout déploiement réel.
 
 **Qui décide** : l'université (nom de domaine).
 
-## 10. Comment prévenir PLaTon d'une nouvelle version du widget ?
+## 9. Comment prévenir PLaTon d'une nouvelle version du widget ?
 
 **État actuel** : le script est servi sans numéro de version
 (`outputHashing: "none"`), sous un nom stable. `location /embed/` envoie
@@ -187,7 +166,7 @@ en production par un autre LMS.
 
 **Qui décide** : les deux équipes.
 
-## 11. Les styles du widget peuvent-ils gêner PLaTon ?
+## 10. Les styles du widget peuvent-ils gêner PLaTon ?
 
 **État actuel** : `styles.css` est une feuille globale (remise à zéro, thèmes
 ng-zorro et Material), chargée dans la page de PLaTon. Elle peut modifier
@@ -203,7 +182,7 @@ l'apparence du reste de PLaTon.
 
 **Qui décide** : l'équipe PLaTon (validation visuelle).
 
-## 12. Faut-il des liens directs vers une vue du widget ?
+## 11. Faut-il des liens directs vers une vue du widget ?
 
 **État actuel** : le routeur interne garde son historique en mémoire pour ne
 jamais toucher à l'URL de PLaTon. Il n'y a pas d'adresse partageable vers une
@@ -215,7 +194,7 @@ widget (par exemple un paramètre de requête), que le widget lirait et mettrait
 
 **Qui décide** : les deux équipes, selon le besoin réel.
 
-## 13. Où mènent « Retour au cours » et « Retour à l'activité » ?
+## 12. Où mènent « Retour au cours » et « Retour à l'activité » ?
 
 **État actuel** : ces liens naviguent **en interne** (`/context`), faute de
 contrat pour pointer vers les vraies pages PLaTon.

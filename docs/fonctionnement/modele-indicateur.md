@@ -123,8 +123,26 @@ déconnecter et se reconnecter avec un autre compte pour en changer. Hors
 production, la page de connexion propose aussi un formulaire de connexion
 locale, qui s'authentifie auprès d'un PLaTon lancé en local ([securite.md](../architecture/securite.md)).
 
-## Contextes orphelins `teacher`/`admin`
+## Indicateurs personnels : `learner`, `teacher`, `admin`
 
-Un indicateur `contextType: 'teacher'` ou `'admin'` est affiché dans le tableau
-de bord de l'enseignant ou de l'administrateur lui-même (`contextId` = son
-`userId`), exactement comme pour `learner`.
+Les six `contextType` se répartissent en deux familles.
+
+| Famille | Types | Lié à | Où il s'affiche |
+|---|---|---|---|
+| Objet de PLaTon | `course`, `activity`, `group` | un cours, une activité, un groupe | la page de ce cours ou de cette activité |
+| Personne | `learner`, `teacher`, `admin` | l'utilisateur lui-même | son tableau de bord |
+
+Un indicateur `teacher` ou `admin` se comporte exactement comme un indicateur
+`learner` : il décrit une personne, son `contextId` est l'identifiant de cette
+personne (`userId`), et sa valeur s'affiche dans le tableau de bord de cette
+personne. Il n'y a pas de « page d'un enseignant » ou « page d'un
+administrateur », comme il y a une page de cours.
+
+Exemples : `learner`, « ma note moyenne », vue par l'étudiant ; `teacher`, « le
+nombre moyen de tentatives dans mes cours », vu par l'enseignant ; `admin`, une
+statistique globale, vue par l'administrateur.
+
+Quand un événement arrive, la valeur d'un indicateur `teacher` est recalculée
+pour le **propriétaire du cours** de l'événement (`Courses.owner_id`). Un membre
+`teacher` du cours qui n'en est pas le propriétaire n'est pas recalculé
+automatiquement : voir [limites-connues.md](../architecture/limites-connues.md).

@@ -62,9 +62,7 @@ introuvable n'est pas refusé ici : le contrôleur renvoie alors 404. Posé sur
 
 Seules restent ouvertes sans token la liste des indicateurs, un indicateur et
 les types d'événements (des définitions, sans donnée personnelle) : voir
-[api.md](../reference/api.md). Les résultats et le CSV d'une activité sont
-lisibles par tout utilisateur connecté, sans contrôle d'appartenance au cours :
-voir [limites-connues.md](limites-connues.md).
+[api.md](../reference/api.md).
 
 ## Limite connue
 

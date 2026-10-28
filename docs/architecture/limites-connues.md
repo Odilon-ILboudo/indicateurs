@@ -1,6 +1,6 @@
 # Limites connues et points à trancher
 
-Ce qui suit est vrai dans le code actuel et mérite d'être dit en réunion.
+Ce qui suit est vrai dans le code actuel.
 Les choix qui restent à faire pour en corriger certaines sont dans
 [decisions-a-prendre.md](./decisions-a-prendre.md).
 
@@ -11,7 +11,7 @@ Les choix qui restent à faire pour en corriger certaines sont dans
 | **Délai du relais** | Le relais lit l'outbox toutes les 2 s, par lots de 200. | Mise à jour quasi temps réel, pas instantanée. Suffisant pour des indicateurs pédagogiques. |
 | **Règles de visibilité en double** | `INDICATOR_VISIBILITY` existe côté API et côté frontend (`RoleService`), à synchroniser à la main ; elles diffèrent déjà (rôle `demo` côté API seulement). | Risque de divergence à chaque modification. L'API reste l'autorité (le guard refuse), le frontend ne fait que masquer. |
 | **Indicateurs figés et visibilité** | La page cours ou activité affiche un indicateur figé sans vérifier `visibilityRoles`. | Un étudiant peut voir la carte d'un indicateur qui lui est interdit ; l'API refuse ensuite sa valeur (403), donc la carte reste en erreur. |
-| **Résultats d'activité sans contrôle d'appartenance** | `GET /api/v1/courses/:courseId/activities/:activityId/results`, `results/date` et `csv` n'exigent qu'un token valide : `:courseId` est ignoré, seul `:activityId` compte. Restent aussi ouvertes sans token la liste des indicateurs, un indicateur et les types d'événements (des définitions, sans donnée personnelle). | Tout utilisateur connecté peut lire les notes, les tentatives et les e-mails des étudiants de n'importe quelle activité. À protéger par un contrôle d'appartenance au cours (admin, propriétaire ou membre `teacher`). |
+| **Co-enseignant jamais notifié** | Pour un indicateur `teacher`, l'événement recalcule la valeur du seul propriétaire du cours (`getTeacherByCourse` lit `Courses.owner_id`), jamais celle des autres membres `teacher` de `CourseMembers`. | La valeur d'un co-enseignant n'est pas rafraîchie par les événements : elle reste celle du dernier calcul (à l'activation de l'indicateur, ou par le bouton « Recalculer » de l'admin). |
 | **Sessions supprimées** | Les déclencheurs ne surveillent pas `DELETE`. | Une session supprimée reste dans le cache du calcul différentiel jusqu'au prochain calcul complet. |
 | **Historique des valeurs** | `metadata.history` reçoit une entrée à chaque calcul, sans limite. | La ligne grossit sans fin pour un indicateur souvent recalculé. |
 | **Lignes copiées par le déclencheur** | Le déclencheur générique copie la ligne entière (`to_jsonb(NEW)`), sans le filtre des colonnes sensibles. | Une règle posée sur une table comme `Users` ferait passer ses colonnes sensibles dans l'outbox et dans RabbitMQ. Il n'y a pas de liste blanche de tables pour les règles. |
